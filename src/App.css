@@ -330,6 +330,24 @@ html, body {
   font-size: 12px; cursor: not-allowed; font-family: inherit;
 }
 
+/* ── Leaderboard ── */
+.rank-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.03); border-radius: 6px;
+  font-size: 13px; color: #ccc;
+  margin-bottom: 3px;
+}
+.rank-row.rank-me {
+  background: rgba(100,180,255,0.10);
+  border: 1px solid rgba(100,180,255,0.25);
+}
+.rank-pos { min-width: 28px; text-align: center; font-weight: 700; font-size: 14px; }
+.rank-nick { flex: 1; font-weight: 600; color: #dde; }
+.rank-fish { color: #77cc77; font-size: 12px; min-width: 56px; text-align: right; }
+.rank-gold { color: #e0d070; font-size: 12px; min-width: 80px; text-align: right; }
+.rank-time { color: #556; font-size: 11px; min-width: 52px; text-align: right; }
+
 /* ── Mobile controls (joystick + action buttons) ── */
 .mobile-controls {
   display: none;

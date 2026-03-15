@@ -3,6 +3,8 @@ import './App.css';
 import GameCanvas from './GameCanvas';
 import Chat from './Chat';
 import Joystick from './Joystick';
+import Leaderboard from './Leaderboard';
+import { saveRanking } from './ranking';
 import { FISH, RODS, ORES, weightedPick, randInt, TILE_SIZE } from './gameData';
 import { nearestChair, nearShop, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
@@ -51,6 +53,7 @@ const DEFAULT_STATE = {
   ownedRods: ['초급낚시대'],
   fishInventory: [],
   oreInventory: { 철광석: 0, 구리광석: 0, 수정: 0 },
+  fishCaught: 0,
 };
 
 function loadSave() {
@@ -63,6 +66,7 @@ function loadSave() {
       ownedRods: s.ownedRods ?? ['초급낚시대'],
       fishInventory: s.fishInventory ?? [],
       oreInventory: { ...DEFAULT_STATE.oreInventory, ...s.oreInventory },
+      fishCaught: s.fishCaught ?? 0,
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -88,6 +92,8 @@ export default function App() {
   const [activity, setActivity] = useState(null);
   const [showInv, setShowInv] = useState(false);
   const [showShop, setShowShop] = useState(false);
+  const [showRank, setShowRank] = useState(false);
+  const rankSaveTimer = useRef(null);
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -114,6 +120,16 @@ export default function App() {
     localStorage.setItem('fishingGame_v1', JSON.stringify(gs));
   }, [gs]);
 
+  // Debounced ranking save (only when logged in)
+  useEffect(() => {
+    if (!nickname) return;
+    clearTimeout(rankSaveTimer.current);
+    rankSaveTimer.current = setTimeout(() => {
+      saveRanking(nickname, gs.money, gs.fishCaught ?? 0);
+    }, 4000);
+    return () => clearTimeout(rankSaveTimer.current);
+  }, [gs.money, gs.fishCaught, nickname]);
+
   const addMsg = useCallback((text, type = 'system') => {
     setMessages(prev => [...prev.slice(-120), { text, type }]);
   }, []);
@@ -131,7 +147,7 @@ export default function App() {
     const price = Math.round(fd.price * (size / avgSz));
     const id = Date.now() + Math.random();
 
-    setGs(prev => ({ ...prev, fishInventory: [...prev.fishInventory, { name, size, price, id }] }));
+    setGs(prev => ({ ...prev, fishInventory: [...prev.fishInventory, { name, size, price, id }], fishCaught: (prev.fishCaught ?? 0) + 1 }));
     addMsg(`🐟 ${name} ${size}cm 낚음! (${price}G)`, 'catch');
 
     if (gameRef.current?.player) {
@@ -178,12 +194,18 @@ export default function App() {
        '!상점  – 상점 열기 (상점 건물 근처)',
        '!판매  – 물고기 전체 판매 (상점 근처)',
        '!인벤  – 인벤토리 열기/닫기',
+       '!랭킹  – 랭킹 보기',
       ].forEach(t => addMsg(t));
       return;
     }
 
     if (cmd === '!인벤' || cmd === '!인벤토리') {
       setShowInv(v => !v);
+      return;
+    }
+
+    if (cmd === '!랭킹') {
+      setShowRank(v => !v);
       return;
     }
 
@@ -314,6 +336,7 @@ export default function App() {
     channelRef.current?.postMessage({ type: 'gameStart', tabId: tabId.current });
     setBlocked(false);
     setNickname(name);
+    saveRanking(name, gs.money, gs.fishCaught ?? 0);
     setMessages([
       { type: 'system', text: `⚓ 어서오세요, ${name}님!` },
       { type: 'system', text: '방향키로 이동 · !도움말 로 명령어 확인' },
@@ -374,6 +397,7 @@ export default function App() {
         <div className="shortcut-bar">
           <button tabIndex={-1} onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
           <button tabIndex={-1} onClick={() => setShowShop(v => !v)}>🏪 상점</button>
+          <button tabIndex={-1} onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
         </div>
 
         {/* Mobile controls: joystick + action buttons */}
@@ -394,6 +418,9 @@ export default function App() {
             </button>
             <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
               <span>🛑</span><span className="action-btn-label">그만</span>
+            </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => setShowRank(v => !v)}>
+              <span>🏆</span><span className="action-btn-label">랭킹</span>
             </button>
           </div>
         </div>
@@ -448,6 +475,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Ranking modal */}
+      {showRank && <Leaderboard onClose={() => setShowRank(false)} myNickname={nickname} />}
 
       {/* Shop modal */}
       {showShop && (
