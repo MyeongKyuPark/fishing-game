@@ -68,6 +68,21 @@ export const ORES = {
   수정:     { price: 100, color: '#a8d8ea', mineRange: [12000, 22000], w: 20 },
 };
 
+export const BOOTS = {
+  기본신발: { name: '기본 신발', price: 0, speedBonus: 0, color: '#aaaaaa' },
+  빠른신발: { name: '빠른 신발', price: 400, speedBonus: 1.5, color: '#66ccff' },
+  질풍신발: { name: '질풍 신발', price: 1800, speedBonus: 3.2, color: '#ff9944', upgradeMats: { 수정: 3 } },
+};
+
+export const STAT_DEFS = {
+  힘:   { icon: '💪', desc: '물고기 판매가 +6%/레벨', color: '#ff7777' },
+  민첩: { icon: '🏃', desc: '이동속도 +0.4/레벨',    color: '#66ccff' },
+  체력: { icon: '❤️',  desc: '낚시·채굴 시간 -5%/레벨', color: '#ffaa55' },
+  행운: { icon: '🍀', desc: '희귀 물고기 확률 상승',  color: '#66ff88' },
+};
+export const STAT_MAX = 10;
+export function statCost(level) { return level * 150; }
+
 export function weightedPick(table) {
   const total = table.reduce((s, e) => s + e.w, 0);
   let r = Math.random() * total;

@@ -357,6 +357,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       const ctx = canvas.getContext('2d');
       const { player, keys } = g;
       const W = canvas.width, H = canvas.height;
+      const maxSpd = MAX_SPEED + (g.speedBonus ?? 0);
 
       // ── Physics ──
       if (player.state === 'idle') {
@@ -366,8 +367,8 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
         if (keys.ArrowUp)    { player.vy -= spd; player.facing = 'up'; }
         if (keys.ArrowDown)  { player.vy += spd; player.facing = 'down'; }
 
-        player.vx = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, player.vx));
-        player.vy = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, player.vy));
+        player.vx = Math.max(-maxSpd, Math.min(maxSpd, player.vx));
+        player.vy = Math.max(-maxSpd, Math.min(maxSpd, player.vy));
 
         const nx = player.x + player.vx;
         if (canWalk(nx, player.y)) player.x = nx; else player.vx = 0;

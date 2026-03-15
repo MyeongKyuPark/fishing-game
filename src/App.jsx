@@ -5,7 +5,7 @@ import Chat from './Chat';
 import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
 import { saveFishRecord } from './ranking';
-import { FISH, RODS, ORES, weightedPick, randInt, TILE_SIZE } from './gameData';
+import { FISH, RODS, ORES, BOOTS, STAT_DEFS, STAT_MAX, statCost, weightedPick, randInt, TILE_SIZE } from './gameData';
 import { nearestChair, nearShop, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
 function LoginScreen({ onLogin }) {
@@ -47,6 +47,8 @@ function LoginScreen({ onLogin }) {
   );
 }
 
+const DEFAULT_STATS = { 힘: 1, 민첩: 1, 체력: 1, 행운: 1 };
+
 const DEFAULT_STATE = {
   money: 100,
   rod: '초급낚시대',
@@ -54,6 +56,9 @@ const DEFAULT_STATE = {
   fishInventory: [],
   oreInventory: { 철광석: 0, 구리광석: 0, 수정: 0 },
   fishCaught: 0,
+  boots: '기본신발',
+  ownedBoots: ['기본신발'],
+  stats: { ...DEFAULT_STATS },
 };
 
 function loadSave() {
@@ -67,6 +72,9 @@ function loadSave() {
       fishInventory: s.fishInventory ?? [],
       oreInventory: { ...DEFAULT_STATE.oreInventory, ...s.oreInventory },
       fishCaught: s.fishCaught ?? 0,
+      boots: s.boots ?? '기본신발',
+      ownedBoots: s.ownedBoots ?? ['기본신발'],
+      stats: { ...DEFAULT_STATS, ...(s.stats ?? {}) },
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -116,6 +124,14 @@ export default function App() {
   // Keep stateRef in sync
   useEffect(() => { stateRef.current = gs; }, [gs]);
 
+  // Sync speed bonus to game loop
+  useEffect(() => {
+    if (!gameRef.current) return;
+    const bootsBonus = BOOTS[gs.boots]?.speedBonus ?? 0;
+    const agilityBonus = ((gs.stats?.민첩 ?? 1) - 1) * 0.4;
+    gameRef.current.speedBonus = bootsBonus + agilityBonus;
+  }, [gs.boots, gs.stats]);
+
   // Save to localStorage
   useEffect(() => {
     localStorage.setItem('fishingGame_v1', JSON.stringify(gs));
@@ -128,15 +144,25 @@ export default function App() {
 
   // ── Callbacks from game loop ──────────────────────────────────────────────
 
+  // Apply luck to boost rare fish weights
+  const applyLuck = useCallback((table, luckLv) => {
+    if (luckLv <= 1) return table;
+    const mult = { 흔함: 1, 보통: 1 + (luckLv-1)*0.12, 희귀: 1 + (luckLv-1)*0.22, 전설: 1 + (luckLv-1)*0.40, 신화: 1 + (luckLv-1)*0.60 };
+    return table.map(e => ({ ...e, w: e.w * (mult[FISH[e.f]?.rarity] ?? 1) }));
+  }, []);
+
   const onFishCaught = useCallback((rodKey) => {
     const rod = RODS[rodKey];
     if (!rod) return;
-    const name = weightedPick(rod.table);
+    const s = stateRef.current;
+    const luckLv = s?.stats?.행운 ?? 1;
+    const 힘Lv = s?.stats?.힘 ?? 1;
+    const name = weightedPick(applyLuck(rod.table, luckLv));
     const fd = FISH[name];
     if (!fd) return;
     const size = parseFloat((Math.random() * (fd.maxSz - fd.minSz) + fd.minSz).toFixed(1));
     const avgSz = (fd.minSz + fd.maxSz) / 2;
-    const price = Math.round(fd.price * (size / avgSz));
+    const price = Math.round(fd.price * (size / avgSz) * (1 + (힘Lv - 1) * 0.06));
     const id = Date.now() + Math.random();
 
     setGs(prev => ({ ...prev, fishInventory: [...prev.fishInventory, { name, size, price, id }], fishCaught: (prev.fishCaught ?? 0) + 1 }));
@@ -225,7 +251,8 @@ export default function App() {
       player.facing = 'down';
       player.state = 'fishing';
       player.currentRod = s.rod;
-      const [mn, mx] = RODS[s.rod].catchTimeRange;
+      const staminaMult = 1 - ((s.stats?.체력 ?? 1) - 1) * 0.05;
+      const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * staminaMult)));
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx);
       player.activityProgress = 0;
@@ -243,7 +270,8 @@ export default function App() {
       const ore = pickOre();
       player.state = 'mining';
       player.currentOre = ore;
-      const [mn, mx] = ORES[ore].mineRange;
+      const stMult = 1 - ((s.stats?.체력 ?? 1) - 1) * 0.05;
+      const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(1000, Math.round(t * stMult)));
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx);
       player.activityProgress = 0;
@@ -281,36 +309,59 @@ export default function App() {
 
   const buyRod = (rodKey) => {
     const rod = RODS[rodKey];
-    if (gs.ownedRods.includes(rodKey)) { addMsg(`이미 보유 중`); return; }
-
-    if (gs.money >= rod.price) {
-      setGs(prev => ({ ...prev, money: prev.money - rod.price, ownedRods: [...prev.ownedRods, rodKey], rod: rodKey }));
-      if (gameRef.current?.player) gameRef.current.player.currentRod = rodKey;
-      addMsg(`🎣 ${rod.name} 구매!`, 'catch');
-      setShowShop(false);
-      return;
-    }
-    if (rod.upgradeMats) {
-      const ok = Object.entries(rod.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
-      if (ok) {
-        setGs(prev => {
-          const ores = { ...prev.oreInventory };
-          for (const [ore, n] of Object.entries(rod.upgradeMats)) ores[ore] -= n;
-          return { ...prev, oreInventory: ores, ownedRods: [...prev.ownedRods, rodKey], rod: rodKey };
-        });
-        if (gameRef.current?.player) gameRef.current.player.currentRod = rodKey;
-        addMsg(`🔨 ${rod.name} 제작!`, 'catch');
-        setShowShop(false);
-        return;
-      }
-    }
-    addMsg(`재료/금 부족 (${rod.price}G 또는 재료 필요)`, 'error');
+    if (gs.ownedRods.includes(rodKey)) { addMsg('이미 보유 중'); return; }
+    const needMoney = rod.price > 0;
+    const canAfford = !needMoney || gs.money >= rod.price;
+    const hasMats = rod.upgradeMats
+      ? Object.entries(rod.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+      : true;
+    if (!canAfford) { addMsg(`💰 골드 부족 (${rod.price}G 필요)`, 'error'); return; }
+    if (!hasMats) { addMsg('재료 부족', 'error'); return; }
+    setGs(prev => {
+      const ores = { ...prev.oreInventory };
+      if (rod.upgradeMats) for (const [ore, n] of Object.entries(rod.upgradeMats)) ores[ore] -= n;
+      return { ...prev, money: needMoney ? prev.money - rod.price : prev.money, oreInventory: ores, ownedRods: [...prev.ownedRods, rodKey], rod: rodKey };
+    });
+    if (gameRef.current?.player) gameRef.current.player.currentRod = rodKey;
+    addMsg(`🎣 ${rod.name} ${needMoney ? '구매' : '획득'}!`, 'catch');
+    setShowShop(false);
   };
 
   const equipRod = (rodKey) => {
     setGs(prev => ({ ...prev, rod: rodKey }));
     if (gameRef.current?.player) gameRef.current.player.currentRod = rodKey;
     addMsg(`🎣 ${RODS[rodKey].name} 장착`);
+  };
+
+  const buyBoots = (key) => {
+    const boot = BOOTS[key];
+    if ((gs.ownedBoots ?? []).includes(key)) { addMsg('이미 보유 중'); return; }
+    const canAfford = gs.money >= boot.price;
+    const hasMats = boot.upgradeMats
+      ? Object.entries(boot.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+      : true;
+    if (!canAfford) { addMsg(`💰 골드 부족 (${boot.price}G 필요)`, 'error'); return; }
+    if (!hasMats) { addMsg('재료 부족', 'error'); return; }
+    setGs(prev => {
+      const ores = { ...prev.oreInventory };
+      if (boot.upgradeMats) for (const [ore, n] of Object.entries(boot.upgradeMats)) ores[ore] -= n;
+      return { ...prev, money: prev.money - boot.price, oreInventory: ores, ownedBoots: [...(prev.ownedBoots ?? ['기본신발']), key], boots: key };
+    });
+    addMsg(`👟 ${boot.name} 구매!`, 'catch');
+  };
+
+  const equipBoots = (key) => {
+    setGs(prev => ({ ...prev, boots: key }));
+    addMsg(`👟 ${BOOTS[key].name} 장착`);
+  };
+
+  const upgradeStat = (stat) => {
+    const lv = gs.stats?.[stat] ?? 1;
+    if (lv >= STAT_MAX) { addMsg(`${stat} 최대 레벨입니다.`); return; }
+    const cost = statCost(lv);
+    if (gs.money < cost) { addMsg(`💰 골드 부족 (${cost}G 필요)`, 'error'); return; }
+    setGs(prev => ({ ...prev, money: prev.money - cost, stats: { ...(prev.stats ?? DEFAULT_STATS), [stat]: lv + 1 } }));
+    addMsg(`✨ ${stat} Lv.${lv + 1} 달성!`, 'catch');
   };
 
   const sellAll = () => {
@@ -481,18 +532,22 @@ export default function App() {
             </div>
             <div className="shop-money">보유: {gs.money.toLocaleString()}G</div>
 
+            {/* ── Rods ── */}
             <div className="section">
               <div className="section-title">낚시대</div>
               {Object.entries(RODS).map(([key, rod]) => {
                 const owned = gs.ownedRods.includes(key);
                 const equipped = gs.rod === key;
-                const canBuy = gs.money >= rod.price;
+                const needMoney = rod.price > 0;
+                const canAfford = !needMoney || gs.money >= rod.price;
                 const hasMats = rod.upgradeMats
                   ? Object.entries(rod.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
-                  : false;
+                  : true;
                 const matsStr = rod.upgradeMats
                   ? Object.entries(rod.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ')
                   : null;
+                const canBuy = canAfford && hasMats;
+                const [tMin, tMax] = rod.catchTimeRange;
                 return (
                   <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -501,8 +556,9 @@ export default function App() {
                       {owned && !equipped && <span className="badge owned">보유</span>}
                     </div>
                     <div className="rod-meta">
-                      {rod.price > 0 ? `${rod.price}G` : '무료'}
-                      {matsStr ? ` | 재료: ${matsStr}` : ''}
+                      {needMoney ? `${rod.price}G` : '무료'}
+                      {matsStr ? ` + 재료: ${matsStr}` : ''}
+                      {' · '}낚시 {tMin/1000}~{tMax/1000}초
                     </div>
                     <div className="rod-fish">
                       {rod.table.map(e => `${e.f}(${e.w}%)`).join(' · ')}
@@ -510,13 +566,8 @@ export default function App() {
                     <div style={{ marginTop: 6 }}>
                       {owned
                         ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipRod(key)}>장착</button>)
-                        : <button
-                            tabIndex={-1}
-                            className={canBuy || hasMats ? 'btn-buy' : 'btn-dis'}
-                            onClick={() => buyRod(key)}
-                            disabled={!canBuy && !hasMats}
-                          >
-                            {canBuy ? `${rod.price}G 구매` : hasMats ? '재료로 제작' : '재료/금 부족'}
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyRod(key)} disabled={!canBuy}>
+                            {canBuy ? (needMoney ? `${rod.price}G + 재료` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
                           </button>
                       }
                     </div>
@@ -525,6 +576,76 @@ export default function App() {
               })}
             </div>
 
+            {/* ── Boots ── */}
+            <div className="section">
+              <div className="section-title">신발 (이동속도)</div>
+              {Object.entries(BOOTS).map(([key, boot]) => {
+                const owned = (gs.ownedBoots ?? ['기본신발']).includes(key);
+                const equipped = gs.boots === key;
+                const canAfford = gs.money >= boot.price;
+                const hasMats = boot.upgradeMats
+                  ? Object.entries(boot.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = boot.upgradeMats ? Object.entries(boot.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: boot.color, fontWeight: 700 }}>👟 {boot.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {boot.price > 0 ? `${boot.price}G` : '무료'}
+                      {matsStr ? ` + 재료: ${matsStr}` : ''}
+                      {' · '}속도 +{boot.speedBonus > 0 ? `${Math.round(boot.speedBonus / 3.5 * 100)}%` : '기본'}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipBoots(key)}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyBoots(key)} disabled={!canBuy}>
+                            {canBuy ? (boot.price > 0 ? `${boot.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Stats ── */}
+            <div className="section">
+              <div className="section-title">캐릭터 스탯</div>
+              <div className="stat-grid">
+                {Object.entries(STAT_DEFS).map(([stat, def]) => {
+                  const lv = gs.stats?.[stat] ?? 1;
+                  const cost = statCost(lv);
+                  const maxed = lv >= STAT_MAX;
+                  const canUp = !maxed && gs.money >= cost;
+                  return (
+                    <div key={stat} className="stat-card">
+                      <div className="stat-top">
+                        <span className="stat-icon">{def.icon}</span>
+                        <span className="stat-name" style={{ color: def.color }}>{stat}</span>
+                        <span className="stat-level">Lv.{lv}</span>
+                      </div>
+                      <div className="stat-desc">{def.desc}</div>
+                      <button
+                        tabIndex={-1}
+                        className={canUp ? 'btn-buy' : 'btn-dis'}
+                        style={{ marginTop: 5, width: '100%', fontSize: 11 }}
+                        onClick={() => upgradeStat(stat)}
+                        disabled={!canUp}
+                      >
+                        {maxed ? 'MAX' : `${cost}G 강화`}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* ── Sell fish ── */}
             <div className="section">
               <div className="section-title">물고기 판매</div>
               {gs.fishInventory.length === 0
