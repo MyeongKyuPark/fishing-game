@@ -68,9 +68,11 @@ const DEFAULT_STATE = {
   ownedCookware: [],
 };
 
-function loadSave() {
+function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
+
+function loadSave(nickname) {
   try {
-    const s = JSON.parse(localStorage.getItem('fishingGame_v1'));
+    const s = JSON.parse(localStorage.getItem(saveKey(nickname)));
     if (!s) return DEFAULT_STATE;
     return {
       money: s.money ?? 100,
@@ -110,7 +112,7 @@ export default function App() {
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
   const [blocked, setBlocked] = useState(false);
 
-  const [gs, setGs] = useState(loadSave);
+  const [gs, setGs] = useState(DEFAULT_STATE);
   const [messages, setMessages] = useState([
     { type: 'system', text: '⚓ 낚시 마을에 오신 걸 환영합니다!' },
     { type: 'system', text: '방향키로 이동, !도움말 로 명령어 확인' },
@@ -188,10 +190,17 @@ export default function App() {
     gameRef.current.speedBonus = bootsBonus + agilityBonus;
   }, [gs.boots, gs.stats]);
 
-  // Save to localStorage
+  // Load save when nickname is established (nickname-keyed, room-independent)
   useEffect(() => {
-    localStorage.setItem('fishingGame_v1', JSON.stringify(gs));
-  }, [gs]);
+    if (!nickname) return;
+    setGs(loadSave(nickname));
+  }, [nickname]);
+
+  // Save to localStorage keyed by nickname
+  useEffect(() => {
+    if (!nickname) return;
+    localStorage.setItem(saveKey(nickname), JSON.stringify(gs));
+  }, [gs, nickname]);
 
 
   const addMsg = useCallback((text, type = 'system') => {
