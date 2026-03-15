@@ -695,6 +695,26 @@ export default function App() {
           )}
         </div>
 
+        {/* Equipment bar */}
+        <div className="equip-bar">
+          {[
+            { icon: '🎣', label: RODS[gs.rod]?.name ?? gs.rod, color: RODS[gs.rod]?.color ?? '#8b6914', active: true },
+            { icon: '👟', label: BOOTS[gs.boots]?.name ?? gs.boots, color: BOOTS[gs.boots]?.color ?? '#aaa', active: true },
+            { icon: '🪝', label: gs.equippedBait ? (BAIT[gs.equippedBait]?.name ?? gs.equippedBait) : '미끼 없음',
+              color: gs.equippedBait ? (BAIT[gs.equippedBait]?.color ?? '#aaa') : '#444', active: !!gs.equippedBait },
+            { icon: '🍳', label: gs.cookware ? (COOKWARE[gs.cookware]?.name ?? gs.cookware) : '요리도구 없음',
+              color: gs.cookware ? (COOKWARE[gs.cookware]?.color ?? '#aaa') : '#444', active: !!gs.cookware },
+          ].map((slot, i) => (
+            <div key={i} className={`equip-slot ${slot.active ? 'equip-slot-active' : ''}`}
+              style={{ '--slot-color': slot.color }}>
+              <div className="equip-slot-icon">{slot.icon}</div>
+              <div className="equip-slot-label" style={{ color: slot.active ? slot.color : '#555' }}>
+                {slot.label}
+              </div>
+            </div>
+          ))}
+        </div>
+
         {/* Shortcut buttons (desktop only) */}
         <div className="shortcut-bar">
           <button tabIndex={-1} onClick={() => setShowInv(v => !v)}>🎒 인벤</button>

@@ -369,6 +369,37 @@ html, body {
 .fish-row-compact { padding: 2px 6px; background: none; border-radius: 3px; }
 .fish-row-compact:hover { background: rgba(255,255,255,0.04); }
 
+/* ── Equipment bar ── */
+.equip-bar {
+  position: absolute;
+  bottom: 14px; left: 14px;
+  display: flex; gap: 6px;
+  pointer-events: none;
+  z-index: 10;
+}
+.equip-slot {
+  display: flex; flex-direction: column; align-items: center;
+  background: rgba(0,0,0,0.62);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  padding: 5px 7px 4px;
+  min-width: 52px;
+  backdrop-filter: blur(4px);
+  transition: border-color 0.2s;
+}
+.equip-slot-active {
+  border-color: color-mix(in srgb, var(--slot-color) 60%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--slot-color) 30%, transparent);
+}
+.equip-slot-icon { font-size: 20px; line-height: 1.1; }
+.equip-slot-label {
+  font-size: 9px; font-weight: 600; text-align: center;
+  margin-top: 2px; max-width: 60px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  letter-spacing: -0.2px;
+}
+@media (max-width: 768px) { .equip-bar { display: none; } }
+
 /* ── Player inspect modal ── */
 .inspect-panel { max-width: 300px; }
 .inspect-header { text-align: center; padding: 10px 0 14px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 8px; }

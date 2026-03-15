@@ -571,10 +571,30 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       if (best) onPlayerInspectRef.current?.(best);
     };
 
+    // Single click → move player to that world position
+    const onClickMove = (e) => {
+      if (showFullMapRef.current) return; // handled by onClick
+      const { cx, cy } = getCanvasPos(e);
+      const mb = minimapBoundsRef.current;
+      if (cx >= mb.x && cx <= mb.x + mb.w && cy >= mb.y && cy <= mb.y + mb.h) return;
+      const g = gameRef.current;
+      if (!g?.player || g.player.state !== 'idle') return;
+      // Convert screen → world using current camera
+      const canvas2 = canvasRef.current;
+      const W = canvas2.width, H = canvas2.height;
+      const maxCX = Math.max(0, MAP_W * TILE_SIZE - W);
+      const maxCY = Math.max(0, MAP_H * TILE_SIZE - H);
+      const camX = Math.round(Math.max(0, Math.min(g.player.x - W / 2, maxCX)));
+      const camY = Math.round(Math.max(0, Math.min(g.player.y - H / 2, maxCY)));
+      g.clickTarget = { x: cx + camX, y: cy + camY };
+    };
+
     canvas.addEventListener('click', onClick);
+    canvas.addEventListener('click', onClickMove);
     canvas.addEventListener('dblclick', onDblClick);
     return () => {
       canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('click', onClickMove);
       canvas.removeEventListener('dblclick', onDblClick);
     };
   }, []);
@@ -621,11 +641,28 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
 
       // ── Physics ──
       if (player.state === 'idle') {
+        // Click-to-move target
+        if (g.clickTarget) {
+          const dx = g.clickTarget.x - player.x;
+          const dy = g.clickTarget.y - player.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 4) {
+            g.clickTarget = null;
+            player.vx = 0; player.vy = 0;
+          } else {
+            const spd = MAX_SPEED + (g.speedBonus ?? 0);
+            player.vx = (dx / dist) * spd;
+            player.vy = (dy / dist) * spd;
+            if (Math.abs(dx) > Math.abs(dy)) player.facing = dx > 0 ? 'right' : 'left';
+            else player.facing = dy > 0 ? 'down' : 'up';
+          }
+        }
+        // Arrow keys cancel click-to-move
         const spd = ACCEL * dt / 16;
-        if (keys.ArrowLeft)  { player.vx -= spd; player.facing = 'left'; }
-        if (keys.ArrowRight) { player.vx += spd; player.facing = 'right'; }
-        if (keys.ArrowUp)    { player.vy -= spd; player.facing = 'up'; }
-        if (keys.ArrowDown)  { player.vy += spd; player.facing = 'down'; }
+        if (keys.ArrowLeft)  { player.vx -= spd; player.facing = 'left';  g.clickTarget = null; }
+        if (keys.ArrowRight) { player.vx += spd; player.facing = 'right'; g.clickTarget = null; }
+        if (keys.ArrowUp)    { player.vy -= spd; player.facing = 'up';    g.clickTarget = null; }
+        if (keys.ArrowDown)  { player.vy += spd; player.facing = 'down';  g.clickTarget = null; }
 
         player.vx = Math.max(-maxSpd, Math.min(maxSpd, player.vx));
         player.vy = Math.max(-maxSpd, Math.min(maxSpd, player.vy));
