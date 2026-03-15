@@ -83,6 +83,31 @@ export const COOKING_RANGE = 4 * TILE_SIZE;
 export const PLAYER_START_X = 15 * TILE_SIZE + TILE_SIZE / 2;
 export const PLAYER_START_Y = 14 * TILE_SIZE + TILE_SIZE / 2;
 
+// Door triggers: walk near these to get an entry prompt
+export const DOOR_TRIGGERS = [
+  {
+    id: 'shop',
+    label: '🏪 상점 입장',
+    wx: 4.5 * TILE_SIZE, wy: 11 * TILE_SIZE,
+    range: 1.8 * TILE_SIZE,
+    exitWx: 4.5 * TILE_SIZE, exitWy: 13 * TILE_SIZE,
+  },
+  {
+    id: 'cooking',
+    label: '🍳 주방 입장',
+    wx: 13.5 * TILE_SIZE, wy: 10 * TILE_SIZE,
+    range: 1.8 * TILE_SIZE,
+    exitWx: 13.5 * TILE_SIZE, exitWy: 12 * TILE_SIZE,
+  },
+  {
+    id: 'mine',
+    label: '⛏ 광산 입장',
+    wx: 29.5 * TILE_SIZE, wy: 6.5 * TILE_SIZE,
+    range: 2.2 * TILE_SIZE,
+    exitWx: 29.5 * TILE_SIZE, exitWy: 8.5 * TILE_SIZE,
+  },
+];
+
 export function isInMineZone(px, py) {
   const tx = Math.floor(px / TILE_SIZE);
   const ty = Math.floor(py / TILE_SIZE);

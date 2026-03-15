@@ -679,6 +679,8 @@ html, body {
 
 .action-btn-stop { border-color: rgba(255,80,80,0.35); }
 .action-btn-stop:active { background: rgba(100,30,30,0.75); }
+.action-btn-enter { border-color: rgba(80,180,255,0.5); animation: pulse-enter 1.5s ease-in-out infinite; }
+@keyframes pulse-enter { 0%,100% { box-shadow: 0 0 0 0 rgba(80,180,255,0.4); } 50% { box-shadow: 0 0 0 6px rgba(80,180,255,0); } }
 
 .action-btn-label {
   font-size: 9px;

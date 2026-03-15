@@ -1,19 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 import GameCanvas from './GameCanvas';
+import IndoorCanvas from './IndoorCanvas';
 import Chat from './Chat';
 import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
 import RankSidebar from './RankSidebar';
 import RoomLobby from './RoomLobby';
-import { saveFishRecord } from './ranking';
+import { saveFishRecord, savePlayerTitle } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
-import { getTitle } from './titleData';
+import { getTitle, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
@@ -158,6 +159,9 @@ export default function App() {
   const [statsTab, setStatsTab] = useState('장비');
   const [inspectPlayer, setInspectPlayer] = useState(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [indoorRoom, setIndoorRoom] = useState(null);
+  const [nearDoor, setNearDoor] = useState(null);
+  const prevTitleRef = useRef(null);
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -178,6 +182,16 @@ export default function App() {
 
   // Keep stateRef in sync
   useEffect(() => { stateRef.current = gs; }, [gs]);
+
+  // Save title to leaderboard whenever it changes
+  useEffect(() => {
+    if (!nickname) return;
+    const t = getTitle(gs);
+    if (prevTitleRef.current === t.label) return;
+    prevTitleRef.current = t.label;
+    const idx = TITLES.findIndex(ti => ti.label === t.label);
+    savePlayerTitle(nickname, t.label, t.color, idx);
+  }, [nickname, gs]);
 
   // Multiplayer: subscribe to other players in same room + join/leave notifications
   useEffect(() => {
@@ -707,9 +721,20 @@ export default function App() {
   const totalFishVal = gs.fishInventory.reduce((s, f) => s + f.price, 0);
   const myTitle = getTitle(gs);
 
+  const handleEnterRoom = (id) => setIndoorRoom(id);
+  const handleExitRoom = () => setIndoorRoom(null);
+
   return (
     <div className="root">
       <div className="canvas-area">
+        {indoorRoom ? (
+          <IndoorCanvas
+            roomId={indoorRoom}
+            nickname={nickname}
+            gameRef={gameRef}
+            onExit={handleExitRoom}
+          />
+        ) : (
         <GameCanvas
           gameRef={gameRef}
           onFishCaught={onFishCaught}
@@ -720,10 +745,13 @@ export default function App() {
           titleColor={myTitle.color}
           otherPlayersRef={otherPlayersRef}
           onPlayerInspect={setInspectPlayer}
+          onEnterRoom={handleEnterRoom}
+          onNearDoorChange={setNearDoor}
         />
+        )}
 
         {/* HUD */}
-        <div className="hud">
+        {!indoorRoom && <div className="hud">
           <div className="hud-chip hud-nick">👤 {nickname}</div>
           <div className="hud-chip" style={{ color: myTitle.color, fontSize: 11 }}>[{myTitle.label}]</div>
           <div className="hud-chip" style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>🏠 {roomTitle}</div>
@@ -739,19 +767,19 @@ export default function App() {
               {activity === 'fishing' ? '🐟 낚시 중…' : '⛏ 채굴 중…'}
             </div>
           )}
-        </div>
+        </div>}
 
 
         {/* Rank sidebar (desktop only) */}
-        <RankSidebar myNickname={nickname} />
+        {!indoorRoom && <RankSidebar myNickname={nickname} />}
 
         {/* Shortcut buttons (desktop only) */}
-        <div className="shortcut-bar">
+        {!indoorRoom && <div className="shortcut-bar">
           <button tabIndex={-1} onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
           <button tabIndex={-1} onClick={() => setShowShop(v => !v)}>🏪 상점</button>
           <button tabIndex={-1} onClick={() => setShowStats(v => !v)}>📊 상태</button>
           <button tabIndex={-1} onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
-        </div>
+        </div>}
 
         {/* Mobile controls: joystick + action buttons */}
         <div className="mobile-controls">
@@ -775,6 +803,11 @@ export default function App() {
             <button className="action-btn" tabIndex={-1} onClick={() => setShowRank(true)}>
               <span>🏆</span><span className="action-btn-label">랭킹</span>
             </button>
+            {nearDoor && !indoorRoom && (
+              <button className="action-btn action-btn-enter" tabIndex={-1} onClick={() => gameRef.current?.enterRoom?.()}>
+                <span>🚪</span><span className="action-btn-label">입장</span>
+              </button>
+            )}
           </div>
         </div>
 

@@ -5,7 +5,7 @@ import {
 import {
   MAP_TILES, FISHING_CHAIRS, MINE_ENTRANCE,
   PLAYER_START_X, PLAYER_START_Y, pickOre,
-  COOKING_TX, COOKING_TY,
+  COOKING_TX, COOKING_TY, DOOR_TRIGGERS,
 } from './mapData';
 
 const PW = 18;
@@ -963,12 +963,20 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
     if (player.floatText.age > 100) player.floatText = null;
   }
 
-  // Title + Nickname below character
+  // Title + Nickname above character head
   if (nickname) {
     ctx.textAlign = 'center';
-    // Title
-    if (title && title !== '신입') {
-      const titleY = py + PH / 2 + 13;
+    // Nickname just above head
+    const nameY = py - 30;
+    ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(nickname, px, nameY);
+    ctx.fillStyle = '#e8e8ff';
+    ctx.fillText(nickname, px, nameY);
+    // Title above nickname
+    if (title) {
+      const titleY = nameY - 12;
       ctx.font = '9px "Noto Sans KR", sans-serif';
       ctx.strokeStyle = 'rgba(0,0,0,0.85)';
       ctx.lineWidth = 2.5;
@@ -976,26 +984,24 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
       ctx.fillStyle = titleColor ?? '#aaaaaa';
       ctx.fillText(`[${title}]`, px, titleY);
     }
-    const nameY = py + PH / 2 + (title && title !== '신입' ? 23 : 14);
-    ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
-    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-    ctx.lineWidth = 3;
-    ctx.strokeText(nickname, px, nameY);
-    ctx.fillStyle = '#e8e8ff';
-    ctx.fillText(nickname, px, nameY);
   }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivityChange, nickname, title, titleColor, otherPlayersRef, onPlayerInspect }) {
+export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivityChange, nickname, title, titleColor, otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onActivityChange });
   const showFullMapRef = useRef(false);
   const minimapBoundsRef = useRef({ x: 0, y: 0, w: 100, h: 75 });
   const otherPlayerScreenPosRef = useRef([]); // [{op, sx, sy}] updated each frame
   const onPlayerInspectRef = useRef(onPlayerInspect);
+  const onEnterRoomRef = useRef(onEnterRoom);
+  const onNearDoorChangeRef = useRef(onNearDoorChange);
+  const nearDoorRef = useRef(null);
   useEffect(() => { onPlayerInspectRef.current = onPlayerInspect; });
+  useEffect(() => { onEnterRoomRef.current = onEnterRoom; });
+  useEffect(() => { onNearDoorChangeRef.current = onNearDoorChange; });
 
   // Always keep callbacks fresh
   useEffect(() => {
@@ -1090,6 +1096,9 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
         if (document.activeElement?.tagName === 'INPUT') return;
         e.preventDefault();
         if (gameRef.current) gameRef.current.keys[e.key] = true;
+      }
+      if (e.key === 'Enter' && nearDoorRef.current) {
+        onEnterRoomRef.current?.(nearDoorRef.current.id);
       }
     };
     const up = (e) => { if (gameRef.current) delete gameRef.current.keys[e.key]; };
@@ -1186,6 +1195,26 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
             player.activityProgress = 0;
           }
         }
+      }
+
+      // ── Door proximity ──
+      if (player.state === 'idle') {
+        let closestDoor = null;
+        for (const dt of DOOR_TRIGGERS) {
+          if (Math.hypot(player.x - dt.wx, player.y - dt.wy) <= dt.range) {
+            closestDoor = dt;
+            break;
+          }
+        }
+        if (closestDoor?.id !== nearDoorRef.current?.id) {
+          nearDoorRef.current = closestDoor;
+          onNearDoorChangeRef.current?.(closestDoor ? closestDoor.id : null);
+        }
+        // Expose to gameRef for mobile button
+        g.nearDoor = closestDoor?.id ?? null;
+        g.enterRoom = () => {
+          if (nearDoorRef.current) onEnterRoomRef.current?.(nearDoorRef.current.id);
+        };
       }
 
       // ── Camera ──
@@ -1290,6 +1319,26 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
 
       // My player (on top)
       drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname, title, titleColor);
+
+      // Door entry prompt
+      if (nearDoorRef.current) {
+        const door = nearDoorRef.current;
+        const psx = player.x - camX, psy = player.y - camY;
+        const label = `${door.label} (Enter)`;
+        ctx.font = 'bold 12px "Noto Sans KR", sans-serif';
+        const tw = ctx.measureText(label).width;
+        const bx = psx - tw / 2 - 8, by = psy - 68;
+        const pulse = 0.85 + 0.15 * Math.sin(performance.now() / 300);
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = 'rgba(20,20,40,0.82)';
+        ctx.beginPath(); ctx.roundRect(bx, by, tw + 16, 22, 5); ctx.fill();
+        ctx.strokeStyle = '#88ccff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(bx, by, tw + 16, 22, 5); ctx.stroke();
+        ctx.fillStyle = '#cceeff';
+        ctx.fillText(label, psx, by + 15);
+        ctx.globalAlpha = 1;
+      }
 
       // Minimap
       const MM_W = 100, MM_H = 75;
