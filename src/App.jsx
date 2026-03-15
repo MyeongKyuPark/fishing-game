@@ -5,6 +5,7 @@ import Chat from './Chat';
 import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
 import { saveFishRecord } from './ranking';
+import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, STAT_DEFS, STAT_MAX, statCost, weightedPick, randInt, TILE_SIZE } from './gameData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
@@ -99,6 +100,8 @@ export default function App() {
   const tabId = useRef(Date.now() + '-' + Math.random());
   const channelRef = useRef(null);
   const nicknameRef = useRef('');
+  const otherPlayersRef = useRef([]);
+  const lastPosRef = useRef({});
 
   const [nickname, setNickname] = useState('');
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
@@ -134,6 +137,39 @@ export default function App() {
 
   // Keep stateRef in sync
   useEffect(() => { stateRef.current = gs; }, [gs]);
+
+  // Multiplayer: subscribe to other players
+  useEffect(() => {
+    if (!nickname) return;
+    const unsub = subscribeOtherPlayers(nickname, (players) => {
+      otherPlayersRef.current = players;
+    });
+    return unsub;
+  }, [nickname]);
+
+  // Multiplayer: throttled position sync (5×/sec, only on change)
+  useEffect(() => {
+    if (!nickname) return;
+    const id = setInterval(() => {
+      const p = gameRef.current?.player;
+      if (!p) return;
+      const last = lastPosRef.current;
+      if (p.x === last.x && p.y === last.y && p.state === last.state && p.facing === last.facing) return;
+      lastPosRef.current = { x: p.x, y: p.y, state: p.state, facing: p.facing };
+      updatePlayerPresence(nickname, p.x, p.y, p.state, p.facing, stateRef.current?.rod ?? '초급낚시대');
+    }, 200);
+    return () => clearInterval(id);
+  }, [nickname]);
+
+  // Multiplayer: cleanup on page close
+  useEffect(() => {
+    const onUnload = () => { if (nicknameRef.current) removePlayerPresence(nicknameRef.current); };
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onUnload);
+      if (nicknameRef.current) removePlayerPresence(nicknameRef.current);
+    };
+  }, []);
 
   // Sync speed bonus to game loop
   useEffect(() => {
@@ -514,6 +550,7 @@ export default function App() {
           onOreMined={onOreMined}
           onActivityChange={onActivityChange}
           nickname={nickname}
+          otherPlayersRef={otherPlayersRef}
         />
 
         {/* HUD */}

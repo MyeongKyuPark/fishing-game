@@ -182,6 +182,60 @@ function drawCookingBuilding(ctx, camX, camY) {
   ctx.fillText('🍳 요리소', bx + bw / 2, by + 19);
 }
 
+function drawMinimap(ctx, W, H, camX, camY, playerX, playerY, otherPlayers) {
+  const MW = 100, MH = 75;
+  const MX = W - MW - 6, MY = 6;
+  const sx = MW / (MAP_W * TILE_SIZE);
+  const sy = MH / (MAP_H * TILE_SIZE);
+
+  const fill = (color, tx1, ty1, tw, th) => {
+    ctx.fillStyle = color;
+    ctx.fillRect(MX + tx1 * TILE_SIZE * sx, MY + ty1 * TILE_SIZE * sy, tw * TILE_SIZE * sx + 0.5, th * TILE_SIZE * sy + 0.5);
+  };
+
+  // Shadow border
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.fillRect(MX - 1, MY - 1, MW + 2, MH + 2);
+
+  // Zones
+  fill('rgba(50,100,40,0.95)',  0,  0, 27, 30); // grass base
+  fill('rgba(80,70,65,0.95)',  27,  0, 13, 19); // mine
+  fill('rgba(180,155,60,0.9)',  0, 17, 27,  2); // sand
+  fill('rgba(110,80,15,0.95)',  3, 19, 22,  2); // dock
+  fill('rgba(20,70,180,0.95)',  0, 21, 27,  9); // water
+  fill('rgba(20,70,180,0.95)', 27, 19, 13, 11); // mine water
+  fill('rgba(130,105,65,0.9)',  0, 12, 27,  2); // main path
+  fill('rgba(60,35,20,0.95)',   1,  1,  9, 10); // shop
+  fill('rgba(70,25,10,0.95)',  11,  2,  8,  8); // cooking
+
+  // Viewport box
+  ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(
+    MX + camX * sx, MY + camY * sy,
+    Math.min(W * sx, MW), Math.min(H * sy, MH)
+  );
+
+  // Other players
+  for (const op of (otherPlayers ?? [])) {
+    ctx.fillStyle = '#00eeee';
+    ctx.beginPath();
+    ctx.arc(MX + op.x * sx, MY + op.y * sy, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Self
+  ctx.fillStyle = '#ffff44';
+  ctx.beginPath();
+  ctx.arc(MX + playerX * sx, MY + playerY * sy, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Border
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(MX, MY, MW, MH);
+}
+
 function drawMineEntrance(ctx, sx, sy) {
   // Cave arch
   const ex = sx + TILE_SIZE, ey = sy + TILE_SIZE;
@@ -331,7 +385,7 @@ function drawPlayer(ctx, px, py, player, nickname) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivityChange, nickname }) {
+export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivityChange, nickname, otherPlayersRef }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onActivityChange });
 
@@ -507,8 +561,22 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       if (ml[0] > 0 && ml[0] < W && ml[1] > 0 && ml[1] < H)
         ctx.fillText('광산 지역', ml[0], ml[1]);
 
-      // Player
+      // Other players
+      const others = otherPlayersRef?.current ?? [];
+      for (const op of others) {
+        drawPlayer(ctx, op.x - camX, op.y - camY, {
+          facing: op.facing ?? 'down',
+          state: op.state ?? 'idle',
+          activityProgress: 0,
+          floatText: null,
+        }, op.nickname);
+      }
+
+      // My player (on top)
       drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname);
+
+      // Minimap
+      drawMinimap(ctx, W, H, camX, camY, player.x, player.y, others);
 
       rafId = requestAnimationFrame(loop);
     }
