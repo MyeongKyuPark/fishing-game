@@ -2,7 +2,8 @@
 
 /* ── Login screen ── */
 .login-bg {
-  width: 100vw; height: 100vh;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
   display: flex; align-items: center; justify-content: center;
   background: radial-gradient(ellipse at 50% 60%, #0d2a4a 0%, #07111f 100%);
   overflow: hidden;
@@ -81,32 +82,29 @@
 .hud-nick { color: #aaddff; }
 
 html, body {
-  display: block !important;
   margin: 0; padding: 0;
   width: 100%; height: 100%;
   overflow: hidden;
-  background: #111;
+  background: #1a1a2e;
   font-family: 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
 }
 
 #root {
-  display: block;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
 }
 
 /* ── Layout ── */
 .root {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
   display: flex;
-  width: 100vw; height: 100vh;
-  overflow: hidden;
   background: #1a1a2e;
 }
 
 .canvas-area {
-  flex: 1;
   position: relative;
+  flex: 1;
   overflow: hidden;
 }
 

@@ -299,11 +299,11 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       const g = gameRef.current;
       if (!canvas || !g || !g.player) { rafId = requestAnimationFrame(loop); return; }
 
-      // Sync canvas size to parent every frame (handles all resize cases)
-      const pw = canvas.parentElement?.clientWidth || window.innerWidth;
-      const ph = canvas.parentElement?.clientHeight || window.innerHeight;
-      if (pw > 0 && canvas.width !== pw) canvas.width = pw;
-      if (ph > 0 && canvas.height !== ph) canvas.height = ph;
+      // Sync canvas buffer to its CSS display size every frame
+      const pw = canvas.offsetWidth || window.innerWidth;
+      const ph = canvas.offsetHeight || window.innerHeight;
+      if (canvas.width !== pw) canvas.width = pw;
+      if (canvas.height !== ph) canvas.height = ph;
       if (canvas.width === 0 || canvas.height === 0) { rafId = requestAnimationFrame(loop); return; }
 
       const ctx = canvas.getContext('2d');
@@ -418,7 +418,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
   return (
     <canvas
       ref={canvasRef}
-      style={{ display: 'block', width: '100%', height: '100%' }}
+      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
     />
   );
 }
