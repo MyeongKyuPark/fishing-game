@@ -74,6 +74,24 @@ export const BOOTS = {
   질풍신발: { name: '질풍 신발', price: 1800, speedBonus: 3.2, color: '#ff9944', upgradeMats: { 수정: 3 } },
 };
 
+export const BAIT = {
+  구리미끼: { name: '구리 미끼', price: 250, type: 'permanent', color: '#b87333',
+    desc: '희귀 물고기 확률 상승', boost: { 보통: 1.4, 희귀: 1.8, 전설: 1.3, 신화: 1.1 } },
+  황금미끼: { name: '황금 미끼', price: 900, type: 'permanent', color: '#ffd700',
+    desc: '전설급 확률 대폭 상승', boost: { 보통: 1.6, 희귀: 2.5, 전설: 2.5, 신화: 1.8 } },
+  전설미끼: { name: '전설 미끼 (1회)', price: 600, type: 'once', color: '#aa44ff',
+    desc: '1회용 – 전설 물고기 출현', boost: { 희귀: 2.0, 전설: 6.0, 신화: 3.0 } },
+  신화미끼: { name: '신화 미끼 (1회)', price: 3000, type: 'once', color: '#ff44ff',
+    desc: '1회용 – 신화 물고기 출현!', boost: { 전설: 4.0, 신화: 10.0 } },
+};
+
+export const COOKWARE = {
+  기본프라이팬: { name: '기본 프라이팬', price: 200, mult: 2.0, color: '#888888',
+    desc: '물고기 요리 → 가격 2배' },
+  고급화로: { name: '고급 화로', price: 900, mult: 3.5, color: '#ff6633',
+    desc: '물고기 요리 → 가격 3.5배', upgradeMats: { 철광석: 3 } },
+};
+
 export const STAT_DEFS = {
   힘:   { icon: '💪', desc: '물고기 판매가 +6%/레벨', color: '#ff7777' },
   민첩: { icon: '🏃', desc: '이동속도 +0.4/레벨',    color: '#66ccff' },

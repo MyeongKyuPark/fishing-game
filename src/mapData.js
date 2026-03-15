@@ -17,6 +17,17 @@ function buildMap() {
   t[11][4] = TILE.PATH;
   t[11][5] = TILE.PATH;
 
+  // Cooking area building: cols 11-18, rows 2-9
+  for (let r = 2; r <= 9; r++)
+    for (let c = 11; c <= 18; c++)
+      t[r][c] = TILE.BUILDING;
+
+  // Cooking entrance path: row 10-11, cols 13-14
+  t[10][13] = TILE.PATH;
+  t[10][14] = TILE.PATH;
+  t[11][13] = TILE.PATH;
+  t[11][14] = TILE.PATH;
+
   // Main horizontal path: rows 12-13, cols 0-26
   for (let c = 0; c < 27; c++) {
     t[12][c] = TILE.PATH;
@@ -65,6 +76,10 @@ export const SHOP_RANGE = 4 * TILE_SIZE;
 export const MINE_ZONE = { tx1: 27, ty1: 0, tx2: 39, ty2: 18 };
 export const MINE_ENTRANCE = { tx: 29, ty: 6 };
 
+export const COOKING_TX = 13;
+export const COOKING_TY = 11;
+export const COOKING_RANGE = 4 * TILE_SIZE;
+
 export const PLAYER_START_X = 15 * TILE_SIZE + TILE_SIZE / 2;
 export const PLAYER_START_Y = 14 * TILE_SIZE + TILE_SIZE / 2;
 
@@ -89,6 +104,12 @@ export function nearShop(px, py) {
   const sx = SHOP_TX * TILE_SIZE + TILE_SIZE / 2;
   const sy = SHOP_TY * TILE_SIZE + TILE_SIZE / 2;
   return Math.hypot(px - sx, py - sy) <= SHOP_RANGE;
+}
+
+export function nearCooking(px, py) {
+  const cx = COOKING_TX * TILE_SIZE + TILE_SIZE / 2;
+  const cy = COOKING_TY * TILE_SIZE + TILE_SIZE / 2;
+  return Math.hypot(px - cx, py - cy) <= COOKING_RANGE;
 }
 
 export function pickOre() {

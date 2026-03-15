@@ -5,6 +5,7 @@ import {
 import {
   MAP_TILES, FISHING_CHAIRS, MINE_ENTRANCE,
   PLAYER_START_X, PLAYER_START_Y, pickOre,
+  COOKING_TX, COOKING_TY,
 } from './mapData';
 
 const PW = 18;
@@ -140,6 +141,45 @@ function drawFishingSign(ctx, sx, sy) {
   ctx.fillStyle = 'rgba(200,240,200,0.8)';
   ctx.fillText('의자에 앉아 !낚시 입력', sx, by + 38);
   ctx.fillText('방향키로 취소', sx, by + 50);
+}
+
+function drawCookingBuilding(ctx, camX, camY) {
+  const bx = COOKING_TX * TILE_SIZE - camX - 2 * TILE_SIZE;
+  const by = COOKING_TY * TILE_SIZE - camY - 8 * TILE_SIZE;
+  const bw = 8 * TILE_SIZE;
+  const bh = 8 * TILE_SIZE;
+
+  // Roof
+  ctx.fillStyle = '#4a1a0a';
+  ctx.fillRect(bx - 4, by - 6, bw + 8, 18);
+
+  // Chimney smoke
+  const smokeY = by - 24 + Math.sin(Date.now() / 700) * 3;
+  ctx.fillStyle = 'rgba(200,200,200,0.35)';
+  ctx.beginPath(); ctx.arc(bx + bw * 0.7, smokeY, 8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(bx + bw * 0.7 - 6, smokeY - 12, 5, 0, Math.PI * 2); ctx.fill();
+
+  // Windows
+  ctx.fillStyle = '#ffcc88';
+  ctx.fillRect(bx + 12, by + 28, 24, 18);
+  ctx.fillRect(bx + bw - 36, by + 28, 24, 18);
+  ctx.strokeStyle = '#5a2a10'; ctx.lineWidth = 2;
+  ctx.strokeRect(bx + 12, by + 28, 24, 18);
+  ctx.strokeRect(bx + bw - 36, by + 28, 24, 18);
+
+  // Door
+  ctx.fillStyle = '#2a0a00';
+  ctx.fillRect(bx + 88, by + bh - 28, 40, 28);
+  ctx.strokeStyle = '#8b4414'; ctx.lineWidth = 2;
+  ctx.strokeRect(bx + 88, by + bh - 28, 40, 28);
+
+  // Sign
+  ctx.fillStyle = '#cc5500';
+  ctx.fillRect(bx + bw / 2 - 40, by + 4, 80, 22);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px "Noto Sans KR", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('🍳 요리소', bx + bw / 2, by + 19);
 }
 
 function drawMineEntrance(ctx, sx, sy) {
@@ -429,6 +469,11 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       const bsx = 1 * TILE_SIZE - camX, bsy = 1 * TILE_SIZE - camY;
       if (bsx < W && bsx + 10 * TILE_SIZE > 0 && bsy < H && bsy + 11 * TILE_SIZE > 0)
         drawShopBuilding(ctx, camX, camY);
+
+      // Cooking building decoration
+      const ckx = COOKING_TX * TILE_SIZE - camX, cky = COOKING_TY * TILE_SIZE - camY;
+      if (ckx > -10 * TILE_SIZE && ckx < W + 2 * TILE_SIZE && cky > -10 * TILE_SIZE && cky < H)
+        drawCookingBuilding(ctx, camX, camY);
 
       // Fishing area sign (tx=13, ty=17 — top of sand beach)
       {

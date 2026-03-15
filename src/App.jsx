@@ -5,8 +5,8 @@ import Chat from './Chat';
 import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
 import { saveFishRecord } from './ranking';
-import { FISH, RODS, ORES, BOOTS, STAT_DEFS, STAT_MAX, statCost, weightedPick, randInt, TILE_SIZE } from './gameData';
-import { nearestChair, nearShop, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
+import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, STAT_DEFS, STAT_MAX, statCost, weightedPick, randInt, TILE_SIZE } from './gameData';
+import { nearestChair, nearShop, nearCooking, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
 function LoginScreen({ onLogin }) {
   const [name, setName] = useState('');
@@ -59,6 +59,11 @@ const DEFAULT_STATE = {
   boots: '기본신발',
   ownedBoots: ['기본신발'],
   stats: { ...DEFAULT_STATS },
+  equippedBait: null,
+  ownedBait: [],
+  baitInventory: {},
+  cookware: null,
+  ownedCookware: [],
 };
 
 function loadSave() {
@@ -75,6 +80,11 @@ function loadSave() {
       boots: s.boots ?? '기본신발',
       ownedBoots: s.ownedBoots ?? ['기본신발'],
       stats: { ...DEFAULT_STATS, ...(s.stats ?? {}) },
+      equippedBait: s.equippedBait ?? null,
+      ownedBait: s.ownedBait ?? [],
+      baitInventory: s.baitInventory ?? {},
+      cookware: s.cookware ?? null,
+      ownedCookware: s.ownedCookware ?? [],
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -144,11 +154,8 @@ export default function App() {
 
   // ── Callbacks from game loop ──────────────────────────────────────────────
 
-  // Apply luck to boost rare fish weights
-  const applyLuck = useCallback((table, luckLv) => {
-    if (luckLv <= 1) return table;
-    const mult = { 흔함: 1, 보통: 1 + (luckLv-1)*0.12, 희귀: 1 + (luckLv-1)*0.22, 전설: 1 + (luckLv-1)*0.40, 신화: 1 + (luckLv-1)*0.60 };
-    return table.map(e => ({ ...e, w: e.w * (mult[FISH[e.f]?.rarity] ?? 1) }));
+  const applyBoosts = useCallback((table, boostMap) => {
+    return table.map(e => ({ ...e, w: e.w * (boostMap[FISH[e.f]?.rarity] ?? 1) }));
   }, []);
 
   const onFishCaught = useCallback((rodKey) => {
@@ -157,12 +164,30 @@ export default function App() {
     const s = stateRef.current;
     const luckLv = s?.stats?.행운 ?? 1;
     const 힘Lv = s?.stats?.힘 ?? 1;
-    const name = weightedPick(applyLuck(rod.table, luckLv));
+
+    // Build rarity boost from luck stat
+    const luckBoost = { 흔함: 1, 보통: 1 + (luckLv-1)*0.12, 희귀: 1 + (luckLv-1)*0.22, 전설: 1 + (luckLv-1)*0.40, 신화: 1 + (luckLv-1)*0.60 };
+    let table = applyBoosts(rod.table, luckBoost);
+
+    // Apply equipped bait
+    const baitKey = s?.equippedBait;
+    const baitData = baitKey ? BAIT[baitKey] : null;
+    if (baitData) table = applyBoosts(table, baitData.boost);
+
+    const name = weightedPick(table);
     const fd = FISH[name];
     if (!fd) return;
     const size = parseFloat((Math.random() * (fd.maxSz - fd.minSz) + fd.minSz).toFixed(1));
     const avgSz = (fd.minSz + fd.maxSz) / 2;
     const price = Math.round(fd.price * (size / avgSz) * (1 + (힘Lv - 1) * 0.06));
+
+    // Consume one-time bait
+    if (baitData?.type === 'once') {
+      setGs(prev => {
+        const bi = { ...(prev.baitInventory ?? {}), [baitKey]: Math.max(0, (prev.baitInventory?.[baitKey] ?? 1) - 1) };
+        return { ...prev, baitInventory: bi, equippedBait: bi[baitKey] <= 0 ? null : prev.equippedBait };
+      });
+    }
     const id = Date.now() + Math.random();
 
     setGs(prev => ({ ...prev, fishInventory: [...prev.fishInventory, { name, size, price, id }], fishCaught: (prev.fishCaught ?? 0) + 1 }));
@@ -210,6 +235,7 @@ export default function App() {
       ['!낚시  – 낚시 시작 (낚시 의자 근처)',
        '!광질  – 채굴 시작 (광산 지역, 동쪽)',
        '!그만  – 현재 활동 중지',
+       '!요리  – 물고기 요리 (요리소 근처)',
        '!상점  – 상점 열기 (상점 건물 근처)',
        '!판매  – 물고기 전체 판매 (상점 근처)',
        '!인벤  – 인벤토리 열기/닫기',
@@ -225,6 +251,29 @@ export default function App() {
 
     if (cmd === '!랭킹') {
       setShowRank(v => !v);
+      return;
+    }
+
+    if (cmd === '!요리') {
+      if (!nearCooking(player.x, player.y)) {
+        addMsg('🍳 요리소 근처로 이동하세요! (지도 북쪽 요리소)', 'error');
+        return;
+      }
+      const cw = stateRef.current?.cookware;
+      if (!cw) {
+        addMsg('🍳 요리 도구가 없습니다. 상점에서 구매하세요!', 'error');
+        return;
+      }
+      const mult = COOKWARE[cw]?.mult ?? 1;
+      const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
+      if (raw.length === 0) { addMsg('요리할 생선이 없습니다.'); return; }
+      setGs(prev => ({
+        ...prev,
+        fishInventory: prev.fishInventory.map(f =>
+          f.cooked ? f : { ...f, price: Math.round(f.price * mult), cooked: true }
+        ),
+      }));
+      addMsg(`🍳 생선 ${raw.length}마리 요리 완료! (가격 ${mult}배)`, 'catch');
       return;
     }
 
@@ -355,6 +404,44 @@ export default function App() {
     addMsg(`👟 ${BOOTS[key].name} 장착`);
   };
 
+  const buyBait = (key) => {
+    const bait = BAIT[key];
+    if (bait.type === 'permanent' && (gs.ownedBait ?? []).includes(key)) { addMsg('이미 보유 중'); return; }
+    if (gs.money < bait.price) { addMsg(`💰 골드 부족 (${bait.price}G 필요)`, 'error'); return; }
+    if (bait.type === 'permanent') {
+      setGs(prev => ({ ...prev, money: prev.money - bait.price, ownedBait: [...(prev.ownedBait ?? []), key], equippedBait: key }));
+      addMsg(`🪝 ${bait.name} 구매 및 장착!`, 'catch');
+    } else {
+      setGs(prev => ({ ...prev, money: prev.money - bait.price, baitInventory: { ...(prev.baitInventory ?? {}), [key]: ((prev.baitInventory ?? {})[key] ?? 0) + 1 } }));
+      addMsg(`🪝 ${bait.name} 구매!`, 'catch');
+    }
+  };
+
+  const equipBait = (key) => {
+    setGs(prev => ({ ...prev, equippedBait: prev.equippedBait === key ? null : key }));
+    addMsg(`🪝 ${BAIT[key]?.name} ${gs.equippedBait === key ? '해제' : '장착'}`);
+  };
+
+  const buyCookware = (key) => {
+    const cw = COOKWARE[key];
+    if ((gs.ownedCookware ?? []).includes(key)) { addMsg('이미 보유 중'); return; }
+    const canAfford = gs.money >= cw.price;
+    const hasMats = cw.upgradeMats ? Object.entries(cw.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
+    if (!canAfford) { addMsg(`💰 골드 부족 (${cw.price}G 필요)`, 'error'); return; }
+    if (!hasMats) { addMsg('재료 부족', 'error'); return; }
+    setGs(prev => {
+      const ores = { ...prev.oreInventory };
+      if (cw.upgradeMats) for (const [ore, n] of Object.entries(cw.upgradeMats)) ores[ore] -= n;
+      return { ...prev, money: prev.money - cw.price, oreInventory: ores, ownedCookware: [...(prev.ownedCookware ?? []), key], cookware: key };
+    });
+    addMsg(`🍳 ${cw.name} 구매!`, 'catch');
+  };
+
+  const equipCookware = (key) => {
+    setGs(prev => ({ ...prev, cookware: key }));
+    addMsg(`🍳 ${COOKWARE[key].name} 장착`);
+  };
+
   const upgradeStat = (stat) => {
     const lv = gs.stats?.[stat] ?? 1;
     if (lv >= STAT_MAX) { addMsg(`${stat} 최대 레벨입니다.`); return; }
@@ -465,6 +552,9 @@ export default function App() {
             <button className="action-btn" tabIndex={-1} onClick={() => setShowRank(v => !v)}>
               <span>🏆</span><span className="action-btn-label">랭킹</span>
             </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!요리')}>
+              <span>🍳</span><span className="action-btn-label">요리</span>
+            </button>
           </div>
         </div>
       </div>
@@ -472,52 +562,106 @@ export default function App() {
       <Chat messages={messages} onCommand={handleCommand} />
 
       {/* Inventory modal */}
-      {showInv && (
-        <div className="overlay" onClick={() => setShowInv(false)}>
-          <div className="panel" onClick={e => e.stopPropagation()}>
-            <div className="panel-head">
-              <span>🎒 인벤토리</span>
-              <button tabIndex={-1} onClick={() => setShowInv(false)}>✕</button>
-            </div>
+      {showInv && (() => {
+        const RARITY_ORDER = { 신화: 5, 전설: 4, 희귀: 3, 보통: 2, 흔함: 1 };
+        const groups = {};
+        for (const f of gs.fishInventory) {
+          if (!groups[f.name]) groups[f.name] = [];
+          groups[f.name].push(f);
+        }
+        const sortedGroups = Object.entries(groups).sort(([a], [b]) =>
+          (RARITY_ORDER[FISH[b]?.rarity] ?? 0) - (RARITY_ORDER[FISH[a]?.rarity] ?? 0)
+        );
+        const sellSpecies = (name) => {
+          const total = groups[name].reduce((s, f) => s + f.price, 0);
+          setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: prev.fishInventory.filter(f => f.name !== name) }));
+          addMsg(`💰 ${name} ${groups[name].length}마리 판매 +${total}G`, 'catch');
+        };
+        return (
+          <div className="overlay" onClick={() => setShowInv(false)}>
+            <div className="panel" onClick={e => e.stopPropagation()}>
+              <div className="panel-head">
+                <span>🎒 인벤토리</span>
+                <button tabIndex={-1} onClick={() => setShowInv(false)}>✕</button>
+              </div>
 
-            <div className="section">
-              <div className="section-title">물고기 ({gs.fishInventory.length}마리)</div>
-              {gs.fishInventory.length === 0
-                ? <div className="empty">물고기가 없습니다.</div>
-                : <>
-                    <button tabIndex={-1} className="sell-all-btn" onClick={sellAll}>
-                      전체 판매 ({totalFishVal}G)
-                    </button>
-                    <div className="fish-list">
-                      {gs.fishInventory.map(f => (
-                        <div key={f.id} className="fish-row">
-                          <span style={{ color: rarityColor(FISH[f.name]?.rarity), minWidth: 42, fontSize: 11 }}>
-                            [{FISH[f.name]?.rarity}]
-                          </span>
-                          <span className="grow">{f.name}</span>
-                          <span className="dim">{f.size}cm</span>
-                          <span className="gold">{f.price}G</span>
-                          <button tabIndex={-1} className="sell-btn" onClick={() => sellOne(f.id)}>판매</button>
-                        </div>
-                      ))}
+              <div className="section">
+                <div className="section-title">물고기 ({gs.fishInventory.length}마리)</div>
+                {gs.fishInventory.length === 0
+                  ? <div className="empty">물고기가 없습니다.</div>
+                  : <>
+                      <button tabIndex={-1} className="sell-all-btn" onClick={sellAll}>
+                        전체 판매 ({totalFishVal}G)
+                      </button>
+                      <div className="fish-list">
+                        {sortedGroups.map(([species, fishes]) => {
+                          const fd = FISH[species];
+                          const rc = rarityColor(fd?.rarity);
+                          const speciesVal = fishes.reduce((s, f) => s + f.price, 0);
+                          const sorted = [...fishes].sort((a, b) => b.size - a.size);
+                          return (
+                            <div key={species} className="species-group">
+                              <div className="species-header">
+                                <span className="species-rarity" style={{ color: rc }}>[{fd?.rarity}]</span>
+                                <span className="species-name" style={{ color: rc }}>{species}</span>
+                                <span className="species-count">{fishes.length}마리</span>
+                                <span className="species-val">{speciesVal}G</span>
+                                <button tabIndex={-1} className="sell-btn" onClick={() => sellSpecies(species)}>전체판매</button>
+                              </div>
+                              <div className="species-fish-list">
+                                {sorted.map(f => (
+                                  <div key={f.id} className="fish-row fish-row-compact">
+                                    <span className="grow">{f.size.toFixed(1)}cm{f.cooked ? ' 🍳' : ''}</span>
+                                    <span className="gold">{f.price}G</span>
+                                    <button tabIndex={-1} className="sell-btn" onClick={() => sellOne(f.id)}>판매</button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                }
+              </div>
+
+              <div className="section">
+                <div className="section-title">광물</div>
+                {Object.entries(gs.oreInventory).map(([ore, cnt]) => (
+                  <div key={ore} className="ore-row">
+                    <span className="grow">{ore}</span>
+                    <span className="dim">{cnt}개</span>
+                    <span className="gold">{(ORES[ore]?.price ?? 0) * cnt}G 상당</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="section">
+                <div className="section-title">미끼</div>
+                {Object.entries(BAIT).map(([key, bait]) => {
+                  const owned = bait.type === 'permanent' ? (gs.ownedBait ?? []).includes(key) : ((gs.baitInventory ?? {})[key] ?? 0) > 0;
+                  if (!owned) return null;
+                  const equipped = gs.equippedBait === key;
+                  return (
+                    <div key={key} className="fish-row">
+                      <span style={{ color: bait.color }}>🪝 {bait.name}</span>
+                      {bait.type === 'once' && <span className="dim">{(gs.baitInventory ?? {})[key] ?? 0}개</span>}
+                      <span className="grow" />
+                      <button tabIndex={-1} className={equipped ? 'btn-eq' : 'sell-btn'} onClick={() => equipBait(key)}>
+                        {equipped ? '장착중' : '장착'}
+                      </button>
                     </div>
-                  </>
-              }
-            </div>
-
-            <div className="section">
-              <div className="section-title">광물</div>
-              {Object.entries(gs.oreInventory).map(([ore, cnt]) => (
-                <div key={ore} className="ore-row">
-                  <span className="grow">{ore}</span>
-                  <span className="dim">{cnt}개</span>
-                  <span className="gold">{(ORES[ore]?.price ?? 0) * cnt}G 상당</span>
-                </div>
-              ))}
+                  );
+                })}
+                {!Object.values(BAIT).some((b, i) => {
+                  const key = Object.keys(BAIT)[i];
+                  return b.type === 'permanent' ? (gs.ownedBait ?? []).includes(key) : ((gs.baitInventory ?? {})[key] ?? 0) > 0;
+                }) && <div className="empty">미끼 없음 (상점에서 구매)</div>}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Ranking modal */}
       {showRank && <Leaderboard onClose={() => setShowRank(false)} myNickname={nickname} />}
@@ -605,6 +749,72 @@ export default function App() {
                         ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipBoots(key)}>장착</button>)
                         : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyBoots(key)} disabled={!canBuy}>
                             {canBuy ? (boot.price > 0 ? `${boot.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Bait ── */}
+            <div className="section">
+              <div className="section-title">미끼</div>
+              {Object.entries(BAIT).map(([key, bait]) => {
+                const isPerm = bait.type === 'permanent';
+                const owned = isPerm ? (gs.ownedBait ?? []).includes(key) : false;
+                const equipped = gs.equippedBait === key;
+                const stock = (gs.baitInventory ?? {})[key] ?? 0;
+                const canAfford = gs.money >= bait.price;
+                return (
+                  <div key={key} className="rod-card" style={equipped ? { borderColor: 'rgba(170,68,255,0.4)', background: 'rgba(170,68,255,0.07)' } : {}}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ color: bait.color, fontWeight: 700 }}>🪝 {bait.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {isPerm && owned && !equipped && <span className="badge owned">보유</span>}
+                      {!isPerm && stock > 0 && <span className="badge owned">×{stock}</span>}
+                    </div>
+                    <div className="rod-meta">{bait.price}G · {bait.desc}</div>
+                    <div style={{ marginTop: 5, display: 'flex', gap: 6 }}>
+                      {isPerm && owned
+                        ? <button tabIndex={-1} className={equipped ? 'btn-dis' : 'btn-eq'} onClick={() => equipBait(key)} disabled={equipped}>
+                            {equipped ? '장착중' : '장착'}
+                          </button>
+                        : <button tabIndex={-1} className={canAfford ? 'btn-buy' : 'btn-dis'} onClick={() => buyBait(key)} disabled={!canAfford}>
+                            {canAfford ? `${bait.price}G 구매` : '💰 부족'}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Cookware ── */}
+            <div className="section">
+              <div className="section-title">요리 도구</div>
+              {Object.entries(COOKWARE).map(([key, cw]) => {
+                const owned = (gs.ownedCookware ?? []).includes(key);
+                const equipped = gs.cookware === key;
+                const canAfford = gs.money >= cw.price;
+                const hasMats = cw.upgradeMats ? Object.entries(cw.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
+                const matsStr = cw.upgradeMats ? Object.entries(cw.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                const canBuy = canAfford && hasMats;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ color: cw.color, fontWeight: 700 }}>🍳 {cw.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {cw.price}G{matsStr ? ` + ${matsStr}` : ''} · {cw.desc}
+                    </div>
+                    <div style={{ marginTop: 5 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipCookware(key)}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyCookware(key)} disabled={!canBuy}>
+                            {canBuy ? `${cw.price}G 구매` : (!canAfford ? '💰 부족' : '재료 부족')}
                           </button>
                       }
                     </div>

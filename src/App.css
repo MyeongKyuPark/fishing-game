@@ -330,6 +330,26 @@ html, body {
   font-size: 12px; cursor: not-allowed; font-family: inherit;
 }
 
+/* ── Species groups in inventory ── */
+.species-group {
+  margin-bottom: 6px;
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 6px; overflow: hidden;
+}
+.species-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 8px;
+  background: rgba(255,255,255,0.06);
+  font-size: 12px;
+}
+.species-rarity { font-size: 10px; min-width: 30px; }
+.species-name { font-weight: 700; flex: 1; }
+.species-count { color: #aaa; font-size: 11px; }
+.species-val { color: #e0d070; font-size: 11px; min-width: 44px; text-align: right; }
+.species-fish-list { padding: 2px 4px; }
+.fish-row-compact { padding: 2px 6px; background: none; border-radius: 3px; }
+.fish-row-compact:hover { background: rgba(255,255,255,0.04); }
+
 /* ── Stat cards ── */
 .stat-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
