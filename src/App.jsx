@@ -4,7 +4,7 @@ import GameCanvas from './GameCanvas';
 import Chat from './Chat';
 import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
-import { saveRanking } from './ranking';
+import { saveFishRecord } from './ranking';
 import { FISH, RODS, ORES, weightedPick, randInt, TILE_SIZE } from './gameData';
 import { nearestChair, nearShop, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
@@ -80,8 +80,10 @@ export default function App() {
   const stateRef = useRef(null);
   const tabId = useRef(Date.now() + '-' + Math.random());
   const channelRef = useRef(null);
+  const nicknameRef = useRef('');
 
   const [nickname, setNickname] = useState('');
+  useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
   const [blocked, setBlocked] = useState(false);
 
   const [gs, setGs] = useState(loadSave);
@@ -93,7 +95,6 @@ export default function App() {
   const [showInv, setShowInv] = useState(false);
   const [showShop, setShowShop] = useState(false);
   const [showRank, setShowRank] = useState(false);
-  const rankSaveTimer = useRef(null);
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -120,15 +121,6 @@ export default function App() {
     localStorage.setItem('fishingGame_v1', JSON.stringify(gs));
   }, [gs]);
 
-  // Debounced ranking save (only when logged in)
-  useEffect(() => {
-    if (!nickname) return;
-    clearTimeout(rankSaveTimer.current);
-    rankSaveTimer.current = setTimeout(() => {
-      saveRanking(nickname, gs.money, gs.fishCaught ?? 0);
-    }, 4000);
-    return () => clearTimeout(rankSaveTimer.current);
-  }, [gs.money, gs.fishCaught, nickname]);
 
   const addMsg = useCallback((text, type = 'system') => {
     setMessages(prev => [...prev.slice(-120), { text, type }]);
@@ -149,6 +141,7 @@ export default function App() {
 
     setGs(prev => ({ ...prev, fishInventory: [...prev.fishInventory, { name, size, price, id }], fishCaught: (prev.fishCaught ?? 0) + 1 }));
     addMsg(`🐟 ${name} ${size}cm 낚음! (${price}G)`, 'catch');
+    if (nicknameRef.current) saveFishRecord(nicknameRef.current, name, size);
 
     if (gameRef.current?.player) {
       gameRef.current.player.floatText = {
@@ -336,7 +329,6 @@ export default function App() {
     channelRef.current?.postMessage({ type: 'gameStart', tabId: tabId.current });
     setBlocked(false);
     setNickname(name);
-    saveRanking(name, gs.money, gs.fishCaught ?? 0);
     setMessages([
       { type: 'system', text: `⚓ 어서오세요, ${name}님!` },
       { type: 'system', text: '방향키로 이동 · !도움말 로 명령어 확인' },

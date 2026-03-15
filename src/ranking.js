@@ -1,32 +1,32 @@
 import {
-  doc, setDoc, collection, query,
-  orderBy, limit, onSnapshot, serverTimestamp,
+  doc, collection, query, orderBy, limit,
+  onSnapshot, serverTimestamp, runTransaction,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-export async function saveRanking(nickname, money, fishCaught) {
+// Save personal best for a specific fish species (subcollection per species)
+export async function saveFishRecord(nickname, fishName, size) {
+  const ref = doc(db, 'fish_records', fishName, 'top', nickname);
   try {
-    await setDoc(doc(db, 'rankings', nickname), {
-      nickname,
-      money,
-      fishCaught,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists() || snap.data().size < size) {
+        tx.set(ref, { nickname, size, caughtAt: serverTimestamp() });
+      }
+    });
   } catch (e) {
-    console.warn('ranking save failed', e);
+    console.warn('fish record save failed', e);
   }
 }
 
-// Returns unsubscribe fn. Calls callback with array of { nickname, money, fishCaught, updatedAt }
-export function subscribeRankings(callback) {
+// Subscribe to top 10 for a specific fish species, ordered by size desc
+export function subscribeFishRankings(fishName, callback) {
   const q = query(
-    collection(db, 'rankings'),
-    orderBy('money', 'desc'),
-    limit(20),
+    collection(db, 'fish_records', fishName, 'top'),
+    orderBy('size', 'desc'),
+    limit(10),
   );
-  return onSnapshot(q, (snap) => {
+  return onSnapshot(q, snap => {
     callback(snap.docs.map(d => d.data()));
-  }, (err) => {
-    console.warn('ranking subscribe error', err);
-  });
+  }, err => console.warn('fish ranking subscribe error', err));
 }

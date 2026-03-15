@@ -331,6 +331,29 @@ html, body {
 }
 
 /* ── Leaderboard ── */
+.rank-tabs {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+.rank-tab {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.45);
+  border-radius: 20px; padding: 3px 10px;
+  font-size: 11px; cursor: pointer; font-family: inherit;
+}
+.rank-tab:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.rank-tab-active {
+  background: rgba(255,255,255,0.08);
+  color: #fff; font-weight: 700;
+}
+
+.rank-fish-header {
+  margin-bottom: 10px; font-size: 13px;
+}
+.rank-fish-range { color: rgba(255,255,255,0.4); font-size: 11px; }
+
 .rank-row {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 8px;
@@ -344,9 +367,8 @@ html, body {
 }
 .rank-pos { min-width: 28px; text-align: center; font-weight: 700; font-size: 14px; }
 .rank-nick { flex: 1; font-weight: 600; color: #dde; }
-.rank-fish { color: #77cc77; font-size: 12px; min-width: 56px; text-align: right; }
-.rank-gold { color: #e0d070; font-size: 12px; min-width: 80px; text-align: right; }
-.rank-time { color: #556; font-size: 11px; min-width: 52px; text-align: right; }
+.rank-size { font-weight: 700; font-size: 13px; min-width: 64px; text-align: right; }
+.rank-time { color: #556; font-size: 11px; min-width: 48px; text-align: right; }
 
 /* ── Mobile controls (joystick + action buttons) ── */
 .mobile-controls {
