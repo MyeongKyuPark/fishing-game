@@ -379,6 +379,7 @@ function drawMineEntrance(ctx, sx, sy) {
 
 function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
   const { facing, state, activityProgress } = player;
+  const now = Date.now();
 
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
@@ -409,42 +410,162 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
   else if (facing === 'up')    { ctx.fillRect(px - 4, ey - 2, 2, 2); ctx.fillRect(px + 2, ey - 2, 2, 2); }
   else                         { ctx.fillRect(px - 4, ey,     2, 2); ctx.fillRect(px + 2, ey,     2, 2); }
 
-  // Fishing rod
+  // ── Fishing animation ──
   if (state === 'fishing') {
-    const bob = Math.sin(Date.now() / 900) * 4;
-    ctx.strokeStyle = '#5a3a0a';
-    ctx.lineWidth = 2;
+    const t = now / 1000;
+    // Arm lean — body tilts forward slightly
+    const leanX = 5 + Math.sin(t * 0.5) * 1.5;
+
+    // Rod base at shoulder
+    const rodBaseX = px + leanX, rodBaseY = py - PH / 2 + 12;
+    // Rod tip oscillates gently (casting tension)
+    const tipBob = Math.sin(t * 1.1) * 3;
+    const rodTipX = rodBaseX + 28 + tipBob * 0.4;
+    const rodTipY = rodBaseY - 18 + tipBob;
+
+    // Draw rod with slight curve (quadratic)
+    ctx.strokeStyle = '#7a5020';
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(px + 8, py - PH / 2 + 10);
-    ctx.lineTo(px + 22 + bob, py + 10 + bob * 0.5);
+    ctx.moveTo(rodBaseX, rodBaseY);
+    ctx.quadraticCurveTo(rodBaseX + 16, rodBaseY - 10, rodTipX, rodTipY);
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(210,210,210,0.7)';
+
+    // Tip glow
+    ctx.fillStyle = '#c89040';
+    ctx.beginPath();
+    ctx.arc(rodTipX, rodTipY, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Fishing line — hangs from tip to float
+    const floatBob = Math.sin(t * 1.6) * 3 + Math.sin(t * 2.9) * 1.2;
+    const floatX = rodTipX + 8;
+    const floatY = py + 26 + floatBob;
+
+    ctx.strokeStyle = 'rgba(220,220,220,0.65)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(px + 22 + bob, py + 10 + bob * 0.5);
-    ctx.lineTo(px + 24 + bob, py + 22);
+    ctx.moveTo(rodTipX, rodTipY);
+    // Slight sag in line
+    ctx.quadraticCurveTo(rodTipX + 12, rodTipY + 18, floatX, floatY);
     ctx.stroke();
-    ctx.fillStyle = '#ff4444';
+
+    // Ripple rings at float
+    const rippleT = (now % 2200) / 2200;
+    if (rippleT > 0.1) {
+      const rAlpha = Math.max(0, 0.5 - rippleT * 0.5);
+      const rRadius = rippleT * 14;
+      ctx.strokeStyle = `rgba(100,180,255,${rAlpha})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(floatX, floatY + 1, rRadius, rRadius * 0.35, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    const rippleT2 = ((now + 1100) % 2200) / 2200;
+    if (rippleT2 > 0.1) {
+      const rAlpha2 = Math.max(0, 0.5 - rippleT2 * 0.5);
+      const rRadius2 = rippleT2 * 14;
+      ctx.strokeStyle = `rgba(100,180,255,${rAlpha2})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(floatX, floatY + 1, rRadius2, rRadius2 * 0.35, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Float body
+    ctx.fillStyle = '#ff3333';
     ctx.beginPath();
-    ctx.arc(px + 24 + bob, py + 22 + Math.sin(Date.now() / 500) * 2, 2.5, 0, Math.PI * 2);
+    ctx.ellipse(floatX, floatY, 4, 2.5, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(floatX, floatY - 2.5, 4, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    ctx.ellipse(floatX, floatY, 4, 5, 0, 0, Math.PI * 2);
+    ctx.stroke();
   }
 
-  // Pickaxe
+  // ── Mining animation ──
   if (state === 'mining') {
-    const swing = Math.sin(Date.now() / 180) * 0.9;
+    const t = now / 1000;
+    // Full swing cycle ~0.55s
+    const cycle = (now % 550) / 550;
+    // Raise arm 0→0.45, slam down 0.45→1.0
+    let swingAngle;
+    if (cycle < 0.45) {
+      // Raise: 0 → -1.3 rad
+      swingAngle = -1.3 * (cycle / 0.45);
+    } else {
+      // Slam: -1.3 → +0.7 rad  (overshoot)
+      swingAngle = -1.3 + 2.0 * ((cycle - 0.45) / 0.55);
+    }
+    const isImpact = cycle > 0.85;
+
     ctx.save();
-    ctx.translate(px + 8, py - PH / 2 + 12);
-    ctx.rotate(swing);
-    ctx.strokeStyle = '#909090';
-    ctx.lineWidth = 2;
+    ctx.translate(px + 7, py - PH / 2 + 14);
+    ctx.rotate(swingAngle);
+
+    // Handle
+    ctx.strokeStyle = '#7a4a10';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(14, 12);
+    ctx.lineTo(0, 18);
     ctx.stroke();
-    ctx.fillStyle = '#707070';
-    ctx.fillRect(11, 8, 7, 6);
+
+    // Pickaxe head (wedge shape)
+    ctx.fillStyle = '#8a8a8a';
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-7, 16);   // left spike
+    ctx.lineTo(-2, 12);
+    ctx.lineTo(0, 18);    // center
+    ctx.lineTo(2, 12);
+    ctx.lineTo(8, 14);    // right blunt
+    ctx.lineTo(5, 19);
+    ctx.lineTo(0, 18);
+    ctx.lineTo(-5, 20);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Metal sheen on head
+    ctx.fillStyle = 'rgba(220,220,220,0.45)';
+    ctx.beginPath();
+    ctx.moveTo(-5, 16); ctx.lineTo(-1, 13); ctx.lineTo(1, 16); ctx.lineTo(-3, 18);
+    ctx.closePath();
+    ctx.fill();
+
     ctx.restore();
+
+    // Impact sparks when slam hits
+    if (isImpact) {
+      const sparkCount = 5;
+      for (let i = 0; i < sparkCount; i++) {
+        const angle = (-0.3 + i * 0.25) + Math.sin(t * 8 + i) * 0.2;
+        const len = 4 + (i % 3) * 3;
+        const sx = px + 10 + Math.cos(angle) * 4;
+        const sy = py + PH / 2 - 2 + Math.sin(angle) * 4;
+        const sparkAlpha = 0.4 + ((cycle - 0.85) / 0.15) * 0.6;
+        ctx.strokeStyle = `rgba(255,${180 + i * 10},50,${sparkAlpha})`;
+        ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + Math.cos(angle) * len, sy + Math.sin(angle) * len);
+        ctx.stroke();
+      }
+      // Impact flash dot
+      ctx.fillStyle = 'rgba(255,220,80,0.6)';
+      ctx.beginPath();
+      ctx.arc(px + 10, py + PH / 2 - 2, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // Progress bar
