@@ -7,11 +7,13 @@ import Leaderboard from './Leaderboard';
 import RoomLobby from './RoomLobby';
 import { saveFishRecord } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
-import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, weightedPick, randInt, TILE_SIZE } from './gameData';
-import { DEFAULT_SKILLS, SKILL_DEFS, addSkillExp, expForLv,
-  FISH_SKILL_EXP, ORE_SKILL_EXP, COOK_SKILL_EXP,
-  SELL_SKILL_EXP_PER_100G, ACTIVITY_STAMINA_EXP } from './skillData';
-import { getTitle, TITLES } from './titleData';
+import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, weightedPick, randInt, TILE_SIZE,
+  getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect } from './gameData';
+import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
+  FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
+  SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
+import { getTitle } from './titleData';
+import { getWeather, msUntilNextWeather } from './weatherData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
 function LoginScreen({ onLogin }) {
@@ -57,12 +59,13 @@ const DEFAULT_STATE = {
   money: 100,
   rod: '초급낚시대',
   ownedRods: ['초급낚시대'],
+  rodEnhance: { 초급낚시대: 0 }, // { rodKey: enhanceLevel }
   fishInventory: [],
   oreInventory: { 철광석: 0, 구리광석: 0, 수정: 0 },
   fishCaught: 0,
   boots: '기본신발',
   ownedBoots: ['기본신발'],
-  skills: { ...DEFAULT_SKILLS },
+  abilities: { ...DEFAULT_ABILITIES },
   equippedBait: null,
   ownedBait: [],
   baitInventory: {},
@@ -76,26 +79,30 @@ function loadSave(nickname) {
   try {
     const s = JSON.parse(localStorage.getItem(saveKey(nickname)));
     if (!s) return DEFAULT_STATE;
-    // Merge saved skills per-key so new skills get defaults even on old saves
-    const savedSkills = s.skills ?? {};
-    const skills = Object.fromEntries(
-      Object.keys(DEFAULT_SKILLS).map(k => [
+    // Merge abilities per-key — default { value:0, grade:0 } for any missing
+    const savedAbil = s.abilities ?? {};
+    const abilities = Object.fromEntries(
+      Object.keys(DEFAULT_ABILITIES).map(k => [
         k,
-        (savedSkills[k] && typeof savedSkills[k].lv === 'number')
-          ? savedSkills[k]
-          : { lv: 1, exp: 0 },
+        (savedAbil[k] && typeof savedAbil[k].value === 'number')
+          ? savedAbil[k]
+          : { value: 0.00, grade: 0 },
       ])
     );
+    const rod = s.rod ?? '초급낚시대';
+    const ownedRods = s.ownedRods ?? ['초급낚시대'];
+    const rodEnhance = s.rodEnhance ?? Object.fromEntries(ownedRods.map(r => [r, 0]));
     return {
       money: s.money ?? 100,
-      rod: s.rod ?? '초급낚시대',
-      ownedRods: s.ownedRods ?? ['초급낚시대'],
+      rod,
+      ownedRods,
+      rodEnhance,
       fishInventory: s.fishInventory ?? [],
       oreInventory: { ...DEFAULT_STATE.oreInventory, ...s.oreInventory },
       fishCaught: s.fishCaught ?? 0,
       boots: s.boots ?? '기본신발',
       ownedBoots: s.ownedBoots ?? ['기본신발'],
-      skills,
+      abilities,
       equippedBait: s.equippedBait ?? null,
       ownedBait: s.ownedBait ?? [],
       baitInventory: s.baitInventory ?? {},
@@ -123,6 +130,7 @@ function rarityColor(r) {
 export default function App() {
   const gameRef = useRef({});
   const stateRef = useRef(null);
+  const weatherRef = useRef(null);
   const tabId = useRef(Date.now() + '-' + Math.random());
   const channelRef = useRef(null);
   const nicknameRef = useRef('');
@@ -147,6 +155,7 @@ export default function App() {
   const [showRank, setShowRank] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [inspectPlayer, setInspectPlayer] = useState(null);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -205,7 +214,8 @@ export default function App() {
         title: t.label,
         titleColor: t.color,
         boots: s.boots ?? '기본신발',
-        skillLvs: Object.fromEntries(Object.keys(DEFAULT_SKILLS).map(k => [k, s.skills?.[k]?.lv ?? 1])),
+        abilityVals: Object.fromEntries(Object.keys(DEFAULT_ABILITIES).map(k => [k, s.abilities?.[k]?.value ?? 0])),
+        abilityGrades: Object.fromEntries(Object.keys(DEFAULT_ABILITIES).map(k => [k, s.abilities?.[k]?.grade ?? 0])),
         fishCaught: s.fishCaught ?? 0,
         money: s.money ?? 0,
       };
@@ -249,9 +259,24 @@ export default function App() {
   useEffect(() => {
     if (!gameRef.current) return;
     const bootsBonus = BOOTS[gs.boots]?.speedBonus ?? 0;
-    const agilityBonus = ((gs.skills?.민첩?.lv ?? 1) - 1) * 0.4;
-    gameRef.current.speedBonus = bootsBonus + agilityBonus;
-  }, [gs.boots, gs.skills]);
+    gameRef.current.speedBonus = bootsBonus;
+  }, [gs.boots]);
+
+  // Weather: deterministic per room+time, update when period changes
+  const [weather, setWeather] = useState(() => getWeather(null, Date.now()));
+  useEffect(() => { weatherRef.current = weather; }, [weather]);
+  useEffect(() => {
+    if (!roomId) return;
+    setWeather(getWeather(roomId, Date.now()));
+    const update = () => setWeather(getWeather(roomId, Date.now()));
+    const ms = msUntilNextWeather(Date.now());
+    const t = setTimeout(() => {
+      update();
+      const id = setInterval(update, 8 * 60 * 1000);
+      return () => clearInterval(id);
+    }, ms);
+    return () => clearTimeout(t);
+  }, [roomId]);
 
   // Load save when nickname is established (nickname-keyed, room-independent)
   useEffect(() => {
@@ -278,17 +303,18 @@ export default function App() {
     setMessages(prev => [...prev.slice(-120), { text, type }]);
   }, []);
 
-  // Grant EXP to a skill; shows level-up message if leveled
-  const grantSkillExp = useCallback((skillName, amount) => {
-    const current = stateRef.current?.skills?.[skillName] ?? { lv: 1, exp: 0 };
-    const result = addSkillExp(current, amount);
-    if (result.leveledUp) {
-      const def = SKILL_DEFS[skillName];
-      setTimeout(() => addMsg(`✨ ${def?.icon ?? ''} ${skillName} Lv.${result.lv} 달성!`, 'catch'), 0);
+  // Grant ability EXP; shows grade-available message if reached 100
+  const grantAbility = useCallback((abilName, amount) => {
+    const current = stateRef.current?.abilities?.[abilName] ?? { value: 0, grade: 0 };
+    const partyBonus = (otherPlayersRef.current?.length ?? 0) > 0;
+    const result = gainAbility(current, amount, partyBonus);
+    if (result.reachedMax && current.value < 100) {
+      const def = ABILITY_DEFS[abilName];
+      setTimeout(() => addMsg(`🌟 ${def?.icon ?? ''} ${abilName} 100.00 달성! 스킬창에서 그레이드업 가능!`, 'catch'), 0);
     }
     setGs(prev => ({
       ...prev,
-      skills: { ...(prev.skills ?? DEFAULT_SKILLS), [skillName]: { lv: result.lv, exp: result.exp } },
+      abilities: { ...(prev.abilities ?? DEFAULT_ABILITIES), [abilName]: { value: result.value, grade: result.grade } },
     }));
   }, []);
 
@@ -298,35 +324,46 @@ export default function App() {
     return table.map(e => ({ ...e, w: e.w * (boostMap[FISH[e.f]?.rarity] ?? 1) }));
   }, []);
 
-  const onFishCaught = useCallback((rodKey) => {
+  const onFishCaught = useCallback((rodKey, weatherId) => {
     const rod = RODS[rodKey];
     if (!rod) return;
     const s = stateRef.current;
-    const luckLv  = s?.skills?.행운?.lv  ?? 1;
-    const speechLv = s?.skills?.화술?.lv ?? 1;
-    const fishLv   = s?.skills?.낚시?.lv ?? 1;
+    const fishAbil  = s?.abilities?.낚시?.value  ?? 0;
+    const fishGrade = s?.abilities?.낚시?.grade  ?? 0;
+    const speechAbil = s?.abilities?.화술?.value ?? 0;
 
-    // Luck boosts rarity weights
-    const luckBoost = { 흔함: 1, 보통: 1 + (luckLv-1)*0.12, 희귀: 1 + (luckLv-1)*0.22, 전설: 1 + (luckLv-1)*0.40, 신화: 1 + (luckLv-1)*0.60 };
-    let table = applyBoosts(rod.table, luckBoost);
+    // Ability-gated fish table
+    let table = getAbilityFishTable(fishAbil);
 
-    // Apply equipped bait
+    // Grade rare bonus — boost rare/legendary/mythic weights
+    const gradeBoostPct = gradeRareBonus(fishGrade);
+    if (gradeBoostPct > 0) {
+      table = applyBoosts(table, { 보통: 1 + gradeBoostPct * 0.5, 희귀: 1 + gradeBoostPct, 전설: 1 + gradeBoostPct * 1.5, 신화: 1 + gradeBoostPct * 2 });
+    }
+
+    // Bait boost
     const baitKey = s?.equippedBait;
     const baitData = baitKey ? BAIT[baitKey] : null;
     if (baitData) table = applyBoosts(table, baitData.boost);
+
+    // Weather fish multiplier embedded in weight boost
+    const wMult = weatherRef.current?.fishMult ?? 1.0;
+    if (wMult !== 1.0) table = table.map(e => ({ ...e, w: e.w * wMult }));
 
     const name = weightedPick(table);
     const fd = FISH[name];
     if (!fd) return;
     const size = parseFloat((Math.random() * (fd.maxSz - fd.minSz) + fd.minSz).toFixed(1));
     const avgSz = (fd.minSz + fd.maxSz) / 2;
-    // Price: base × size ratio × 화술 bonus × 낚시 bonus
+
+    // Price: base × size × 화술 ability × rod enhance bonus
+    const enhLevel = s?.rodEnhance?.[rodKey] ?? 0;
+    const enhEffect = rodEnhanceEffect(enhLevel);
     const price = Math.round(
       fd.price * (size / avgSz)
-      * (1 + (speechLv - 1) * 0.005 + (fishLv - 1) * 0.003)
+      * (1 + speechAbil * 0.005 + fishAbil * 0.002 + enhEffect.priceBonus)
     );
 
-    // Consume one-time bait
     if (baitData?.type === 'once') {
       setGs(prev => {
         const bi = { ...(prev.baitInventory ?? {}), [baitKey]: Math.max(0, (prev.baitInventory?.[baitKey] ?? 1) - 1) };
@@ -334,19 +371,15 @@ export default function App() {
       });
     }
     const id = Date.now() + Math.random();
-
     setGs(prev => ({ ...prev, fishInventory: [...prev.fishInventory, { name, size, price, id }], fishCaught: (prev.fishCaught ?? 0) + 1 }));
     addMsg(`🐟 ${name} ${size}cm 낚음! (${price}G)`, 'catch');
     if (nicknameRef.current) saveFishRecord(nicknameRef.current, name, size);
-
-    if (gameRef.current?.player) {
+    if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `${name} ${size}cm`, age: 0, color: rarityColor(fd.rarity) };
-    }
 
-    // Grant skill EXP
-    grantSkillExp('낚시', FISH_SKILL_EXP[fd.rarity] ?? 5);
-    grantSkillExp('체력', ACTIVITY_STAMINA_EXP);
-  }, [addMsg, grantSkillExp]);
+    grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
+    grantAbility('체력', STAMINA_GAIN);
+  }, [addMsg, grantAbility]);
 
   const onOreMined = useCallback((oreName) => {
     setGs(prev => ({
@@ -354,12 +387,11 @@ export default function App() {
       oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + 1 },
     }));
     addMsg(`⛏ ${oreName} 1개 채굴!`, 'mine');
-    if (gameRef.current?.player) {
+    if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `+${oreName}`, age: 0, color: ORES[oreName]?.color ?? '#fa4' };
-    }
-    grantSkillExp('채굴', ORE_SKILL_EXP[oreName] ?? 8);
-    grantSkillExp('체력', ACTIVITY_STAMINA_EXP);
-  }, [addMsg, grantSkillExp]);
+    grantAbility('채굴', ORE_ABILITY_GAIN[oreName] ?? 0.40);
+    grantAbility('체력', STAMINA_GAIN);
+  }, [addMsg, grantAbility]);
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
 
@@ -414,8 +446,8 @@ export default function App() {
         return;
       }
       const baseMult = COOKWARE[cw]?.mult ?? 1;
-      const cookLv = stateRef.current?.skills?.요리?.lv ?? 1;
-      const totalMult = baseMult + (cookLv - 1) * 0.03;
+      const cookAbil = stateRef.current?.abilities?.요리?.value ?? 0;
+      const totalMult = baseMult + cookAbil * 0.01; // up to +1.0x at 100
       const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
       if (raw.length === 0) { addMsg('요리할 생선이 없습니다.'); return; }
       setGs(prev => ({
@@ -425,7 +457,7 @@ export default function App() {
         ),
       }));
       addMsg(`🍳 생선 ${raw.length}마리 요리 완료! (x${totalMult.toFixed(2)})`, 'catch');
-      grantSkillExp('요리', COOK_SKILL_EXP * raw.length);
+      grantAbility('요리', COOK_ABILITY_GAIN * raw.length);
       return;
     }
 
@@ -459,11 +491,20 @@ export default function App() {
       player.y = nearest.cy - TILE_SIZE / 2;
       player.vx = 0; player.vy = 0;
       player.facing = 'down';
+      // Check weather — storm blocks fishing
+      if (weatherRef.current?.canFish === false) {
+        addMsg(`${weatherRef.current.icon} 폭풍 중에는 낚시할 수 없습니다!`, 'error');
+        return;
+      }
       player.state = 'fishing';
       player.currentRod = s.rod;
-      const fishLv = s.skills?.낚시?.lv ?? 1;
-      const stamLv = s.skills?.체력?.lv ?? 1;
-      const timeMult = (1 - (fishLv - 1) * 0.004) * (1 - (stamLv - 1) * 0.003);
+      const fishAbil = s.abilities?.낚시?.value ?? 0;
+      const stamAbil = s.abilities?.체력?.value ?? 0;
+      const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
+      const enhEffect = rodEnhanceEffect(enhLevel);
+      const timeMult = Math.max(0.3,
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction)
+      );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx);
@@ -482,9 +523,9 @@ export default function App() {
       const ore = pickOre();
       player.state = 'mining';
       player.currentOre = ore;
-      const mineLv = s.skills?.채굴?.lv ?? 1;
-      const mineStamLv = s.skills?.체력?.lv ?? 1;
-      const mineMult = (1 - (mineLv - 1) * 0.004) * (1 - (mineStamLv - 1) * 0.003);
+      const mineAbil = s.abilities?.채굴?.value ?? 0;
+      const mineStamAbil = s.abilities?.체력?.value ?? 0;
+      const mineMult = Math.max(0.3, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003));
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(1000, Math.round(t * mineMult)));
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx);
@@ -513,7 +554,7 @@ export default function App() {
       const total = inv.reduce((sum, f) => sum + f.price, 0);
       setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: [] }));
       addMsg(`💰 물고기 ${inv.length}마리 → ${total}G!`, 'catch');
-      grantSkillExp('화술', Math.max(1, Math.floor(total / 100)) * SELL_SKILL_EXP_PER_100G);
+      grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
       return;
     }
 
@@ -612,14 +653,14 @@ export default function App() {
     const total = gs.fishInventory.reduce((s, f) => s + f.price, 0);
     setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: [] }));
     addMsg(`💰 전체 판매 +${total}G`, 'catch');
-    grantSkillExp('화술', Math.max(1, Math.floor(total / 100)) * SELL_SKILL_EXP_PER_100G);
+    grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
   };
 
   const sellOne = (id) => {
     const fish = gs.fishInventory.find(f => f.id === id);
     if (!fish) return;
     setGs(prev => ({ ...prev, money: prev.money + fish.price, fishInventory: prev.fishInventory.filter(f => f.id !== id) }));
-    grantSkillExp('화술', Math.max(1, Math.floor(fish.price / 100)) * SELL_SKILL_EXP_PER_100G);
+    grantAbility('화술', Math.max(0.01, Math.floor(fish.price / 100) * SELL_ABILITY_PER_100G));
   };
 
   const handleLogin = (name) => {
@@ -688,6 +729,9 @@ export default function App() {
           <div className="hud-chip" style={{ color: RODS[gs.rod]?.color }}>
             🎣 {RODS[gs.rod]?.name}
           </div>
+          {weather && (
+            <div className="hud-chip" style={{ fontSize: 11 }}>{weather.icon} {weather.label}</div>
+          )}
           {activity && (
             <div className={`hud-chip hud-active ${activity}`}>
               {activity === 'fishing' ? '🐟 낚시 중…' : '⛏ 채굴 중…'}
@@ -727,32 +771,55 @@ export default function App() {
         <div className="mobile-controls">
           <Joystick gameRef={gameRef} />
           <div className="action-btns">
+            <button className="action-btn" tabIndex={-1} onClick={() => setShowMobileMenu(v => !v)}>
+              <span>☰</span><span className="action-btn-label">메뉴</span>
+            </button>
             <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!낚시')}>
               <span>🎣</span><span className="action-btn-label">낚시</span>
-            </button>
-            <button className="action-btn" tabIndex={-1} onClick={() => setShowInv(v => !v)}>
-              <span>🎒</span><span className="action-btn-label">인벤</span>
             </button>
             <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!광질')}>
               <span>⛏</span><span className="action-btn-label">광질</span>
             </button>
-            <button className="action-btn" tabIndex={-1} onClick={() => setShowShop(v => !v)}>
-              <span>🏪</span><span className="action-btn-label">상점</span>
-            </button>
             <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
               <span>🛑</span><span className="action-btn-label">그만</span>
-            </button>
-            <button className="action-btn" tabIndex={-1} onClick={() => setShowRank(v => !v)}>
-              <span>🏆</span><span className="action-btn-label">랭킹</span>
-            </button>
-            <button className="action-btn" tabIndex={-1} onClick={() => setShowStats(v => !v)}>
-              <span>📊</span><span className="action-btn-label">스탯</span>
             </button>
             <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!요리')}>
               <span>🍳</span><span className="action-btn-label">요리</span>
             </button>
           </div>
         </div>
+
+        {/* Mobile slide-in menu */}
+        {showMobileMenu && (
+          <div className="mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}>
+            <div className="mobile-menu-drawer" onClick={e => e.stopPropagation()}>
+              <div className="mobile-menu-header">
+                <span>메뉴</span>
+                <button className="mobile-menu-close" onClick={() => setShowMobileMenu(false)}>✕</button>
+              </div>
+              <div className="mobile-menu-items">
+                <button className="mobile-menu-item" onClick={() => { setShowInv(true); setShowMobileMenu(false); }}>
+                  <span className="mobile-menu-icon">🎒</span><span>인벤토리</span>
+                </button>
+                <button className="mobile-menu-item" onClick={() => { setShowShop(true); setShowMobileMenu(false); }}>
+                  <span className="mobile-menu-icon">🏪</span><span>상점</span>
+                </button>
+                <button className="mobile-menu-item" onClick={() => { setShowStats(true); setShowMobileMenu(false); }}>
+                  <span className="mobile-menu-icon">📊</span><span>어빌리티</span>
+                </button>
+                <button className="mobile-menu-item" onClick={() => { setShowRank(true); setShowMobileMenu(false); }}>
+                  <span className="mobile-menu-icon">🏆</span><span>랭킹</span>
+                </button>
+              </div>
+              <div className="mobile-menu-status">
+                <div style={{ color: myTitle.color, fontWeight: 700 }}>[{myTitle.label}]</div>
+                <div>💰 {gs.money.toLocaleString()}G</div>
+                <div style={{ color: RODS[gs.rod]?.color }}>🎣 {RODS[gs.rod]?.name}</div>
+                {weather && <div>{weather.icon} {weather.label}</div>}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <Chat messages={messages} onCommand={handleCommand} />
@@ -772,7 +839,7 @@ export default function App() {
           const total = groups[name].reduce((s, f) => s + f.price, 0);
           setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: prev.fishInventory.filter(f => f.name !== name) }));
           addMsg(`💰 ${name} ${groups[name].length}마리 판매 +${total}G`, 'catch');
-          grantSkillExp('화술', Math.max(1, Math.floor(total / 100)) * SELL_SKILL_EXP_PER_100G);
+          grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
         };
         return (
           <div className="overlay" onClick={() => setShowInv(false)}>
@@ -860,37 +927,110 @@ export default function App() {
         );
       })()}
 
-      {/* Skills modal */}
+      {/* Abilities modal */}
       {showStats && (
         <div className="overlay" onClick={() => setShowStats(false)}>
           <div className="panel" onClick={e => e.stopPropagation()}>
             <div className="panel-head">
-              <span>📊 스킬</span>
+              <span>📊 어빌리티</span>
               <button tabIndex={-1} onClick={() => setShowStats(false)}>✕</button>
             </div>
+            {(otherPlayersRef.current?.length ?? 0) > 0 && (
+              <div className="party-banner">🎉 파티 중 — 어빌리티 획득 시 20% 확률로 2배!</div>
+            )}
             <div className="section">
               <div className="skill-grid">
-                {Object.entries(SKILL_DEFS).map(([name, def]) => {
-                  const sk = gs.skills?.[name] ?? { lv: 1, exp: 0 };
-                  const needed = expForLv(sk.lv);
-                  const pct = Math.min(100, Math.round((sk.exp / needed) * 100));
+                {Object.entries(ABILITY_DEFS).map(([name, def]) => {
+                  const ab = gs.abilities?.[name] ?? { value: 0, grade: 0 };
+                  const pct = Math.min(100, ab.value);
+                  const canGrade = ab.value >= 100;
                   return (
                     <div key={name} className="skill-card">
                       <div className="skill-top">
                         <span className="skill-icon">{def.icon}</span>
                         <span className="skill-name" style={{ color: def.color }}>{name}</span>
-                        <span className="skill-lv">Lv.{sk.lv}</span>
+                        <span className="skill-lv">{ab.value.toFixed(2)}</span>
+                        {ab.grade > 0 && <span className="grade-badge">G{ab.grade}</span>}
                       </div>
                       <div className="skill-bar-wrap">
                         <div className="skill-bar-fill" style={{ width: `${pct}%`, background: def.color }} />
                       </div>
-                      <div className="skill-exp-txt">{sk.exp} / {needed} EXP</div>
-                      <div className="skill-effect" style={{ color: def.color }}>{def.effectDesc(sk.lv)}</div>
-                      <div className="skill-source">{def.grind ? '🔄 활동 경험치' : '📜 퀘스트 보상'}</div>
+                      <div className="skill-exp-txt">{ab.value.toFixed(2)} / 100.00</div>
+                      <div className="skill-source">{def.desc}</div>
+                      {canGrade && (
+                        <button className="btn-buy grade-up-btn" onClick={() => {
+                          setGs(prev => ({
+                            ...prev,
+                            abilities: { ...(prev.abilities ?? DEFAULT_ABILITIES),
+                              [name]: doGradeUp(prev.abilities?.[name] ?? { value: 100, grade: 0 }) },
+                          }));
+                          addMsg(`🌟 ${def.icon} ${name} 그레이드 ${ab.grade + 1} 달성! 희귀 보너스 +${((ab.grade + 1) * 10)}%`, 'catch');
+                        }}>
+                          ⬆️ 그레이드업 → G{ab.grade + 1}
+                        </button>
+                      )}
                     </div>
                   );
                 })}
               </div>
+            </div>
+            {/* Rod enhancement section */}
+            <div className="section">
+              <div className="section-title">🔨 낚싯대 강화</div>
+              {gs.ownedRods.map(rodKey => {
+                const rod = RODS[rodKey];
+                const enhLv = gs.rodEnhance?.[rodKey] ?? 0;
+                const cost = rodEnhanceCost(enhLv);
+                const mats = rodEnhanceMatsNeeded(enhLv);
+                const ganghwaAbil = gs.abilities?.강화?.value ?? 0;
+                const rate = rodEnhanceSuccessRate(enhLv, ganghwaAbil);
+                const canAfford = gs.money >= cost;
+                const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
+                const matsStr = Object.entries(mats).map(([k, n]) => `${k}×${n}`).join(' ');
+                const eff = rodEnhanceEffect(enhLv);
+                return (
+                  <div key={rodKey} className="rod-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ color: rod.color, fontWeight: 700 }}>🎣 {rod.name}</span>
+                      <span className="badge" style={{ background: enhLv >= 80 ? '#ff4400' : enhLv >= 50 ? '#ffaa00' : '#446688' }}>
+                        +{enhLv}
+                      </span>
+                    </div>
+                    <div className="rod-meta">
+                      효과: 낚시 시간 -{(eff.timeReduction * 100).toFixed(0)}% · 판매가 +{(eff.priceBonus * 100).toFixed(0)}%
+                    </div>
+                    <div className="rod-meta">
+                      강화비: {cost}G{matsStr ? ` + ${matsStr}` : ''} · 성공률 {(rate * 100).toFixed(0)}%
+                    </div>
+                    <button
+                      className={canAfford && hasMats ? 'btn-buy' : 'btn-dis'}
+                      disabled={!canAfford || !hasMats || enhLv >= 100}
+                      onClick={() => {
+                        if (enhLv >= 100) return;
+                        const success = Math.random() < rodEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0);
+                        setGs(prev => {
+                          const ores = { ...prev.oreInventory };
+                          for (const [ore, n] of Object.entries(mats)) ores[ore] = Math.max(0, (ores[ore] || 0) - n);
+                          return {
+                            ...prev,
+                            money: prev.money - cost,
+                            oreInventory: ores,
+                            rodEnhance: { ...(prev.rodEnhance ?? {}), [rodKey]: success ? enhLv + 1 : enhLv },
+                          };
+                        });
+                        if (success) {
+                          addMsg(`🔨 ${rod.name} +${enhLv + 1} 강화 성공!`, 'catch');
+                          grantAbility('강화', ENHANCE_ABILITY_GAIN);
+                        } else {
+                          addMsg(`🔨 강화 실패... (${rod.name} +${enhLv} 유지)`, 'error');
+                        }
+                      }}
+                    >
+                      {enhLv >= 100 ? '최대 강화' : `강화 (+${enhLv} → +${enhLv + 1})`}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -928,19 +1068,20 @@ export default function App() {
               </div>
             </div>
             <div className="section">
-              <div className="section-title">스킬</div>
+              <div className="section-title">어빌리티</div>
               <div className="inspect-skill-list">
-                {Object.entries(SKILL_DEFS).map(([name, def]) => {
-                  const lv = inspectPlayer.skillLvs?.[name] ?? 1;
+                {Object.entries(ABILITY_DEFS).map(([name, def]) => {
+                  const val = inspectPlayer.abilityVals?.[name] ?? 0;
+                  const grade = inspectPlayer.abilityGrades?.[name] ?? 0;
                   return (
                     <div key={name} className="inspect-skill-row">
                       <span className="inspect-skill-icon">{def.icon}</span>
                       <span className="inspect-skill-name" style={{ color: def.color }}>{name}</span>
                       <div className="inspect-skill-bar-wrap">
                         <div className="inspect-skill-bar-fill"
-                          style={{ width: `${Math.min(100, (lv / 99) * 100)}%`, background: def.color }} />
+                          style={{ width: `${Math.min(100, val)}%`, background: def.color }} />
                       </div>
-                      <span className="inspect-skill-lv">Lv.{lv}</span>
+                      <span className="inspect-skill-lv">{val.toFixed(1)}{grade > 0 ? ` G${grade}` : ''}</span>
                     </div>
                   );
                 })}
@@ -987,9 +1128,6 @@ export default function App() {
                       {needMoney ? `${rod.price}G` : '무료'}
                       {matsStr ? ` + 재료: ${matsStr}` : ''}
                       {' · '}낚시 {tMin/1000}~{tMax/1000}초
-                    </div>
-                    <div className="rod-fish">
-                      {rod.table.map(e => `${e.f}(${e.w}%)`).join(' · ')}
                     </div>
                     <div style={{ marginTop: 6 }}>
                       {owned
