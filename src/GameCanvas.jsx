@@ -32,33 +32,66 @@ function canWalk(x, y) {
 
 function drawTile(ctx, tx, ty, sx, sy) {
   const t = getTile(tx, ty);
-  ctx.fillStyle = TILE_COLOR[t] ?? '#333';
-  ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+  const now = Date.now();
 
-  if (t === TILE.WATER) {
-    const wave = Math.floor(Date.now() / 600) % 2;
-    if ((tx + ty + wave) % 3 === 0) {
-      ctx.fillStyle = 'rgba(255,255,255,0.06)';
-      ctx.fillRect(sx + 4, sy + TILE_SIZE / 2 - 1, TILE_SIZE - 8, 2);
-    }
-  }
   if (t === TILE.GRASS) {
-    ctx.strokeStyle = 'rgba(0,0,0,0.07)';
-    ctx.lineWidth = 0.5;
+    const v = ((tx * 7 + ty * 13) % 8) / 8;
+    const r = 52 + Math.floor(v * 14);
+    const g = 105 + Math.floor(v * 28);
+    const b = 38 + Math.floor(v * 12);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    // Subtle grass tufts
+    if ((tx * 3 + ty * 7) % 6 === 0) {
+      ctx.fillStyle = `rgba(70,145,50,0.45)`;
+      const gx = sx + ((tx * 11) % 20) + 4, gy = sy + ((ty * 13) % 16) + 7;
+      ctx.fillRect(gx, gy, 2, 7); ctx.fillRect(gx + 4, gy + 2, 2, 5);
+    }
+  } else if (t === TILE.WATER) {
+    const wave1 = Math.sin(now / 900 + tx * 0.6 + ty * 0.4);
+    const b = 155 + Math.floor(wave1 * 18);
+    ctx.fillStyle = `rgb(18,72,${b})`;
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    // Horizontal shimmer band
+    const waveY = sy + TILE_SIZE * 0.45 + Math.sin(now / 700 + tx * 0.5) * 4;
+    ctx.fillStyle = 'rgba(160,220,255,0.10)';
+    ctx.fillRect(sx + 2, waveY, TILE_SIZE - 4, 3);
+    // Sparkle
+    if (((Math.floor(now / 450) + tx * 3 + ty * 5)) % 9 === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.40)';
+      ctx.beginPath();
+      ctx.arc(sx + (tx * 9 % 22) + 5, sy + (ty * 11 % 18) + 5, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (t === TILE.PATH) {
+    ctx.fillStyle = '#c8aa72';
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    const stW = TILE_SIZE / 2, offX = (ty % 2 === 0) ? 0 : stW / 2;
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
+    for (let i = -1; i <= 2; i++) ctx.strokeRect(sx + offX + i * stW, sy, stW, TILE_SIZE);
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fillRect(sx + 3, sy + 2, TILE_SIZE - 6, 3);
+  } else if (t === TILE.SAND) {
+    const v = ((tx * 5 + ty * 9) % 6) / 6;
+    ctx.fillStyle = `rgb(${198 + Math.floor(v * 22)},${168 + Math.floor(v * 18)},${88 + Math.floor(v * 22)})`;
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+  } else if (t === TILE.STONE) {
+    const v = ((tx * 11 + ty * 7) % 6) / 6;
+    ctx.fillStyle = `rgb(${98 + Math.floor(v * 22)},${92 + Math.floor(v * 20)},${88 + Math.floor(v * 18)})`;
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    ctx.strokeStyle = 'rgba(0,0,0,0.10)'; ctx.lineWidth = 1;
     ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
-  }
-  if (t === TILE.STONE) {
-    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-    ctx.lineWidth = 0.5;
-    ctx.strokeRect(sx, sy, TILE_SIZE, TILE_SIZE);
-  }
-  if (t === TILE.WOOD) {
-    ctx.strokeStyle = 'rgba(0,0,0,0.10)';
-    ctx.lineWidth = 0.5;
+  } else if (t === TILE.WOOD) {
+    ctx.fillStyle = '#a07840';
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(sx, sy + TILE_SIZE / 2);
-    ctx.lineTo(sx + TILE_SIZE, sy + TILE_SIZE / 2);
+    ctx.moveTo(sx, sy + TILE_SIZE / 3); ctx.lineTo(sx + TILE_SIZE, sy + TILE_SIZE / 3);
+    ctx.moveTo(sx, sy + TILE_SIZE * 2 / 3); ctx.lineTo(sx + TILE_SIZE, sy + TILE_SIZE * 2 / 3);
     ctx.stroke();
+  } else {
+    ctx.fillStyle = TILE_COLOR[t] ?? '#333';
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
   }
 }
 
@@ -67,86 +100,184 @@ function drawShopBuilding(ctx, camX, camY) {
   const by = 1 * TILE_SIZE - camY;
   const bw = 9 * TILE_SIZE;
   const bh = 10 * TILE_SIZE;
+  const cx = bx + bw / 2;
 
-  // Roof
-  ctx.fillStyle = '#3a2010';
-  ctx.fillRect(bx - 4, by - 6, bw + 8, 18);
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(bx + 8, by + 8, bw, bh);
 
-  // Windows
-  ctx.fillStyle = '#88aacc';
-  ctx.fillRect(bx + 16, by + 34, 28, 22);
-  ctx.fillRect(bx + bw - 44, by + 34, 28, 22);
-  ctx.strokeStyle = '#5a4030';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(bx + 16, by + 34, 28, 22);
-  ctx.strokeRect(bx + bw - 44, by + 34, 28, 22);
+  // Wall — warm cream with wood panelling
+  ctx.fillStyle = '#f0e2c0';
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.fillStyle = '#d9c9a0';
+  ctx.fillRect(bx, by + bh * 0.45, bw, bh * 0.55); // lower half slightly darker
 
-  // Door
-  ctx.fillStyle = '#2a1508';
-  ctx.fillRect(bx + 100, by + bh - 28, 44, 28);
-  ctx.strokeStyle = '#8b6914';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(bx + 100, by + bh - 28, 44, 28);
+  // Horizontal timber beams
+  ctx.fillStyle = '#8b5e30';
+  [0.44, 0.72].forEach(r => ctx.fillRect(bx, by + bh * r, bw, 7));
+  // Vertical timber posts
+  ctx.fillStyle = '#7a5028';
+  [0, 1/3, 2/3, 1].forEach(r => ctx.fillRect(bx + bw * r - (r > 0 ? 4 : 0), by, 8, bh));
 
-  // Sign
-  ctx.fillStyle = '#c8860a';
-  ctx.fillRect(bx + bw / 2 - 38, by + 6, 76, 22);
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 13px "Noto Sans KR", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('🏪  상  점', bx + bw / 2, by + 21);
+  // ── Roof ──
+  ctx.fillStyle = '#5c2a0e';
+  ctx.beginPath();
+  ctx.moveTo(bx - 14, by + 2);
+  ctx.lineTo(cx, by - 75);
+  ctx.lineTo(bx + bw + 14, by + 2);
+  ctx.closePath();
+  ctx.fill();
+  // Roof shingles
+  for (let row = 0; row < 5; row++) {
+    const t = row / 5;
+    const rowY = by - 75 + row * 15 + t * 2;
+    const half = (bw / 2 + 14) * t + 6;
+    const count = Math.ceil(half * 2 / 16);
+    ctx.fillStyle = row % 2 === 0 ? '#4a2008' : '#3e1a06';
+    for (let c = 0; c < count; c++) {
+      const sx2 = cx - half + c * 16 + (row % 2 ? 8 : 0);
+      ctx.fillRect(sx2, rowY, 14, 14);
+      ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 0.8;
+      ctx.strokeRect(sx2, rowY, 14, 14);
+    }
+  }
+  // Roof ridge cap
+  ctx.fillStyle = '#c07828';
+  ctx.fillRect(bx - 16, by - 3, bw + 32, 8);
+  ctx.fillStyle = '#ffcc66';
+  ctx.fillRect(bx - 16, by - 3, bw + 32, 3);
+
+  // ── Left window ──
+  const lw = { x: bx + 38, y: by + 55, w: 52, h: 44 };
+  // Glow
+  const gl = ctx.createRadialGradient(lw.x + lw.w/2, lw.y + lw.h/2, 4, lw.x + lw.w/2, lw.y + lw.h/2, 40);
+  gl.addColorStop(0, 'rgba(255,210,80,0.35)'); gl.addColorStop(1, 'rgba(255,210,80,0)');
+  ctx.fillStyle = gl; ctx.fillRect(lw.x - 10, lw.y - 10, lw.w + 20, lw.h + 20);
+  ctx.fillStyle = '#ffe89a'; ctx.fillRect(lw.x, lw.y, lw.w, lw.h);
+  ctx.strokeStyle = '#7a4a18'; ctx.lineWidth = 4; ctx.strokeRect(lw.x, lw.y, lw.w, lw.h);
+  ctx.strokeStyle = '#8b5e30'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(lw.x + lw.w/2, lw.y); ctx.lineTo(lw.x + lw.w/2, lw.y + lw.h);
+  ctx.moveTo(lw.x, lw.y + lw.h/2); ctx.lineTo(lw.x + lw.w, lw.y + lw.h/2);
+  ctx.stroke();
+  // Flower box
+  ctx.fillStyle = '#7a4a18'; ctx.fillRect(lw.x - 4, lw.y + lw.h, lw.w + 8, 12);
+  [['#ff7090',4], ['#ffcc44',14], ['#ff90b0',24], ['#88ddaa',34], ['#aaccff',44]].forEach(([c, o]) => {
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(lw.x + 4 + o, lw.y + lw.h + 5, 5, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // ── Right window ──
+  const rw = { x: bx + bw - 90, y: by + 55, w: 52, h: 44 };
+  const gr = ctx.createRadialGradient(rw.x + rw.w/2, rw.y + rw.h/2, 4, rw.x + rw.w/2, rw.y + rw.h/2, 40);
+  gr.addColorStop(0, 'rgba(255,210,80,0.35)'); gr.addColorStop(1, 'rgba(255,210,80,0)');
+  ctx.fillStyle = gr; ctx.fillRect(rw.x - 10, rw.y - 10, rw.w + 20, rw.h + 20);
+  ctx.fillStyle = '#ffe89a'; ctx.fillRect(rw.x, rw.y, rw.w, rw.h);
+  ctx.strokeStyle = '#7a4a18'; ctx.lineWidth = 4; ctx.strokeRect(rw.x, rw.y, rw.w, rw.h);
+  ctx.strokeStyle = '#8b5e30'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(rw.x + rw.w/2, rw.y); ctx.lineTo(rw.x + rw.w/2, rw.y + rw.h);
+  ctx.moveTo(rw.x, rw.y + rw.h/2); ctx.lineTo(rw.x + rw.w, rw.y + rw.h/2);
+  ctx.stroke();
+  ctx.fillStyle = '#7a4a18'; ctx.fillRect(rw.x - 4, rw.y + rw.h, rw.w + 8, 12);
+  [['#88aaff',4], ['#ff7090',14], ['#ffcc44',24], ['#ff90b0',34], ['#aaffcc',44]].forEach(([c, o]) => {
+    ctx.fillStyle = c; ctx.beginPath(); ctx.arc(rw.x + 4 + o, rw.y + rw.h + 5, 5, 0, Math.PI * 2); ctx.fill();
+  });
+
+  // ── Door ──
+  const dw = 50, dh = 65, dx = cx - dw / 2, dy = by + bh - dh;
+  ctx.fillStyle = '#5a2a08'; ctx.fillRect(dx, dy, dw, dh);
+  ctx.beginPath(); ctx.arc(dx + dw / 2, dy, dw / 2, Math.PI, 0); ctx.fill();
+  ctx.strokeStyle = '#8b5020'; ctx.lineWidth = 3;
+  ctx.strokeRect(dx, dy, dw, dh);
+  ctx.beginPath(); ctx.arc(dx + dw / 2, dy, dw / 2, Math.PI, 0); ctx.stroke();
+  // Door panels
+  ctx.strokeStyle = 'rgba(255,200,100,0.2)'; ctx.lineWidth = 1.5;
+  ctx.strokeRect(dx + 6, dy + 8, dw - 12, dh * 0.4);
+  ctx.strokeRect(dx + 6, dy + dh * 0.5, dw - 12, dh * 0.4);
+  // Knob
+  ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(dx + dw - 10, dy + dh / 2, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#cc9900'; ctx.lineWidth = 1; ctx.stroke();
+
+  // ── Hanging sign ──
+  const sw = 110, sh = 32, sy2 = by - 28 - sh;
+  ctx.strokeStyle = '#8b5e30'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - sw/2 + 12, by - 48); ctx.lineTo(cx - sw/2 + 12, sy2 + sh);
+  ctx.moveTo(cx + sw/2 - 12, by - 48); ctx.lineTo(cx + sw/2 - 12, sy2 + sh);
+  ctx.stroke();
+  ctx.fillStyle = '#c47828';
+  ctx.beginPath(); ctx.roundRect(cx - sw/2, sy2, sw, sh, 7); ctx.fill();
+  ctx.strokeStyle = '#8b5020'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = '#fff8e8'; ctx.font = 'bold 14px "Noto Sans KR", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('🏪 상점', cx, sy2 + sh * 0.68);
 }
 
 function drawChair(ctx, sx, sy, occupied) {
-  ctx.fillStyle = occupied ? '#3a1a0a' : '#5a3a1a';
-  ctx.fillRect(sx + 4, sy + 14, TILE_SIZE - 8, TILE_SIZE - 18);
-  ctx.fillStyle = occupied ? '#2a0a00' : '#4a2a0a';
-  ctx.fillRect(sx + 4, sy + 4, TILE_SIZE - 8, 12);
-  ctx.fillStyle = occupied ? '#4a2a0a' : '#6a4a2a';
-  ctx.fillRect(sx + 2, sy + 10, 4, 16);
-  ctx.fillRect(sx + TILE_SIZE - 6, sy + 10, 4, 16);
+  const cx = sx + TILE_SIZE / 2;
+  const col = occupied ? '#4a2008' : '#7a4a20';
+  const back = occupied ? '#3a1408' : '#6a3a18';
+  // Legs
+  ctx.fillStyle = back;
+  ctx.fillRect(sx + 4, sy + 16, 5, 14); ctx.fillRect(sx + TILE_SIZE - 9, sy + 16, 5, 14);
+  // Seat
+  ctx.fillStyle = col;
+  ctx.beginPath(); ctx.roundRect(sx + 3, sy + 13, TILE_SIZE - 6, 10, 3); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 1; ctx.stroke();
+  // Backrest
+  ctx.fillStyle = back;
+  ctx.beginPath(); ctx.roundRect(sx + 4, sy + 2, TILE_SIZE - 8, 12, 4); ctx.fill();
+  // Backrest cushion
+  ctx.fillStyle = occupied ? '#220808' : '#5a2a10';
+  ctx.beginPath(); ctx.roundRect(sx + 7, sy + 4, TILE_SIZE - 14, 8, 3); ctx.fill();
+  // Armrests
+  ctx.fillStyle = col;
+  ctx.fillRect(sx + 1, sy + 11, 5, 5); ctx.fillRect(sx + TILE_SIZE - 6, sy + 11, 5, 5);
+
   if (occupied) {
-    ctx.fillStyle = 'rgba(255,80,80,0.7)';
-    ctx.font = '10px sans-serif';
+    ctx.fillStyle = 'rgba(255,80,80,0.75)';
+    ctx.font = 'bold 9px "Noto Sans KR", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('사용중', sx + TILE_SIZE / 2, sy + 2);
+    ctx.fillText('사용중', cx, sy + 1);
   }
 }
 
 function drawFishingSign(ctx, sx, sy) {
-  const boardW = 96, boardH = 52;
-  const bx = sx - boardW / 2, by = sy - boardH - 12;
+  const boardW = 108, boardH = 58;
+  const bx = sx - boardW / 2, by = sy - boardH - 10;
 
-  // Post
-  ctx.fillStyle = '#6b4226';
-  ctx.fillRect(sx - 4, by + boardH, 8, 28);
+  // Post (rounded wood)
+  ctx.fillStyle = '#7a5230';
+  ctx.fillRect(sx - 5, by + boardH, 10, 30);
+  ctx.fillStyle = '#6a4220';
+  ctx.fillRect(sx - 3, by + boardH, 6, 30);
 
   // Board shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.fillRect(bx + 3, by + 3, boardW, boardH);
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath(); ctx.roundRect(bx + 4, by + 4, boardW, boardH, 8); ctx.fill();
 
-  // Board body
-  ctx.fillStyle = '#2a5a3a';
-  ctx.fillRect(bx, by, boardW, boardH);
-  ctx.strokeStyle = '#4a8a5a';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(bx, by, boardW, boardH);
+  // Board body — teal green cottage style
+  ctx.fillStyle = '#2d6845';
+  ctx.beginPath(); ctx.roundRect(bx, by, boardW, boardH, 8); ctx.fill();
+  ctx.strokeStyle = '#5aaa78'; ctx.lineWidth = 2.5; ctx.stroke();
 
-  // Top accent line
-  ctx.fillStyle = '#4aaa6a';
-  ctx.fillRect(bx, by, boardW, 5);
+  // Top accent stripe
+  ctx.fillStyle = '#4ec87a';
+  ctx.beginPath(); ctx.roundRect(bx, by, boardW, 6, [8, 8, 0, 0]); ctx.fill();
 
   // Title
-  ctx.font = 'bold 13px "Noto Sans KR", sans-serif';
+  ctx.font = 'bold 14px "Noto Sans KR", sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#e8f8e8';
-  ctx.fillText('🎣 낚시터', sx, by + 22);
+  ctx.fillStyle = '#e8ffe8';
+  ctx.fillText('🎣 낚시터', sx, by + 24);
 
-  // Sub text
+  // Divider
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx + 12, by + 30); ctx.lineTo(bx + boardW - 12, by + 30); ctx.stroke();
+
   ctx.font = '10px "Noto Sans KR", sans-serif';
-  ctx.fillStyle = 'rgba(200,240,200,0.8)';
-  ctx.fillText('의자에 앉아 !낚시 입력', sx, by + 38);
-  ctx.fillText('방향키로 취소', sx, by + 50);
+  ctx.fillStyle = 'rgba(200,255,210,0.75)';
+  ctx.fillText('의자에 앉아 !낚시', sx, by + 43);
+  ctx.fillText('방향키로 취소', sx, by + 55);
 }
 
 function drawCookingBuilding(ctx, camX, camY) {
@@ -154,38 +285,99 @@ function drawCookingBuilding(ctx, camX, camY) {
   const by = COOKING_TY * TILE_SIZE - camY - 8 * TILE_SIZE;
   const bw = 8 * TILE_SIZE;
   const bh = 8 * TILE_SIZE;
+  const cx = bx + bw / 2;
+  const now = Date.now();
 
-  // Roof
-  ctx.fillStyle = '#4a1a0a';
-  ctx.fillRect(bx - 4, by - 6, bw + 8, 18);
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(bx + 8, by + 8, bw, bh);
 
-  // Chimney smoke
-  const smokeY = by - 24 + Math.sin(Date.now() / 700) * 3;
-  ctx.fillStyle = 'rgba(200,200,200,0.35)';
-  ctx.beginPath(); ctx.arc(bx + bw * 0.7, smokeY, 8, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(bx + bw * 0.7 - 6, smokeY - 12, 5, 0, Math.PI * 2); ctx.fill();
+  // ── Chimney (behind roof) ──
+  ctx.fillStyle = '#8a5030';
+  ctx.fillRect(bx + bw * 0.65 - 12, by - 45, 24, 55);
+  ctx.fillStyle = '#6a3a20';
+  ctx.fillRect(bx + bw * 0.65 - 14, by - 48, 28, 10);
+  // Chimney smoke puffs
+  for (let i = 0; i < 3; i++) {
+    const t = (now / 1200 + i * 0.33) % 1;
+    const smokeX = bx + bw * 0.65 + Math.sin(t * 4) * 6;
+    const smokeY = by - 48 - t * 40;
+    const smokeR = 5 + t * 8;
+    ctx.fillStyle = `rgba(200,190,180,${0.45 - t * 0.45})`;
+    ctx.beginPath(); ctx.arc(smokeX, smokeY, smokeR, 0, Math.PI * 2); ctx.fill();
+  }
 
-  // Windows
-  ctx.fillStyle = '#ffcc88';
-  ctx.fillRect(bx + 12, by + 28, 24, 18);
-  ctx.fillRect(bx + bw - 36, by + 28, 24, 18);
-  ctx.strokeStyle = '#5a2a10'; ctx.lineWidth = 2;
-  ctx.strokeRect(bx + 12, by + 28, 24, 18);
-  ctx.strokeRect(bx + bw - 36, by + 28, 24, 18);
+  // Wall — warm terracotta
+  ctx.fillStyle = '#e8c8a0';
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.fillStyle = '#d4b080';
+  ctx.fillRect(bx, by + bh * 0.5, bw, bh * 0.5);
 
-  // Door
-  ctx.fillStyle = '#2a0a00';
-  ctx.fillRect(bx + 88, by + bh - 28, 40, 28);
-  ctx.strokeStyle = '#8b4414'; ctx.lineWidth = 2;
-  ctx.strokeRect(bx + 88, by + bh - 28, 40, 28);
+  // Timber frame
+  ctx.fillStyle = '#7a4828';
+  [0.49].forEach(r => ctx.fillRect(bx, by + bh * r, bw, 7));
+  [0, 1/3, 2/3, 1].forEach(r => ctx.fillRect(bx + bw * r - (r > 0 ? 4 : 0), by, 8, bh));
 
-  // Sign
-  ctx.fillStyle = '#cc5500';
-  ctx.fillRect(bx + bw / 2 - 40, by + 4, 80, 22);
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 12px "Noto Sans KR", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('🍳 요리소', bx + bw / 2, by + 19);
+  // ── Roof ──
+  ctx.fillStyle = '#6a2808';
+  ctx.beginPath();
+  ctx.moveTo(bx - 12, by + 2);
+  ctx.lineTo(cx, by - 62);
+  ctx.lineTo(bx + bw + 12, by + 2);
+  ctx.closePath(); ctx.fill();
+  // Shingles
+  for (let row = 0; row < 4; row++) {
+    const t = row / 4;
+    const rowY = by - 62 + row * 16;
+    const half = (bw / 2 + 12) * t + 5;
+    ctx.fillStyle = row % 2 === 0 ? '#581e06' : '#4c1604';
+    for (let c = 0; c < Math.ceil(half * 2 / 16); c++) {
+      const sx2 = cx - half + c * 16 + (row % 2 ? 8 : 0);
+      ctx.fillRect(sx2, rowY, 14, 14);
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 0.8;
+      ctx.strokeRect(sx2, rowY, 14, 14);
+    }
+  }
+  ctx.fillStyle = '#d0641e';
+  ctx.fillRect(bx - 14, by - 3, bw + 28, 8);
+  ctx.fillStyle = '#ffaa55';
+  ctx.fillRect(bx - 14, by - 3, bw + 28, 3);
+
+  // ── Windows (warmer orange glow — fire inside) ──
+  const winColor = `rgba(255,${160 + Math.floor(Math.sin(now / 400) * 20)},40,0.9)`;
+  [{ x: bx + 18, y: by + 38 }, { x: bx + bw - 50, y: by + 38 }].forEach(w => {
+    const gw = ctx.createRadialGradient(w.x + 16, w.y + 12, 2, w.x + 16, w.y + 12, 32);
+    gw.addColorStop(0, 'rgba(255,160,40,0.4)'); gw.addColorStop(1, 'rgba(255,100,20,0)');
+    ctx.fillStyle = gw; ctx.fillRect(w.x - 8, w.y - 8, 50, 44);
+    ctx.fillStyle = winColor; ctx.fillRect(w.x, w.y, 32, 28);
+    ctx.strokeStyle = '#7a3818'; ctx.lineWidth = 3; ctx.strokeRect(w.x, w.y, 32, 28);
+    ctx.strokeStyle = '#8b5020'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(w.x + 16, w.y); ctx.lineTo(w.x + 16, w.y + 28);
+    ctx.moveTo(w.x, w.y + 14); ctx.lineTo(w.x + 32, w.y + 14);
+    ctx.stroke();
+  });
+
+  // ── Door ──
+  const dw = 44, dh = 58, dx = cx - dw/2, dy = by + bh - dh;
+  ctx.fillStyle = '#4a1e08'; ctx.fillRect(dx, dy, dw, dh);
+  ctx.beginPath(); ctx.arc(dx + dw/2, dy, dw/2, Math.PI, 0); ctx.fill();
+  ctx.strokeStyle = '#8b4414'; ctx.lineWidth = 3; ctx.strokeRect(dx, dy, dw, dh);
+  ctx.beginPath(); ctx.arc(dx + dw/2, dy, dw/2, Math.PI, 0); ctx.stroke();
+  ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(dx + dw - 9, dy + dh/2, 3, 0, Math.PI*2); ctx.fill();
+
+  // ── Sign ──
+  const sw = 100, sh = 30;
+  ctx.strokeStyle = '#8b5e30'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - sw/2 + 10, by - 42); ctx.lineTo(cx - sw/2 + 10, by - 24 - sh);
+  ctx.moveTo(cx + sw/2 - 10, by - 42); ctx.lineTo(cx + sw/2 - 10, by - 24 - sh);
+  ctx.stroke();
+  ctx.fillStyle = '#cc5510';
+  ctx.beginPath(); ctx.roundRect(cx - sw/2, by - 24 - sh, sw, sh, 6); ctx.fill();
+  ctx.strokeStyle = '#8b3a08'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = '#fff8e8'; ctx.font = 'bold 13px "Noto Sans KR", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('🍳 요리소', cx, by - 24 - sh + sh * 0.68);
 }
 
 function drawFullMap(ctx, W, H, playerX, playerY, otherPlayers, nickname) {
@@ -346,35 +538,145 @@ function drawMinimap(ctx, W, H, camX, camY, playerX, playerY, otherPlayers) {
 }
 
 function drawMineEntrance(ctx, sx, sy) {
-  // Cave arch
   const ex = sx + TILE_SIZE, ey = sy + TILE_SIZE;
   const ew = 4 * TILE_SIZE, eh = 3.5 * TILE_SIZE;
-  ctx.fillStyle = '#0a0a0a';
-  ctx.beginPath();
-  ctx.moveTo(ex, ey + eh);
-  ctx.lineTo(ex, ey + 20);
-  ctx.quadraticCurveTo(ex + ew / 2, ey - 16, ex + ew, ey + 20);
-  ctx.lineTo(ex + ew, ey + eh);
-  ctx.closePath();
-  ctx.fill();
+  const mx = ex + ew / 2;
+  const now = Date.now();
 
-  // Wooden frame
-  ctx.strokeStyle = '#5a3a1a';
-  ctx.lineWidth = 4;
+  // Rock walls on sides
+  for (let i = 0; i < 3; i++) {
+    const vy = ((i * 7) % 5) * 8;
+    ctx.fillStyle = `rgb(${72 + i*8},${68 + i*6},${62 + i*6})`;
+    ctx.fillRect(ex - 14, ey + vy + i * 22, 16, 24);
+    ctx.fillRect(ex + ew, ey + vy + i * 22, 16, 24);
+  }
+
+  // Cave interior (deep dark)
+  ctx.fillStyle = '#06060c';
+  ctx.beginPath();
+  ctx.moveTo(ex + 6, ey + eh);
+  ctx.lineTo(ex + 6, ey + 22);
+  ctx.quadraticCurveTo(mx, ey - 14, ex + ew - 6, ey + 22);
+  ctx.lineTo(ex + ew - 6, ey + eh);
+  ctx.closePath(); ctx.fill();
+
+  // Inner glow (dim lantern light from inside)
+  const glow = ctx.createRadialGradient(mx, ey + eh * 0.4, 10, mx, ey + eh * 0.4, 60);
+  glow.addColorStop(0, 'rgba(255,160,30,0.18)');
+  glow.addColorStop(1, 'rgba(255,160,30,0)');
+  ctx.fillStyle = glow; ctx.fill();
+
+  // Wooden arch frame
+  ctx.strokeStyle = '#6a4020'; ctx.lineWidth = 7; ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(ex, ey + eh);
   ctx.lineTo(ex, ey + 20);
-  ctx.quadraticCurveTo(ex + ew / 2, ey - 16, ex + ew, ey + 20);
+  ctx.quadraticCurveTo(mx, ey - 18, ex + ew, ey + 20);
   ctx.lineTo(ex + ew, ey + eh);
   ctx.stroke();
+  // Inner arch edge
+  ctx.strokeStyle = '#4a2810'; ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(ex + 7, ey + eh);
+  ctx.lineTo(ex + 7, ey + 24);
+  ctx.quadraticCurveTo(mx, ey - 8, ex + ew - 7, ey + 24);
+  ctx.lineTo(ex + ew - 7, ey + eh);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
 
-  // Sign
-  ctx.fillStyle = '#8b6914';
-  ctx.fillRect(ex + ew / 2 - 32, ey - 32, 64, 18);
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('⛏ 광 산', ex + ew / 2, ey - 18);
+  // Cross beam
+  ctx.fillStyle = '#6a4020';
+  ctx.fillRect(ex, ey + 12, ew, 10);
+  ctx.fillStyle = '#4a2810';
+  ctx.fillRect(ex, ey + 12, ew, 3);
+
+  // Hanging lantern
+  const lx = mx, ly = ey + 30;
+  const flicker = Math.sin(now / 180) * 0.15 + 0.85;
+  // Rope
+  ctx.strokeStyle = '#8b6040'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(lx, ey + 12); ctx.lineTo(lx, ly); ctx.stroke();
+  // Lantern body
+  ctx.fillStyle = `rgba(255,${Math.floor(140 * flicker)},20,${0.9 * flicker})`;
+  ctx.beginPath(); ctx.arc(lx, ly + 8, 8, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#8b6040'; ctx.lineWidth = 1.5; ctx.stroke();
+  // Lantern glow
+  const lg = ctx.createRadialGradient(lx, ly + 8, 2, lx, ly + 8, 22);
+  lg.addColorStop(0, `rgba(255,160,30,${0.35 * flicker})`);
+  lg.addColorStop(1, 'rgba(255,100,0,0)');
+  ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(lx, ly + 8, 22, 0, Math.PI * 2); ctx.fill();
+  // Cap
+  ctx.fillStyle = '#5a3010';
+  ctx.fillRect(lx - 6, ly, 12, 4);
+
+  // Pickaxe icon on sign
+  const sw = 80, sh = 26, sgy = ey - 42;
+  ctx.fillStyle = '#7a5020';
+  ctx.beginPath(); ctx.roundRect(mx - sw/2, sgy, sw, sh, 5); ctx.fill();
+  ctx.strokeStyle = '#5a3010'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#fff8e0'; ctx.font = 'bold 12px "Noto Sans KR", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('⛏ 광산', mx, sgy + sh * 0.72);
+}
+
+// ── Decoration positions (world tile coords) ──────────────────────────────────
+const TREE_POSITIONS = [
+  // Left edge
+  { tx: 0.4, ty: 10.6 }, { tx: 0.4, ty: 14.2 },
+  // Between buildings & path
+  { tx: 10.2, ty: 10.8 }, { tx: 10.1, ty: 13.8 },
+  // Upper-right grass
+  { tx: 19.3, ty: 0.5 }, { tx: 21.5, ty: 1.0 }, { tx: 23.8, ty: 0.4 }, { tx: 25.2, ty: 2.3 },
+  // Mid-right
+  { tx: 20.1, ty: 5.5 }, { tx: 22.5, ty: 6.2 }, { tx: 24.3, ty: 4.1 }, { tx: 26.0, ty: 5.8 },
+  // Lower-right before path
+  { tx: 19.5, ty: 10.2 }, { tx: 21.8, ty: 10.6 }, { tx: 24.0, ty: 9.4 },
+];
+
+function drawTree(ctx, wx, wy) {
+  const now = Date.now();
+  const sway = Math.sin(now / 2200 + wx * 0.01) * 2;
+  const tx = wx, ty = wy;
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.12)';
+  ctx.beginPath(); ctx.ellipse(tx, ty + 5, 18, 6, 0, 0, Math.PI * 2); ctx.fill();
+  // Trunk
+  ctx.fillStyle = '#7a5228';
+  ctx.fillRect(tx - 5, ty - 16, 10, 22);
+  ctx.fillStyle = '#9a6a38';
+  ctx.fillRect(tx - 3, ty - 16, 4, 22);
+  // Canopy layers (back → front)
+  const canopies = [
+    { ox: sway * 0.3,  oy: -30, r: 22, col: '#2d7a3e' },
+    { ox: -10 + sway * 0.5, oy: -40, r: 16, col: '#388a4a' },
+    { ox: 10 + sway * 0.6,  oy: -42, r: 17, col: '#3a9050' },
+    { ox: sway,        oy: -50, r: 14, col: '#44aa5a' },
+  ];
+  canopies.forEach(({ ox, oy, r, col }) => {
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(tx + ox, ty + oy, r, 0, Math.PI * 2); ctx.fill();
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.beginPath(); ctx.arc(tx + ox - r * 0.2, ty + oy - r * 0.25, r * 0.45, 0, Math.PI * 2); ctx.fill();
+  });
+}
+
+function drawFlowerPatch(ctx, wx, wy, seed) {
+  const colors = ['#ff7098', '#ffcc44', '#ff9ac8', '#88ddff', '#ccaaff', '#ffaa66'];
+  for (let i = 0; i < 4; i++) {
+    const angle = (seed * 137.5 + i * 90) * Math.PI / 180;
+    const dist = 5 + (i * seed % 5);
+    const fx = wx + Math.cos(angle) * dist;
+    const fy = wy + Math.sin(angle) * dist;
+    const col = colors[(seed + i) % colors.length];
+    // Stem
+    ctx.strokeStyle = '#4a9a30'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(fx, fy + 5); ctx.lineTo(fx, fy); ctx.stroke();
+    // Petals
+    ctx.fillStyle = col;
+    ctx.beginPath(); ctx.arc(fx, fy, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffc0';
+    ctx.beginPath(); ctx.arc(fx, fy, 1.5, 0, Math.PI * 2); ctx.fill();
+  }
 }
 
 function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
@@ -382,33 +684,94 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
   const now = Date.now();
 
   // Shadow
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath();
-  ctx.ellipse(px, py + PH / 2 + 2, PW / 2, 4, 0, 0, Math.PI * 2);
+  ctx.ellipse(px, py + 14, 11, 4, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  // ── Chibi body ──
+  const bodyCol = state === 'fishing' ? '#4a9a60' : state === 'mining' ? '#c47840' : '#5a7aaa';
+  const bodyColDark = state === 'fishing' ? '#2e7040' : state === 'mining' ? '#8a4e20' : '#3a5280';
+
+  // Walking legs
+  const isMoving = (player.vx !== undefined) ? (Math.abs(player.vx) + Math.abs(player.vy) > 0.2) : false;
+  const legSwing = isMoving ? Math.sin(now / 130) * 4 : 0;
+  // Shoes
+  ctx.fillStyle = '#3a2810';
+  ctx.beginPath(); ctx.ellipse(px - 5, py + 14 + legSwing, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(px + 5, py + 14 - legSwing, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+  // Legs
+  ctx.fillStyle = '#4a5070';
+  ctx.beginPath(); ctx.roundRect(px - 8, py + 4, 6, 11 + legSwing * 0.5, 3); ctx.fill();
+  ctx.beginPath(); ctx.roundRect(px + 2, py + 4, 6, 11 - legSwing * 0.5, 3); ctx.fill();
 
   // Body
-  const bodyCol = state === 'fishing' ? '#2a6a3a' : state === 'mining' ? '#7a4a2a' : '#3a5a8a';
   ctx.fillStyle = bodyCol;
-  ctx.fillRect(px - PW / 2, py - PH / 2 + 10, PW, PH - 10);
+  ctx.beginPath(); ctx.roundRect(px - 9, py - 6, 18, 12, 4); ctx.fill();
+  // Body highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath(); ctx.roundRect(px - 7, py - 4, 7, 6, 3); ctx.fill();
+  // Body shadow
+  ctx.fillStyle = bodyColDark;
+  ctx.beginPath(); ctx.roundRect(px - 9, py + 2, 18, 4, [0, 0, 4, 4]); ctx.fill();
 
+  // Arms (base, overdrawn by fishing/mining)
+  if (state !== 'fishing' && state !== 'mining') {
+    ctx.fillStyle = bodyCol;
+    ctx.beginPath(); ctx.roundRect(px - 14, py - 4, 5, 10, 3); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(px + 9, py - 4, 5, 10, 3); ctx.fill();
+    // Hands
+    ctx.fillStyle = '#f6cc88';
+    ctx.beginPath(); ctx.arc(px - 12, py + 7, 3.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + 12, py + 7, 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ── Chibi head ──
+  const headY = py - 14;
   // Head
-  ctx.fillStyle = '#f4c17a';
-  ctx.beginPath();
-  ctx.arc(px, py - PH / 2 + 8, 9, 0, Math.PI * 2);
-  ctx.fill();
-
+  ctx.fillStyle = '#f6cc88';
+  ctx.beginPath(); ctx.arc(px, headY, 12, 0, Math.PI * 2); ctx.fill();
+  // Cheek blush
+  ctx.fillStyle = 'rgba(255,120,120,0.38)';
+  ctx.beginPath(); ctx.ellipse(px - 8, headY + 3, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(px + 8, headY + 3, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
   // Hair
   ctx.fillStyle = '#5a3010';
-  ctx.fillRect(px - 9, py - PH / 2, 18, 5);
+  ctx.beginPath(); ctx.arc(px, headY, 12, Math.PI, 0); ctx.fill();
+  ctx.beginPath(); ctx.arc(px - 5, headY - 4, 7, Math.PI, Math.PI * 1.8); ctx.fill();
+  ctx.beginPath(); ctx.arc(px + 5, headY - 4, 7, Math.PI * 1.2, 0); ctx.fill();
+  // Hair highlight
+  ctx.fillStyle = 'rgba(255,200,120,0.18)';
+  ctx.beginPath(); ctx.arc(px - 3, headY - 8, 5, 0, Math.PI * 2); ctx.fill();
 
   // Eyes
-  ctx.fillStyle = '#222';
-  const ey = py - PH / 2 + 8;
-  if (facing === 'right')      { ctx.fillRect(px + 2, ey - 1, 3, 2); }
-  else if (facing === 'left')  { ctx.fillRect(px - 5, ey - 1, 3, 2); }
-  else if (facing === 'up')    { ctx.fillRect(px - 4, ey - 2, 2, 2); ctx.fillRect(px + 2, ey - 2, 2, 2); }
-  else                         { ctx.fillRect(px - 4, ey,     2, 2); ctx.fillRect(px + 2, ey,     2, 2); }
+  const ey = headY + 1;
+  ctx.fillStyle = '#1a1a1a';
+  if (facing === 'up') {
+    ctx.beginPath(); ctx.arc(px - 4, ey - 2, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + 4, ey - 2, 2, 0, Math.PI * 2); ctx.fill();
+  } else if (facing === 'down') {
+    // Cute curved happy eyes
+    ctx.lineWidth = 2; ctx.strokeStyle = '#1a1a1a';
+    ctx.beginPath(); ctx.arc(px - 4, ey + 1, 2.5, Math.PI, 0); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px + 4, ey + 1, 2.5, Math.PI, 0); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath(); ctx.arc(px - 3, ey - 0.5, 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + 5, ey - 0.5, 1, 0, Math.PI * 2); ctx.fill();
+  } else if (facing === 'right') {
+    ctx.beginPath(); ctx.arc(px + 4, ey, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath(); ctx.arc(px + 5.2, ey - 1, 1, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.beginPath(); ctx.arc(px - 4, ey, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.beginPath(); ctx.arc(px - 2.8, ey - 1, 1, 0, Math.PI * 2); ctx.fill();
+  }
+  // Small smile (only for down/side)
+  if (facing !== 'up') {
+    ctx.strokeStyle = '#9a4820'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(px, headY + 5, 3.5, 0.1, Math.PI - 0.1); ctx.stroke();
+  }
 
   // ── Fishing animation ──
   if (state === 'fishing') {
@@ -843,6 +1206,18 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
         for (let tx = stx; tx < etx; tx++)
           drawTile(ctx, tx, ty, tx * TILE_SIZE - camX, ty * TILE_SIZE - camY);
 
+      // Scattered flowers on grass
+      for (let ty2 = sty; ty2 < ety; ty2++) {
+        for (let tx2 = stx; tx2 < etx; tx2++) {
+          const seed = tx2 * 31 + ty2 * 17;
+          if (getTile(tx2, ty2) === TILE.GRASS && seed % 11 === 0) {
+            const fx = tx2 * TILE_SIZE - camX + (seed % 24) + 4;
+            const fy = ty2 * TILE_SIZE - camY + ((seed >> 3) % 18) + 5;
+            drawFlowerPatch(ctx, fx, fy, seed);
+          }
+        }
+      }
+
       // Shop building decoration
       const bsx = 1 * TILE_SIZE - camX, bsy = 1 * TILE_SIZE - camY;
       if (bsx < W && bsx + 10 * TILE_SIZE > 0 && bsy < H && bsy + 11 * TILE_SIZE > 0)
@@ -871,6 +1246,14 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
         const sx = c.tx * TILE_SIZE - camX, sy = c.ty * TILE_SIZE - camY;
         if (sx > -TILE_SIZE && sx < W && sy > -TILE_SIZE && sy < H)
           drawChair(ctx, sx, sy, occupied);
+      }
+
+      // Trees
+      for (const tp of TREE_POSITIONS) {
+        const twx = tp.tx * TILE_SIZE - camX;
+        const twy = tp.ty * TILE_SIZE - camY;
+        if (twx > -60 && twx < W + 60 && twy > -80 && twy < H + 20)
+          drawTree(ctx, twx, twy);
       }
 
       // Mine entrance
