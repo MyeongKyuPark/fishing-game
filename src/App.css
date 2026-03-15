@@ -1,42 +1,248 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  display: block !important;
+  place-items: unset !important;
+  width: 100vw; height: 100vh;
+  overflow: hidden;
+  background: #111;
+  font-family: 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+#root { width: 100vw; height: 100vh; }
+
+/* ── Layout ── */
+.root {
+  display: flex;
+  width: 100vw; height: 100vh;
+  overflow: hidden;
+  background: #1a1a2e;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.canvas-area {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+/* ── HUD ── */
+.hud {
+  position: absolute;
+  top: 10px; left: 10px;
+  display: flex; gap: 7px; flex-wrap: wrap;
+  pointer-events: none;
 }
 
-.card {
-  padding: 2em;
+.hud-chip {
+  background: rgba(0,0,0,0.65);
+  color: #e8d888;
+  padding: 5px 11px;
+  border-radius: 7px;
+  font-size: 13px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.1);
+  backdrop-filter: blur(4px);
 }
 
-.read-the-docs {
-  color: #888;
+.hud-active { animation: blink 1.4s ease-in-out infinite; }
+.hud-active.fishing { color: #66ccff; }
+.hud-active.mining  { color: #ffbb44; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.55} }
+
+/* ── Shortcut buttons ── */
+.shortcut-bar {
+  position: absolute;
+  bottom: 10px; left: 10px;
+  display: flex; gap: 7px;
+}
+.shortcut-bar button {
+  background: rgba(0,0,0,0.65);
+  color: #ccc;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 7px;
+  padding: 6px 13px;
+  font-size: 12px; cursor: pointer;
+  backdrop-filter: blur(4px);
+  font-family: inherit;
+}
+.shortcut-bar button:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* ── Chat panel ── */
+.chat-panel {
+  width: 290px; min-width: 290px;
+  display: flex; flex-direction: column;
+  background: rgba(8,8,18,0.94);
+  border-left: 1px solid rgba(255,255,255,0.07);
+}
+
+.chat-header {
+  padding: 9px 14px;
+  font-size: 12px; font-weight: 700;
+  color: rgba(255,255,255,0.35);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+.chat-messages {
+  flex: 1; overflow-y: auto;
+  padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.chat-messages::-webkit-scrollbar { width: 3px; }
+.chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+.chat-msg { font-size: 12px; line-height: 1.5; word-break: break-all; padding: 1px 3px; }
+.chat-user   { color: #88bbff; }
+.chat-system { color: #aaaacc; }
+.chat-catch  { color: #77ee77; font-weight: 600; }
+.chat-mine   { color: #ffbb44; }
+.chat-error  { color: #ff6666; }
+
+.chat-form {
+  display: flex; gap: 5px;
+  padding: 8px; border-top: 1px solid rgba(255,255,255,0.06);
+}
+.chat-input {
+  flex: 1;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.13);
+  color: #e0e0ff;
+  padding: 6px 10px; border-radius: 6px;
+  font-size: 12px; outline: none; font-family: inherit;
+}
+.chat-input:focus { border-color: rgba(100,150,255,0.45); background: rgba(255,255,255,0.1); }
+.chat-input::placeholder { color: rgba(255,255,255,0.25); }
+
+.chat-send {
+  background: #2a5a9a; color: #fff; border: none;
+  padding: 6px 11px; border-radius: 6px;
+  font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.chat-send:hover { background: #3a6aaa; }
+
+/* ── Modals ── */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200; backdrop-filter: blur(3px);
+}
+
+.panel {
+  background: #16162a;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  width: 500px; max-width: 95vw; max-height: 82vh;
+  overflow-y: auto;
+}
+.panel::-webkit-scrollbar { width: 4px; }
+.panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+.panel-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.09);
+  font-size: 15px; font-weight: 700; color: #e8d888;
+}
+.panel-head button {
+  background: rgba(255,255,255,0.08); color: #888;
+  border: none; width: 28px; height: 28px;
+  border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+.panel-head button:hover { background: rgba(220,60,60,0.4); color: #fff; }
+
+.shop-money {
+  padding: 9px 18px;
+  color: #e0d070; font-size: 13px; font-weight: 600;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.section { padding: 12px 18px; }
+.section + .section { border-top: 1px solid rgba(255,255,255,0.07); }
+.section-title {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: #6688aa; margin-bottom: 10px;
+}
+
+.empty { font-size: 12px; color: rgba(255,255,255,0.3); font-style: italic; }
+
+/* Fish list */
+.fish-list {
+  display: flex; flex-direction: column; gap: 3px;
+  max-height: 220px; overflow-y: auto; margin-top: 8px;
+}
+.fish-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.04); border-radius: 4px;
+  font-size: 12px; color: #ccc;
+}
+.fish-row .grow { flex: 1; }
+.fish-row .dim  { color: #888; min-width: 42px; text-align: right; }
+.fish-row .gold { color: #e0d070; min-width: 44px; text-align: right; }
+
+.ore-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 8px; font-size: 12px; color: #bbb;
+}
+.ore-row .grow { flex: 1; }
+.ore-row .dim  { color: #888; }
+.ore-row .gold { color: #e0d070; }
+
+/* Buttons */
+.sell-all-btn {
+  background: rgba(60,180,60,0.25);
+  color: #88ff88; border: 1px solid rgba(60,180,60,0.35);
+  border-radius: 7px; padding: 7px 16px;
+  font-size: 12px; cursor: pointer; margin-bottom: 6px; font-family: inherit;
+}
+.sell-all-btn:hover { background: rgba(60,180,60,0.4); }
+
+.sell-btn {
+  background: rgba(60,180,60,0.2); color: #88ee88;
+  border: 1px solid rgba(60,180,60,0.3);
+  border-radius: 4px; padding: 2px 8px;
+  font-size: 11px; cursor: pointer; font-family: inherit;
+}
+.sell-btn:hover { background: rgba(60,180,60,0.4); }
+
+/* Rod cards */
+.rod-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px; padding: 11px 13px; margin-bottom: 8px;
+}
+.rod-card.equipped {
+  border-color: rgba(80,200,80,0.4);
+  background: rgba(80,200,80,0.07);
+}
+
+.badge {
+  font-size: 10px; padding: 2px 7px; border-radius: 4px;
+  background: rgba(80,200,80,0.25); color: #88ee88;
+}
+.badge.owned { background: rgba(100,140,255,0.25); color: #88aaff; }
+
+.rod-meta { font-size: 11px; color: #6688aa; margin-bottom: 3px; }
+.rod-fish { font-size: 10px; color: #5a6a7a; }
+
+.btn-buy {
+  background: #254a8a; color: #fff;
+  border: none; border-radius: 6px;
+  padding: 5px 14px; font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.btn-buy:hover { background: #3a6aaa; }
+
+.btn-eq {
+  background: rgba(80,200,80,0.25); color: #88ee88;
+  border: 1px solid rgba(80,200,80,0.3);
+  border-radius: 6px; padding: 5px 14px;
+  font-size: 12px; cursor: pointer; font-family: inherit;
+}
+.btn-eq:hover { background: rgba(80,200,80,0.45); }
+
+.btn-dis {
+  background: rgba(100,100,100,0.2); color: #555;
+  border: 1px solid rgba(100,100,100,0.2);
+  border-radius: 6px; padding: 5px 14px;
+  font-size: 12px; cursor: not-allowed; font-family: inherit;
 }
