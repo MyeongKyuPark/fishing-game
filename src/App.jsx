@@ -155,6 +155,7 @@ export default function App() {
   const [showShop, setShowShop] = useState(false);
   const [showRank, setShowRank] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [statsTab, setStatsTab] = useState('장비');
   const [inspectPlayer, setInspectPlayer] = useState(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
@@ -740,25 +741,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Equipment bar */}
-        <div className="equip-bar">
-          {[
-            { icon: '🎣', label: RODS[gs.rod]?.name ?? gs.rod, color: RODS[gs.rod]?.color ?? '#8b6914', active: true },
-            { icon: '👟', label: BOOTS[gs.boots]?.name ?? gs.boots, color: BOOTS[gs.boots]?.color ?? '#aaa', active: true },
-            { icon: '🪝', label: gs.equippedBait ? (BAIT[gs.equippedBait]?.name ?? gs.equippedBait) : '미끼 없음',
-              color: gs.equippedBait ? (BAIT[gs.equippedBait]?.color ?? '#aaa') : '#444', active: !!gs.equippedBait },
-            { icon: '🍳', label: gs.cookware ? (COOKWARE[gs.cookware]?.name ?? gs.cookware) : '요리도구 없음',
-              color: gs.cookware ? (COOKWARE[gs.cookware]?.color ?? '#aaa') : '#444', active: !!gs.cookware },
-          ].map((slot, i) => (
-            <div key={i} className={`equip-slot ${slot.active ? 'equip-slot-active' : ''}`}
-              style={{ '--slot-color': slot.color }}>
-              <div className="equip-slot-icon">{slot.icon}</div>
-              <div className="equip-slot-label" style={{ color: slot.active ? slot.color : '#555' }}>
-                {slot.label}
-              </div>
-            </div>
-          ))}
-        </div>
 
         {/* Rank sidebar (desktop only) */}
         <RankSidebar myNickname={nickname} />
@@ -767,7 +749,7 @@ export default function App() {
         <div className="shortcut-bar">
           <button tabIndex={-1} onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
           <button tabIndex={-1} onClick={() => setShowShop(v => !v)}>🏪 상점</button>
-          <button tabIndex={-1} onClick={() => setShowStats(v => !v)}>📊 스탯</button>
+          <button tabIndex={-1} onClick={() => setShowStats(v => !v)}>📊 상태</button>
           <button tabIndex={-1} onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
         </div>
 
@@ -931,111 +913,184 @@ export default function App() {
         );
       })()}
 
-      {/* Abilities modal */}
+      {/* Status modal (장비 + 어빌리티 tabs) */}
       {showStats && (
         <div className="overlay" onClick={() => setShowStats(false)}>
           <div className="panel" onClick={e => e.stopPropagation()}>
             <div className="panel-head">
-              <span>📊 어빌리티</span>
+              <span>📊 상태창</span>
               <button tabIndex={-1} onClick={() => setShowStats(false)}>✕</button>
             </div>
-            {(otherPlayersRef.current?.length ?? 0) > 0 && (
-              <div className="party-banner">🎉 파티 중 — 어빌리티 획득 시 20% 확률로 2배!</div>
-            )}
-            <div className="section">
-              <div className="skill-grid">
-                {Object.entries(ABILITY_DEFS).map(([name, def]) => {
-                  const ab = gs.abilities?.[name] ?? { value: 0, grade: 0 };
-                  const pct = Math.min(100, ab.value);
-                  const canGrade = ab.value >= 100;
-                  return (
-                    <div key={name} className="skill-card">
-                      <div className="skill-top">
-                        <span className="skill-icon">{def.icon}</span>
-                        <span className="skill-name" style={{ color: def.color }}>{name}</span>
-                        <span className="skill-lv">{ab.value.toFixed(2)}</span>
-                        {ab.grade > 0 && <span className="grade-badge">G{ab.grade}</span>}
-                      </div>
-                      <div className="skill-bar-wrap">
-                        <div className="skill-bar-fill" style={{ width: `${pct}%`, background: def.color }} />
-                      </div>
-                      <div className="skill-exp-txt">{ab.value.toFixed(2)} / 100.00</div>
-                      <div className="skill-source">{def.desc}</div>
-                      {canGrade && (
-                        <button className="btn-buy grade-up-btn" onClick={() => {
-                          setGs(prev => ({
-                            ...prev,
-                            abilities: { ...(prev.abilities ?? DEFAULT_ABILITIES),
-                              [name]: doGradeUp(prev.abilities?.[name] ?? { value: 100, grade: 0 }) },
-                          }));
-                          addMsg(`🌟 ${def.icon} ${name} 그레이드 ${ab.grade + 1} 달성! 희귀 보너스 +${((ab.grade + 1) * 10)}%`, 'catch');
-                        }}>
-                          ⬆️ 그레이드업 → G{ab.grade + 1}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+
+            {/* Tabs */}
+            <div className="stats-tabs">
+              {['장비', '어빌리티'].map(tab => (
+                <button key={tab} tabIndex={-1}
+                  className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''}`}
+                  onClick={() => setStatsTab(tab)}>{tab}</button>
+              ))}
             </div>
-            {/* Rod enhancement section */}
-            <div className="section">
-              <div className="section-title">🔨 낚싯대 강화</div>
-              {gs.ownedRods.map(rodKey => {
-                const rod = RODS[rodKey];
-                const enhLv = gs.rodEnhance?.[rodKey] ?? 0;
-                const cost = rodEnhanceCost(enhLv);
-                const mats = rodEnhanceMatsNeeded(enhLv);
-                const ganghwaAbil = gs.abilities?.강화?.value ?? 0;
-                const rate = rodEnhanceSuccessRate(enhLv, ganghwaAbil);
-                const canAfford = gs.money >= cost;
-                const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
-                const matsStr = Object.entries(mats).map(([k, n]) => `${k}×${n}`).join(' ');
-                const eff = rodEnhanceEffect(enhLv);
-                return (
-                  <div key={rodKey} className="rod-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                      <span style={{ color: rod.color, fontWeight: 700 }}>🎣 {rod.name}</span>
-                      <span className="badge" style={{ background: enhLv >= 80 ? '#ff4400' : enhLv >= 50 ? '#ffaa00' : '#446688' }}>
-                        +{enhLv}
-                      </span>
-                    </div>
-                    <div className="rod-meta">
-                      효과: 낚시 시간 -{(eff.timeReduction * 100).toFixed(0)}% · 판매가 +{(eff.priceBonus * 100).toFixed(0)}%
-                    </div>
-                    <div className="rod-meta">
-                      강화비: {cost}G{matsStr ? ` + ${matsStr}` : ''} · 성공률 {(rate * 100).toFixed(0)}%
-                    </div>
-                    <button
-                      className={canAfford && hasMats ? 'btn-buy' : 'btn-dis'}
-                      disabled={!canAfford || !hasMats || enhLv >= 100}
-                      onClick={() => {
-                        if (enhLv >= 100) return;
-                        const success = Math.random() < rodEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0);
-                        setGs(prev => {
-                          const ores = { ...prev.oreInventory };
-                          for (const [ore, n] of Object.entries(mats)) ores[ore] = Math.max(0, (ores[ore] || 0) - n);
-                          return {
-                            ...prev,
-                            money: prev.money - cost,
-                            oreInventory: ores,
-                            rodEnhance: { ...(prev.rodEnhance ?? {}), [rodKey]: success ? enhLv + 1 : enhLv },
-                          };
-                        });
-                        if (success) {
-                          addMsg(`🔨 ${rod.name} +${enhLv + 1} 강화 성공!`, 'catch');
-                          grantAbility('강화', ENHANCE_ABILITY_GAIN);
-                        } else {
-                          addMsg(`🔨 강화 실패... (${rod.name} +${enhLv} 유지)`, 'error');
-                        }
-                      }}
-                    >
-                      {enhLv >= 100 ? '최대 강화' : `강화 (+${enhLv} → +${enhLv + 1})`}
-                    </button>
+
+            {/* ── 장비 tab ── */}
+            {statsTab === '장비' && (() => {
+              const rodData   = RODS[gs.rod];
+              const bootData  = BOOTS[gs.boots];
+              const baitData  = gs.equippedBait ? BAIT[gs.equippedBait] : null;
+              const cwData    = gs.cookware ? COOKWARE[gs.cookware] : null;
+              const enhLv     = gs.rodEnhance?.[gs.rod] ?? 0;
+
+              // Slot renderer
+              const Slot = ({ icon, label, color, sub, locked }) => (
+                <div className={`doll-slot ${locked ? 'doll-slot-locked' : label ? 'doll-slot-filled' : 'doll-slot-empty'}`}>
+                  <div className="doll-slot-icon">{icon}</div>
+                  {label
+                    ? <div className="doll-slot-name" style={{ color: color ?? '#ccc' }}>{label}</div>
+                    : <div className="doll-slot-name doll-slot-none">{locked ? '준비 중' : '없음'}</div>
+                  }
+                  {sub && <div className="doll-slot-sub">{sub}</div>}
+                </div>
+              );
+
+              return (
+                <div className="doll-wrap">
+                  {/* Left column — body slots */}
+                  <div className="doll-col doll-col-left">
+                    <Slot icon="🎩" label={null} locked={true} />
+                    <Slot icon="🥋" label={null} locked={true} />
+                    <Slot icon="💍" label={null} locked={true} />
+                    <Slot icon="👖" label={null} locked={true} />
+                    <Slot icon="🪢" label={null} locked={true} />
+                    <Slot icon="👟"
+                      label={bootData?.name ?? gs.boots}
+                      color={bootData?.color}
+                      sub={bootData?.speedBonus > 0 ? `+${bootData.speedBonus} 속도` : null}
+                    />
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Center — character silhouette */}
+                  <div className="doll-center">
+                    <div className="doll-char">
+                      <div className="doll-char-head">
+                        <div className="doll-char-face" />
+                      </div>
+                      <div className="doll-char-body" />
+                      <div className="doll-char-legs" />
+                    </div>
+                    <div className="doll-char-name" style={{ color: myTitle.color }}>[{myTitle.label}]</div>
+                    <div className="doll-char-nick">{nickname}</div>
+                    <div className="doll-char-money">💰 {gs.money.toLocaleString()}G</div>
+                  </div>
+
+                  {/* Right column — activity slots */}
+                  <div className="doll-col doll-col-right">
+                    <Slot icon="🎣"
+                      label={rodData?.name ?? gs.rod}
+                      color={rodData?.color}
+                      sub={enhLv > 0 ? `+${enhLv} 강화` : null}
+                    />
+                    <Slot icon="🪝"
+                      label={baitData?.name ?? null}
+                      color={baitData?.color}
+                    />
+                    <Slot icon="🍳"
+                      label={cwData?.name ?? null}
+                      color={cwData?.color}
+                      sub={cwData ? `×${cwData.mult} 요리` : null}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── 어빌리티 tab ── */}
+            {statsTab === '어빌리티' && (
+              <>
+                {(otherPlayersRef.current?.length ?? 0) > 0 && (
+                  <div className="party-banner">🎉 파티 중 — 어빌리티 획득 시 20% 확률로 2배!</div>
+                )}
+                <div className="section">
+                  <div className="skill-grid">
+                    {Object.entries(ABILITY_DEFS).map(([name, def]) => {
+                      const ab = gs.abilities?.[name] ?? { value: 0, grade: 0 };
+                      const pct = Math.min(100, ab.value);
+                      const canGrade = ab.value >= 100;
+                      return (
+                        <div key={name} className="skill-card">
+                          <div className="skill-top">
+                            <span className="skill-icon">{def.icon}</span>
+                            <span className="skill-name" style={{ color: def.color }}>{name}</span>
+                            <span className="skill-lv">{ab.value.toFixed(2)}</span>
+                            {ab.grade > 0 && <span className="grade-badge">G{ab.grade}</span>}
+                          </div>
+                          <div className="skill-bar-wrap">
+                            <div className="skill-bar-fill" style={{ width: `${pct}%`, background: def.color }} />
+                          </div>
+                          <div className="skill-exp-txt">{ab.value.toFixed(2)} / 100.00</div>
+                          <div className="skill-source">{def.desc}</div>
+                          {canGrade && (
+                            <button className="btn-buy grade-up-btn" onClick={() => {
+                              setGs(prev => ({
+                                ...prev,
+                                abilities: { ...(prev.abilities ?? DEFAULT_ABILITIES),
+                                  [name]: doGradeUp(prev.abilities?.[name] ?? { value: 100, grade: 0 }) },
+                              }));
+                              addMsg(`🌟 ${def.icon} ${name} 그레이드 ${ab.grade + 1} 달성! 희귀 보너스 +${((ab.grade + 1) * 10)}%`, 'catch');
+                            }}>
+                              ⬆️ 그레이드업 → G{ab.grade + 1}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="section">
+                  <div className="section-title">🔨 낚싯대 강화</div>
+                  {gs.ownedRods.map(rodKey => {
+                    const rod = RODS[rodKey];
+                    const enhLv = gs.rodEnhance?.[rodKey] ?? 0;
+                    const cost = rodEnhanceCost(enhLv);
+                    const mats = rodEnhanceMatsNeeded(enhLv);
+                    const ganghwaAbil = gs.abilities?.강화?.value ?? 0;
+                    const rate = rodEnhanceSuccessRate(enhLv, ganghwaAbil);
+                    const canAfford = gs.money >= cost;
+                    const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
+                    const matsStr = Object.entries(mats).map(([k, n]) => `${k}×${n}`).join(' ');
+                    const eff = rodEnhanceEffect(enhLv);
+                    return (
+                      <div key={rodKey} className="rod-card">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          <span style={{ color: rod.color, fontWeight: 700 }}>🎣 {rod.name}</span>
+                          <span className="badge" style={{ background: enhLv >= 80 ? '#ff4400' : enhLv >= 50 ? '#ffaa00' : '#446688' }}>
+                            +{enhLv}
+                          </span>
+                        </div>
+                        <div className="rod-meta">효과: 낚시 -{(eff.timeReduction*100).toFixed(0)}% · 판매 +{(eff.priceBonus*100).toFixed(0)}%</div>
+                        <div className="rod-meta">강화비: {cost}G{matsStr ? ` + ${matsStr}` : ''} · 성공률 {(rate*100).toFixed(0)}%</div>
+                        <button
+                          className={canAfford && hasMats ? 'btn-buy' : 'btn-dis'}
+                          disabled={!canAfford || !hasMats || enhLv >= 100}
+                          onClick={() => {
+                            if (enhLv >= 100) return;
+                            const success = Math.random() < rodEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0);
+                            setGs(prev => {
+                              const ores = { ...prev.oreInventory };
+                              for (const [ore, n] of Object.entries(mats)) ores[ore] = Math.max(0, (ores[ore] || 0) - n);
+                              return { ...prev, money: prev.money - cost, oreInventory: ores,
+                                rodEnhance: { ...(prev.rodEnhance ?? {}), [rodKey]: success ? enhLv + 1 : enhLv } };
+                            });
+                            if (success) { addMsg(`🔨 ${rod.name} +${enhLv + 1} 강화 성공!`, 'catch'); grantAbility('강화', ENHANCE_ABILITY_GAIN); }
+                            else addMsg(`🔨 강화 실패... (${rod.name} +${enhLv} 유지)`, 'error');
+                          }}
+                        >
+                          {enhLv >= 100 ? '최대 강화' : `강화 (+${enhLv} → +${enhLv + 1})`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
