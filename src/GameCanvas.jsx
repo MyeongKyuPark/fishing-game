@@ -106,6 +106,42 @@ function drawChair(ctx, sx, sy) {
   ctx.fillRect(sx + TILE_SIZE - 6, sy + 10, 4, 16);
 }
 
+function drawFishingSign(ctx, sx, sy) {
+  const boardW = 96, boardH = 52;
+  const bx = sx - boardW / 2, by = sy - boardH - 12;
+
+  // Post
+  ctx.fillStyle = '#6b4226';
+  ctx.fillRect(sx - 4, by + boardH, 8, 28);
+
+  // Board shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(bx + 3, by + 3, boardW, boardH);
+
+  // Board body
+  ctx.fillStyle = '#2a5a3a';
+  ctx.fillRect(bx, by, boardW, boardH);
+  ctx.strokeStyle = '#4a8a5a';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(bx, by, boardW, boardH);
+
+  // Top accent line
+  ctx.fillStyle = '#4aaa6a';
+  ctx.fillRect(bx, by, boardW, 5);
+
+  // Title
+  ctx.font = 'bold 13px "Noto Sans KR", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e8f8e8';
+  ctx.fillText('🎣 낚시터', sx, by + 22);
+
+  // Sub text
+  ctx.font = '10px "Noto Sans KR", sans-serif';
+  ctx.fillStyle = 'rgba(200,240,200,0.8)';
+  ctx.fillText('의자에 앉아 !낚시 입력', sx, by + 38);
+  ctx.fillText('방향키로 취소', sx, by + 50);
+}
+
 function drawMineEntrance(ctx, sx, sy) {
   // Cave arch
   const ex = sx + TILE_SIZE, ey = sy + TILE_SIZE;
@@ -392,6 +428,14 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       const bsx = 1 * TILE_SIZE - camX, bsy = 1 * TILE_SIZE - camY;
       if (bsx < W && bsx + 10 * TILE_SIZE > 0 && bsy < H && bsy + 11 * TILE_SIZE > 0)
         drawShopBuilding(ctx, camX, camY);
+
+      // Fishing area sign (tx=13, ty=17 — top of sand beach)
+      {
+        const sx = 13 * TILE_SIZE + TILE_SIZE / 2 - camX;
+        const sy = 17 * TILE_SIZE - camY;
+        if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
+          drawFishingSign(ctx, sx, sy);
+      }
 
       // Fishing chairs
       for (const c of FISHING_CHAIRS) {
