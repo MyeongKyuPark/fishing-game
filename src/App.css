@@ -369,7 +369,29 @@ html, body {
 .fish-row-compact { padding: 2px 6px; background: none; border-radius: 3px; }
 .fish-row-compact:hover { background: rgba(255,255,255,0.04); }
 
-/* ── Stat cards ── */
+/* ── Skill cards ── */
+.skill-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+.skill-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 8px 10px;
+}
+.skill-top { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+.skill-icon { font-size: 15px; }
+.skill-name { font-weight: 700; font-size: 13px; flex: 1; }
+.skill-lv { font-size: 11px; color: #e0d070; font-weight: 700; }
+.skill-bar-wrap {
+  height: 5px; background: rgba(255,255,255,0.1);
+  border-radius: 3px; overflow: hidden; margin-bottom: 2px;
+}
+.skill-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+.skill-exp-txt { font-size: 9px; color: rgba(255,255,255,0.35); margin-bottom: 3px; }
+.skill-effect { font-size: 10px; font-weight: 600; margin-bottom: 2px; }
+.skill-source { font-size: 9px; color: rgba(255,255,255,0.3); }
+
+/* ── Stat cards (legacy) ── */
 .stat-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
 }

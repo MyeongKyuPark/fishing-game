@@ -7,7 +7,10 @@ import Leaderboard from './Leaderboard';
 import RoomLobby from './RoomLobby';
 import { saveFishRecord } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
-import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, STAT_DEFS, STAT_MAX, statCost, weightedPick, randInt, TILE_SIZE } from './gameData';
+import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, weightedPick, randInt, TILE_SIZE } from './gameData';
+import { DEFAULT_SKILLS, SKILL_DEFS, addSkillExp, expForLv,
+  FISH_SKILL_EXP, ORE_SKILL_EXP, COOK_SKILL_EXP,
+  SELL_SKILL_EXP_PER_100G, ACTIVITY_STAMINA_EXP } from './skillData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
 function LoginScreen({ onLogin }) {
@@ -49,8 +52,6 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-const DEFAULT_STATS = { 화술: 1, 민첩: 1, 체력: 1, 행운: 1 };
-
 const DEFAULT_STATE = {
   money: 100,
   rod: '초급낚시대',
@@ -60,7 +61,7 @@ const DEFAULT_STATE = {
   fishCaught: 0,
   boots: '기본신발',
   ownedBoots: ['기본신발'],
-  stats: { ...DEFAULT_STATS },
+  skills: { ...DEFAULT_SKILLS },
   equippedBait: null,
   ownedBait: [],
   baitInventory: {},
@@ -74,6 +75,16 @@ function loadSave(nickname) {
   try {
     const s = JSON.parse(localStorage.getItem(saveKey(nickname)));
     if (!s) return DEFAULT_STATE;
+    // Merge saved skills per-key so new skills get defaults even on old saves
+    const savedSkills = s.skills ?? {};
+    const skills = Object.fromEntries(
+      Object.keys(DEFAULT_SKILLS).map(k => [
+        k,
+        (savedSkills[k] && typeof savedSkills[k].lv === 'number')
+          ? savedSkills[k]
+          : { lv: 1, exp: 0 },
+      ])
+    );
     return {
       money: s.money ?? 100,
       rod: s.rod ?? '초급낚시대',
@@ -83,7 +94,7 @@ function loadSave(nickname) {
       fishCaught: s.fishCaught ?? 0,
       boots: s.boots ?? '기본신발',
       ownedBoots: s.ownedBoots ?? ['기본신발'],
-      stats: { ...DEFAULT_STATS, ...(s.stats ?? {}) },
+      skills,
       equippedBait: s.equippedBait ?? null,
       ownedBait: s.ownedBait ?? [],
       baitInventory: s.baitInventory ?? {},
@@ -223,9 +234,9 @@ export default function App() {
   useEffect(() => {
     if (!gameRef.current) return;
     const bootsBonus = BOOTS[gs.boots]?.speedBonus ?? 0;
-    const agilityBonus = ((gs.stats?.민첩 ?? 1) - 1) * 0.4;
+    const agilityBonus = ((gs.skills?.민첩?.lv ?? 1) - 1) * 0.4;
     gameRef.current.speedBonus = bootsBonus + agilityBonus;
-  }, [gs.boots, gs.stats]);
+  }, [gs.boots, gs.skills]);
 
   // Load save when nickname is established (nickname-keyed, room-independent)
   useEffect(() => {
@@ -252,6 +263,20 @@ export default function App() {
     setMessages(prev => [...prev.slice(-120), { text, type }]);
   }, []);
 
+  // Grant EXP to a skill; shows level-up message if leveled
+  const grantSkillExp = useCallback((skillName, amount) => {
+    const current = stateRef.current?.skills?.[skillName] ?? { lv: 1, exp: 0 };
+    const result = addSkillExp(current, amount);
+    if (result.leveledUp) {
+      const def = SKILL_DEFS[skillName];
+      setTimeout(() => addMsg(`✨ ${def?.icon ?? ''} ${skillName} Lv.${result.lv} 달성!`, 'catch'), 0);
+    }
+    setGs(prev => ({
+      ...prev,
+      skills: { ...(prev.skills ?? DEFAULT_SKILLS), [skillName]: { lv: result.lv, exp: result.exp } },
+    }));
+  }, []);
+
   // ── Callbacks from game loop ──────────────────────────────────────────────
 
   const applyBoosts = useCallback((table, boostMap) => {
@@ -262,10 +287,11 @@ export default function App() {
     const rod = RODS[rodKey];
     if (!rod) return;
     const s = stateRef.current;
-    const luckLv = s?.stats?.행운 ?? 1;
-    const 힘Lv = s?.stats?.화술 ?? 1;
+    const luckLv  = s?.skills?.행운?.lv  ?? 1;
+    const speechLv = s?.skills?.화술?.lv ?? 1;
+    const fishLv   = s?.skills?.낚시?.lv ?? 1;
 
-    // Build rarity boost from luck stat
+    // Luck boosts rarity weights
     const luckBoost = { 흔함: 1, 보통: 1 + (luckLv-1)*0.12, 희귀: 1 + (luckLv-1)*0.22, 전설: 1 + (luckLv-1)*0.40, 신화: 1 + (luckLv-1)*0.60 };
     let table = applyBoosts(rod.table, luckBoost);
 
@@ -279,7 +305,11 @@ export default function App() {
     if (!fd) return;
     const size = parseFloat((Math.random() * (fd.maxSz - fd.minSz) + fd.minSz).toFixed(1));
     const avgSz = (fd.minSz + fd.maxSz) / 2;
-    const price = Math.round(fd.price * (size / avgSz) * (1 + (힘Lv - 1) * 0.06));
+    // Price: base × size ratio × 화술 bonus × 낚시 bonus
+    const price = Math.round(
+      fd.price * (size / avgSz)
+      * (1 + (speechLv - 1) * 0.005 + (fishLv - 1) * 0.003)
+    );
 
     // Consume one-time bait
     if (baitData?.type === 'once') {
@@ -295,13 +325,13 @@ export default function App() {
     if (nicknameRef.current) saveFishRecord(nicknameRef.current, name, size);
 
     if (gameRef.current?.player) {
-      gameRef.current.player.floatText = {
-        text: `${name} ${size}cm`,
-        age: 0,
-        color: rarityColor(fd.rarity),
-      };
+      gameRef.current.player.floatText = { text: `${name} ${size}cm`, age: 0, color: rarityColor(fd.rarity) };
     }
-  }, [addMsg]);
+
+    // Grant skill EXP
+    grantSkillExp('낚시', FISH_SKILL_EXP[fd.rarity] ?? 5);
+    grantSkillExp('체력', ACTIVITY_STAMINA_EXP);
+  }, [addMsg, grantSkillExp]);
 
   const onOreMined = useCallback((oreName) => {
     setGs(prev => ({
@@ -310,13 +340,11 @@ export default function App() {
     }));
     addMsg(`⛏ ${oreName} 1개 채굴!`, 'mine');
     if (gameRef.current?.player) {
-      gameRef.current.player.floatText = {
-        text: `+${oreName}`,
-        age: 0,
-        color: ORES[oreName]?.color ?? '#fa4',
-      };
+      gameRef.current.player.floatText = { text: `+${oreName}`, age: 0, color: ORES[oreName]?.color ?? '#fa4' };
     }
-  }, [addMsg]);
+    grantSkillExp('채굴', ORE_SKILL_EXP[oreName] ?? 8);
+    grantSkillExp('체력', ACTIVITY_STAMINA_EXP);
+  }, [addMsg, grantSkillExp]);
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
 
@@ -370,16 +398,19 @@ export default function App() {
         addMsg('🍳 요리 도구가 없습니다. 상점에서 구매하세요!', 'error');
         return;
       }
-      const mult = COOKWARE[cw]?.mult ?? 1;
+      const baseMult = COOKWARE[cw]?.mult ?? 1;
+      const cookLv = stateRef.current?.skills?.요리?.lv ?? 1;
+      const totalMult = baseMult + (cookLv - 1) * 0.03;
       const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
       if (raw.length === 0) { addMsg('요리할 생선이 없습니다.'); return; }
       setGs(prev => ({
         ...prev,
         fishInventory: prev.fishInventory.map(f =>
-          f.cooked ? f : { ...f, price: Math.round(f.price * mult), cooked: true }
+          f.cooked ? f : { ...f, price: Math.round(f.price * totalMult), cooked: true }
         ),
       }));
-      addMsg(`🍳 생선 ${raw.length}마리 요리 완료! (가격 ${mult}배)`, 'catch');
+      addMsg(`🍳 생선 ${raw.length}마리 요리 완료! (x${totalMult.toFixed(2)})`, 'catch');
+      grantSkillExp('요리', COOK_SKILL_EXP * raw.length);
       return;
     }
 
@@ -415,8 +446,10 @@ export default function App() {
       player.facing = 'down';
       player.state = 'fishing';
       player.currentRod = s.rod;
-      const staminaMult = 1 - ((s.stats?.체력 ?? 1) - 1) * 0.05;
-      const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * staminaMult)));
+      const fishLv = s.skills?.낚시?.lv ?? 1;
+      const stamLv = s.skills?.체력?.lv ?? 1;
+      const timeMult = (1 - (fishLv - 1) * 0.004) * (1 - (stamLv - 1) * 0.003);
+      const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx);
       player.activityProgress = 0;
@@ -434,8 +467,10 @@ export default function App() {
       const ore = pickOre();
       player.state = 'mining';
       player.currentOre = ore;
-      const stMult = 1 - ((s.stats?.체력 ?? 1) - 1) * 0.05;
-      const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(1000, Math.round(t * stMult)));
+      const mineLv = s.skills?.채굴?.lv ?? 1;
+      const mineStamLv = s.skills?.체력?.lv ?? 1;
+      const mineMult = (1 - (mineLv - 1) * 0.004) * (1 - (mineStamLv - 1) * 0.003);
+      const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(1000, Math.round(t * mineMult)));
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx);
       player.activityProgress = 0;
@@ -463,6 +498,7 @@ export default function App() {
       const total = inv.reduce((sum, f) => sum + f.price, 0);
       setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: [] }));
       addMsg(`💰 물고기 ${inv.length}마리 → ${total}G!`, 'catch');
+      grantSkillExp('화술', Math.max(1, Math.floor(total / 100)) * SELL_SKILL_EXP_PER_100G);
       return;
     }
 
@@ -557,25 +593,18 @@ export default function App() {
     addMsg(`🍳 ${COOKWARE[key].name} 장착`);
   };
 
-  const upgradeStat = (stat) => {
-    const lv = gs.stats?.[stat] ?? 1;
-    if (lv >= STAT_MAX) { addMsg(`${stat} 최대 레벨입니다.`); return; }
-    const cost = statCost(lv);
-    if (gs.money < cost) { addMsg(`💰 골드 부족 (${cost}G 필요)`, 'error'); return; }
-    setGs(prev => ({ ...prev, money: prev.money - cost, stats: { ...(prev.stats ?? DEFAULT_STATS), [stat]: lv + 1 } }));
-    addMsg(`✨ ${stat} Lv.${lv + 1} 달성!`, 'catch');
-  };
-
   const sellAll = () => {
     const total = gs.fishInventory.reduce((s, f) => s + f.price, 0);
     setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: [] }));
     addMsg(`💰 전체 판매 +${total}G`, 'catch');
+    grantSkillExp('화술', Math.max(1, Math.floor(total / 100)) * SELL_SKILL_EXP_PER_100G);
   };
 
   const sellOne = (id) => {
     const fish = gs.fishInventory.find(f => f.id === id);
     if (!fish) return;
     setGs(prev => ({ ...prev, money: prev.money + fish.price, fishInventory: prev.fishInventory.filter(f => f.id !== id) }));
+    grantSkillExp('화술', Math.max(1, Math.floor(fish.price / 100)) * SELL_SKILL_EXP_PER_100G);
   };
 
   const handleLogin = (name) => {
@@ -703,6 +732,7 @@ export default function App() {
           const total = groups[name].reduce((s, f) => s + f.price, 0);
           setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: prev.fishInventory.filter(f => f.name !== name) }));
           addMsg(`💰 ${name} ${groups[name].length}마리 판매 +${total}G`, 'catch');
+          grantSkillExp('화술', Math.max(1, Math.floor(total / 100)) * SELL_SKILL_EXP_PER_100G);
         };
         return (
           <div className="overlay" onClick={() => setShowInv(false)}>
@@ -790,45 +820,33 @@ export default function App() {
         );
       })()}
 
-      {/* Stats modal */}
+      {/* Skills modal */}
       {showStats && (
         <div className="overlay" onClick={() => setShowStats(false)}>
           <div className="panel" onClick={e => e.stopPropagation()}>
             <div className="panel-head">
-              <span>📊 캐릭터 스탯</span>
+              <span>📊 스킬</span>
               <button tabIndex={-1} onClick={() => setShowStats(false)}>✕</button>
             </div>
-            <div className="shop-money">보유: {gs.money.toLocaleString()}G</div>
             <div className="section">
-              <div className="stat-grid">
-                {Object.entries(STAT_DEFS).map(([stat, def]) => {
-                  const lv = gs.stats?.[stat] ?? 1;
-                  const cost = statCost(lv);
-                  const maxed = lv >= STAT_MAX;
-                  const canUp = !maxed && gs.money >= cost;
+              <div className="skill-grid">
+                {Object.entries(SKILL_DEFS).map(([name, def]) => {
+                  const sk = gs.skills?.[name] ?? { lv: 1, exp: 0 };
+                  const needed = expForLv(sk.lv);
+                  const pct = Math.min(100, Math.round((sk.exp / needed) * 100));
                   return (
-                    <div key={stat} className="stat-card">
-                      <div className="stat-top">
-                        <span className="stat-icon">{def.icon}</span>
-                        <span className="stat-name" style={{ color: def.color }}>{stat}</span>
-                        <span className="stat-level">Lv.{lv} / {STAT_MAX}</span>
+                    <div key={name} className="skill-card">
+                      <div className="skill-top">
+                        <span className="skill-icon">{def.icon}</span>
+                        <span className="skill-name" style={{ color: def.color }}>{name}</span>
+                        <span className="skill-lv">Lv.{sk.lv}</span>
                       </div>
-                      <div className="stat-desc">{def.desc}</div>
-                      <div className="stat-effect" style={{ color: def.color }}>
-                        {stat === '화술' && `현재 판매가 +${((lv-1)*6)}%`}
-                        {stat === '민첩' && `현재 속도 +${((lv-1)*0.4).toFixed(1)}`}
-                        {stat === '체력' && `현재 시간 -${((lv-1)*5)}%`}
-                        {stat === '행운' && `현재 희귀 가중치 +${((lv-1)*22)}%`}
+                      <div className="skill-bar-wrap">
+                        <div className="skill-bar-fill" style={{ width: `${pct}%`, background: def.color }} />
                       </div>
-                      <button
-                        tabIndex={-1}
-                        className={canUp ? 'btn-buy' : 'btn-dis'}
-                        style={{ marginTop: 6, width: '100%', fontSize: 11 }}
-                        onClick={() => upgradeStat(stat)}
-                        disabled={!canUp}
-                      >
-                        {maxed ? '✨ MAX' : `${cost}G 강화 → Lv.${lv+1}`}
-                      </button>
+                      <div className="skill-exp-txt">{sk.exp} / {needed} EXP</div>
+                      <div className="skill-effect" style={{ color: def.color }}>{def.effectDesc(sk.lv)}</div>
+                      <div className="skill-source">{def.grind ? '🔄 활동 경험치' : '📜 퀘스트 보상'}</div>
                     </div>
                   );
                 })}
