@@ -4,10 +4,11 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-export async function updatePlayerPresence(nickname, roomId, x, y, state, facing, rod) {
+export async function updatePlayerPresence(nickname, roomId, x, y, state, facing, rod, info = {}) {
   try {
     await setDoc(doc(db, 'players', `${roomId}_${nickname}`), {
       nickname, roomId, x, y, state, facing, rod,
+      ...info,
       updatedAt: serverTimestamp(),
     });
   } catch (e) {

@@ -377,7 +377,7 @@ function drawMineEntrance(ctx, sx, sy) {
   ctx.fillText('⛏ 광 산', ex + ew / 2, ey - 18);
 }
 
-function drawPlayer(ctx, px, py, player, nickname) {
+function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
   const { facing, state, activityProgress } = player;
 
   // Shadow
@@ -479,11 +479,21 @@ function drawPlayer(ctx, px, py, player, nickname) {
     if (player.floatText.age > 100) player.floatText = null;
   }
 
-  // Nickname below character
+  // Title + Nickname below character
   if (nickname) {
-    const nameY = py + PH / 2 + 14;
-    ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
     ctx.textAlign = 'center';
+    // Title
+    if (title && title !== '신입') {
+      const titleY = py + PH / 2 + 13;
+      ctx.font = '9px "Noto Sans KR", sans-serif';
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.lineWidth = 2.5;
+      ctx.strokeText(`[${title}]`, px, titleY);
+      ctx.fillStyle = titleColor ?? '#aaaaaa';
+      ctx.fillText(`[${title}]`, px, titleY);
+    }
+    const nameY = py + PH / 2 + (title && title !== '신입' ? 23 : 14);
+    ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
     ctx.strokeStyle = 'rgba(0,0,0,0.8)';
     ctx.lineWidth = 3;
     ctx.strokeText(nickname, px, nameY);
@@ -494,11 +504,14 @@ function drawPlayer(ctx, px, py, player, nickname) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivityChange, nickname, otherPlayersRef }) {
+export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivityChange, nickname, title, titleColor, otherPlayersRef, onPlayerInspect }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onActivityChange });
   const showFullMapRef = useRef(false);
   const minimapBoundsRef = useRef({ x: 0, y: 0, w: 100, h: 75 });
+  const otherPlayerScreenPosRef = useRef([]); // [{op, sx, sy}] updated each frame
+  const onPlayerInspectRef = useRef(onPlayerInspect);
+  useEffect(() => { onPlayerInspectRef.current = onPlayerInspect; });
 
   // Always keep callbacks fresh
   useEffect(() => {
@@ -524,14 +537,21 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
     };
   }, []);
 
-  // Click: toggle full map (minimap click = open, anywhere when open = close)
+  // Click: toggle full map; dblclick: inspect player
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const onClick = (e) => {
+
+    const getCanvasPos = (e) => {
       const rect = canvas.getBoundingClientRect();
-      const cx = (e.clientX - rect.left) * (canvas.width / rect.width);
-      const cy = (e.clientY - rect.top) * (canvas.height / rect.height);
+      return {
+        cx: (e.clientX - rect.left) * (canvas.width / rect.width),
+        cy: (e.clientY - rect.top) * (canvas.height / rect.height),
+      };
+    };
+
+    const onClick = (e) => {
+      const { cx, cy } = getCanvasPos(e);
       const mb = minimapBoundsRef.current;
       if (showFullMapRef.current) {
         showFullMapRef.current = false;
@@ -539,8 +559,24 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
         showFullMapRef.current = true;
       }
     };
+
+    const onDblClick = (e) => {
+      const { cx, cy } = getCanvasPos(e);
+      // Find closest other player within 32px
+      let best = null, bestDist = 32;
+      for (const { op, sx, sy } of otherPlayerScreenPosRef.current) {
+        const d = Math.hypot(cx - sx, cy - sy);
+        if (d < bestDist) { bestDist = d; best = op; }
+      }
+      if (best) onPlayerInspectRef.current?.(best);
+    };
+
     canvas.addEventListener('click', onClick);
-    return () => canvas.removeEventListener('click', onClick);
+    canvas.addEventListener('dblclick', onDblClick);
+    return () => {
+      canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('dblclick', onDblClick);
+    };
   }, []);
 
   // Key events
@@ -698,17 +734,21 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
 
       // Other players
       const others = otherPlayersRef?.current ?? [];
+      const screenPositions = [];
       for (const op of others) {
-        drawPlayer(ctx, op.x - camX, op.y - camY, {
+        const sx = op.x - camX, sy = op.y - camY;
+        screenPositions.push({ op, sx, sy });
+        drawPlayer(ctx, sx, sy, {
           facing: op.facing ?? 'down',
           state: op.state ?? 'idle',
           activityProgress: 0,
           floatText: null,
-        }, op.nickname);
+        }, op.nickname, op.title, op.titleColor);
       }
+      otherPlayerScreenPosRef.current = screenPositions;
 
       // My player (on top)
-      drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname);
+      drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname, title, titleColor);
 
       // Minimap
       const MM_W = 100, MM_H = 75;

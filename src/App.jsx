@@ -11,6 +11,7 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, weightedPick, randInt, TILE_SI
 import { DEFAULT_SKILLS, SKILL_DEFS, addSkillExp, expForLv,
   FISH_SKILL_EXP, ORE_SKILL_EXP, COOK_SKILL_EXP,
   SELL_SKILL_EXP_PER_100G, ACTIVITY_STAMINA_EXP } from './skillData';
+import { getTitle, TITLES } from './titleData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
 function LoginScreen({ onLogin }) {
@@ -145,6 +146,7 @@ export default function App() {
   const [showShop, setShowShop] = useState(false);
   const [showRank, setShowRank] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [inspectPlayer, setInspectPlayer] = useState(null);
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -195,12 +197,25 @@ export default function App() {
   // Multiplayer: throttled position sync (5×/sec, only on change) + immediate write on join
   useEffect(() => {
     if (!nickname || !roomId) return;
+    const buildInfo = () => {
+      const s = stateRef.current;
+      if (!s) return {};
+      const t = getTitle(s);
+      return {
+        title: t.label,
+        titleColor: t.color,
+        boots: s.boots ?? '기본신발',
+        skillLvs: Object.fromEntries(Object.keys(DEFAULT_SKILLS).map(k => [k, s.skills?.[k]?.lv ?? 1])),
+        fishCaught: s.fishCaught ?? 0,
+        money: s.money ?? 0,
+      };
+    };
     // Write immediately so others see us right away
     const writeNow = () => {
       const p = gameRef.current?.player;
       if (!p) return;
       lastPosRef.current = { x: p.x, y: p.y, state: p.state, facing: p.facing };
-      updatePlayerPresence(nickname, roomId, p.x, p.y, p.state, p.facing, stateRef.current?.rod ?? '초급낚시대');
+      updatePlayerPresence(nickname, roomId, p.x, p.y, p.state, p.facing, stateRef.current?.rod ?? '초급낚시대', buildInfo());
     };
     const initTimer = setTimeout(writeNow, 300);
     const id = setInterval(() => {
@@ -209,7 +224,7 @@ export default function App() {
       const last = lastPosRef.current;
       if (p.x === last.x && p.y === last.y && p.state === last.state && p.facing === last.facing) return;
       lastPosRef.current = { x: p.x, y: p.y, state: p.state, facing: p.facing };
-      updatePlayerPresence(nickname, roomId, p.x, p.y, p.state, p.facing, stateRef.current?.rod ?? '초급낚시대');
+      updatePlayerPresence(nickname, roomId, p.x, p.y, p.state, p.facing, stateRef.current?.rod ?? '초급낚시대', buildInfo());
     }, 200);
     return () => { clearTimeout(initTimer); clearInterval(id); };
   }, [nickname, roomId]);
@@ -647,6 +662,7 @@ export default function App() {
   );
 
   const totalFishVal = gs.fishInventory.reduce((s, f) => s + f.price, 0);
+  const myTitle = getTitle(gs);
 
   return (
     <div className="root">
@@ -657,12 +673,16 @@ export default function App() {
           onOreMined={onOreMined}
           onActivityChange={onActivityChange}
           nickname={nickname}
+          title={myTitle.label}
+          titleColor={myTitle.color}
           otherPlayersRef={otherPlayersRef}
+          onPlayerInspect={setInspectPlayer}
         />
 
         {/* HUD */}
         <div className="hud">
           <div className="hud-chip hud-nick">👤 {nickname}</div>
+          <div className="hud-chip" style={{ color: myTitle.color, fontSize: 11 }}>[{myTitle.label}]</div>
           <div className="hud-chip" style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>🏠 {roomTitle}</div>
           <div className="hud-chip">💰 {gs.money.toLocaleString()}G</div>
           <div className="hud-chip" style={{ color: RODS[gs.rod]?.color }}>
@@ -858,6 +878,57 @@ export default function App() {
 
       {/* Ranking modal */}
       {showRank && <Leaderboard onClose={() => setShowRank(false)} myNickname={nickname} />}
+
+      {/* Player inspect modal */}
+      {inspectPlayer && (
+        <div className="overlay" onClick={() => setInspectPlayer(null)}>
+          <div className="panel inspect-panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>👤 플레이어 정보</span>
+              <button tabIndex={-1} onClick={() => setInspectPlayer(null)}>✕</button>
+            </div>
+            <div className="inspect-header">
+              <div className="inspect-title" style={{ color: inspectPlayer.titleColor ?? '#aaa' }}>
+                [{inspectPlayer.title ?? '신입'}]
+              </div>
+              <div className="inspect-name">{inspectPlayer.nickname}</div>
+              <div className="inspect-sub">🐟 {inspectPlayer.fishCaught ?? 0}마리 낚음</div>
+            </div>
+            <div className="section">
+              <div className="section-title">장비</div>
+              <div className="inspect-equip-row">
+                <span style={{ color: RODS[inspectPlayer.rod]?.color ?? '#fff' }}>
+                  🎣 {RODS[inspectPlayer.rod]?.name ?? inspectPlayer.rod}
+                </span>
+              </div>
+              <div className="inspect-equip-row">
+                <span style={{ color: BOOTS[inspectPlayer.boots]?.color ?? '#aaa' }}>
+                  👟 {BOOTS[inspectPlayer.boots]?.name ?? inspectPlayer.boots ?? '기본 신발'}
+                </span>
+              </div>
+            </div>
+            <div className="section">
+              <div className="section-title">스킬</div>
+              <div className="inspect-skill-list">
+                {Object.entries(SKILL_DEFS).map(([name, def]) => {
+                  const lv = inspectPlayer.skillLvs?.[name] ?? 1;
+                  return (
+                    <div key={name} className="inspect-skill-row">
+                      <span className="inspect-skill-icon">{def.icon}</span>
+                      <span className="inspect-skill-name" style={{ color: def.color }}>{name}</span>
+                      <div className="inspect-skill-bar-wrap">
+                        <div className="inspect-skill-bar-fill"
+                          style={{ width: `${Math.min(100, (lv / 99) * 100)}%`, background: def.color }} />
+                      </div>
+                      <span className="inspect-skill-lv">Lv.{lv}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Shop modal */}
       {showShop && (
