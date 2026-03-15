@@ -73,8 +73,11 @@ function rarityColor(r) {
 export default function App() {
   const gameRef = useRef({});
   const stateRef = useRef(null);
+  const tabId = useRef(Date.now() + '-' + Math.random());
+  const channelRef = useRef(null);
 
   const [nickname, setNickname] = useState(() => localStorage.getItem('fishingNickname') || '');
+  const [blocked, setBlocked] = useState(false);
 
   const [gs, setGs] = useState(loadSave);
   const [messages, setMessages] = useState([
@@ -84,6 +87,29 @@ export default function App() {
   const [activity, setActivity] = useState(null);
   const [showInv, setShowInv] = useState(false);
   const [showShop, setShowShop] = useState(false);
+
+  // BroadcastChannel: 중복 탭 방지
+  useEffect(() => {
+    const ch = new BroadcastChannel('fishingGame_session');
+    channelRef.current = ch;
+
+    ch.onmessage = (e) => {
+      if (e.data.tabId === tabId.current) return;
+      if (e.data.type === 'gameStart') setBlocked(true);
+      if (e.data.type === 'leave') setBlocked(false);
+    };
+
+    // 이미 닉네임이 있으면 (재방문) 즉시 다른 탭에 알림
+    const saved = localStorage.getItem('fishingNickname');
+    if (saved) {
+      ch.postMessage({ type: 'gameStart', tabId: tabId.current });
+    }
+
+    return () => {
+      ch.postMessage({ type: 'leave', tabId: tabId.current });
+      ch.close();
+    };
+  }, []);
 
   // Keep stateRef in sync
   useEffect(() => { stateRef.current = gs; }, [gs]);
@@ -291,6 +317,8 @@ export default function App() {
 
   const handleLogin = (name) => {
     localStorage.setItem('fishingNickname', name);
+    channelRef.current?.postMessage({ type: 'gameStart', tabId: tabId.current });
+    setBlocked(false);
     setNickname(name);
     setMessages([
       { type: 'system', text: `⚓ 어서오세요, ${name}님!` },
@@ -298,9 +326,28 @@ export default function App() {
     ]);
   };
 
+  const takeOver = () => {
+    channelRef.current?.postMessage({ type: 'gameStart', tabId: tabId.current });
+    setBlocked(false);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (!nickname) return <LoginScreen onLogin={handleLogin} />;
+
+  if (blocked) return (
+    <div className="login-bg">
+      <div className="login-box">
+        <div className="login-icon">⚠️</div>
+        <h1 className="login-title" style={{ fontSize: 20 }}>다른 탭에서 접속됨</h1>
+        <p className="login-sub" style={{ marginBottom: 24 }}>
+          다른 탭에서 게임이 실행 중입니다.<br />이 탭에서 계속하려면 아래 버튼을 누르세요.
+        </p>
+        <button className="login-btn" onClick={takeOver}>이 탭에서 계속하기</button>
+        <p className="login-hint" style={{ marginTop: 16 }}>다른 탭은 자동으로 중단됩니다.</p>
+      </div>
+    </div>
+  );
 
   const totalFishVal = gs.fishInventory.reduce((s, f) => s + f.price, 0);
 
