@@ -359,6 +359,7 @@ export default function App() {
           onFishCaught={onFishCaught}
           onOreMined={onOreMined}
           onActivityChange={onActivityChange}
+          nickname={nickname}
         />
 
         {/* HUD */}

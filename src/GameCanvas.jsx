@@ -138,7 +138,7 @@ function drawMineEntrance(ctx, sx, sy) {
   ctx.fillText('⛏ 광 산', ex + ew / 2, ey - 18);
 }
 
-function drawPlayer(ctx, px, py, player) {
+function drawPlayer(ctx, px, py, player, nickname) {
   const { facing, state, activityProgress } = player;
 
   // Shadow
@@ -239,11 +239,23 @@ function drawPlayer(ctx, px, py, player) {
     player.floatText.age++;
     if (player.floatText.age > 100) player.floatText = null;
   }
+
+  // Nickname below character
+  if (nickname) {
+    const nameY = py + PH / 2 + 14;
+    ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(nickname, px, nameY);
+    ctx.fillStyle = '#e8e8ff';
+    ctx.fillText(nickname, px, nameY);
+  }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivityChange }) {
+export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivityChange, nickname }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onActivityChange });
 
@@ -406,7 +418,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
         ctx.fillText('광산 지역', ml[0], ml[1]);
 
       // Player
-      drawPlayer(ctx, player.x - camX, player.y - camY, player);
+      drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname);
 
       rafId = requestAnimationFrame(loop);
     }
