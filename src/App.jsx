@@ -5,6 +5,45 @@ import Chat from './Chat';
 import { FISH, RODS, ORES, weightedPick, randInt, TILE_SIZE } from './gameData';
 import { nearestChair, nearShop, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
+function LoginScreen({ onLogin }) {
+  const [name, setName] = useState('');
+  const [err, setErr] = useState('');
+
+  const submit = (e) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) { setErr('닉네임을 입력해주세요.'); return; }
+    if (trimmed.length < 2) { setErr('2글자 이상 입력해주세요.'); return; }
+    if (trimmed.length > 12) { setErr('12글자 이하로 입력해주세요.'); return; }
+    onLogin(trimmed);
+  };
+
+  return (
+    <div className="login-bg">
+      <div className="login-box">
+        <div className="login-icon">🎣</div>
+        <h1 className="login-title">Tidehaven</h1>
+        <p className="login-sub">낚시와 채굴의 조용한 마을</p>
+        <form className="login-form" onSubmit={submit}>
+          <label className="login-label">닉네임</label>
+          <input
+            className="login-input"
+            type="text"
+            placeholder="2~12글자"
+            value={name}
+            onChange={e => { setName(e.target.value); setErr(''); }}
+            autoFocus
+            maxLength={12}
+          />
+          {err && <div className="login-err">{err}</div>}
+          <button className="login-btn" type="submit">입장하기</button>
+        </form>
+        <p className="login-hint">방향키로 이동 · !낚시 · !광질 · !도움말</p>
+      </div>
+    </div>
+  );
+}
+
 const DEFAULT_STATE = {
   money: 100,
   rod: '초급낚시대',
@@ -34,6 +73,8 @@ function rarityColor(r) {
 export default function App() {
   const gameRef = useRef({});
   const stateRef = useRef(null);
+
+  const [nickname, setNickname] = useState(() => localStorage.getItem('fishingNickname') || '');
 
   const [gs, setGs] = useState(loadSave);
   const [messages, setMessages] = useState([
@@ -248,7 +289,18 @@ export default function App() {
     setGs(prev => ({ ...prev, money: prev.money + fish.price, fishInventory: prev.fishInventory.filter(f => f.id !== id) }));
   };
 
+  const handleLogin = (name) => {
+    localStorage.setItem('fishingNickname', name);
+    setNickname(name);
+    setMessages([
+      { type: 'system', text: `⚓ 어서오세요, ${name}님!` },
+      { type: 'system', text: '방향키로 이동 · !도움말 로 명령어 확인' },
+    ]);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
+
+  if (!nickname) return <LoginScreen onLogin={handleLogin} />;
 
   const totalFishVal = gs.fishInventory.reduce((s, f) => s + f.price, 0);
 
@@ -264,6 +316,7 @@ export default function App() {
 
         {/* HUD */}
         <div className="hud">
+          <div className="hud-chip hud-nick">👤 {nickname}</div>
           <div className="hud-chip">💰 {gs.money.toLocaleString()}G</div>
           <div className="hud-chip" style={{ color: RODS[gs.rod]?.color }}>
             🎣 {RODS[gs.rod]?.name}
