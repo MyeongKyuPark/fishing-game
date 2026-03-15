@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 import GameCanvas from './GameCanvas';
 import Chat from './Chat';
+import Joystick from './Joystick';
 import { FISH, RODS, ORES, weightedPick, randInt, TILE_SIZE } from './gameData';
 import { nearestChair, nearShop, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
 
@@ -76,7 +77,7 @@ export default function App() {
   const tabId = useRef(Date.now() + '-' + Math.random());
   const channelRef = useRef(null);
 
-  const [nickname, setNickname] = useState(() => localStorage.getItem('fishingNickname') || '');
+  const [nickname, setNickname] = useState('');
   const [blocked, setBlocked] = useState(false);
 
   const [gs, setGs] = useState(loadSave);
@@ -98,12 +99,6 @@ export default function App() {
       if (e.data.type === 'gameStart') setBlocked(true);
       if (e.data.type === 'leave') setBlocked(false);
     };
-
-    // 이미 닉네임이 있으면 (재방문) 즉시 다른 탭에 알림
-    const saved = localStorage.getItem('fishingNickname');
-    if (saved) {
-      ch.postMessage({ type: 'gameStart', tabId: tabId.current });
-    }
 
     return () => {
       ch.postMessage({ type: 'leave', tabId: tabId.current });
@@ -316,7 +311,6 @@ export default function App() {
   };
 
   const handleLogin = (name) => {
-    localStorage.setItem('fishingNickname', name);
     channelRef.current?.postMessage({ type: 'gameStart', tabId: tabId.current });
     setBlocked(false);
     setNickname(name);
@@ -353,8 +347,6 @@ export default function App() {
 
   return (
     <div className="root">
-      <Chat messages={messages} onCommand={handleCommand} />
-
       <div className="canvas-area">
         <GameCanvas
           gameRef={gameRef}
@@ -378,12 +370,36 @@ export default function App() {
           )}
         </div>
 
-        {/* Shortcut buttons */}
+        {/* Shortcut buttons (desktop only) */}
         <div className="shortcut-bar">
-          <button onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
-          <button onClick={() => setShowShop(v => !v)}>🏪 상점</button>
+          <button tabIndex={-1} onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
+          <button tabIndex={-1} onClick={() => setShowShop(v => !v)}>🏪 상점</button>
+        </div>
+
+        {/* Mobile controls: joystick + action buttons */}
+        <div className="mobile-controls">
+          <Joystick gameRef={gameRef} />
+          <div className="action-btns">
+            <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!낚시')}>
+              <span>🎣</span><span className="action-btn-label">낚시</span>
+            </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => setShowInv(v => !v)}>
+              <span>🎒</span><span className="action-btn-label">인벤</span>
+            </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!광질')}>
+              <span>⛏</span><span className="action-btn-label">광질</span>
+            </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => setShowShop(v => !v)}>
+              <span>🏪</span><span className="action-btn-label">상점</span>
+            </button>
+            <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
+              <span>🛑</span><span className="action-btn-label">그만</span>
+            </button>
+          </div>
         </div>
       </div>
+
+      <Chat messages={messages} onCommand={handleCommand} />
 
       {/* Inventory modal */}
       {showInv && (
@@ -391,7 +407,7 @@ export default function App() {
           <div className="panel" onClick={e => e.stopPropagation()}>
             <div className="panel-head">
               <span>🎒 인벤토리</span>
-              <button onClick={() => setShowInv(false)}>✕</button>
+              <button tabIndex={-1} onClick={() => setShowInv(false)}>✕</button>
             </div>
 
             <div className="section">
@@ -399,7 +415,7 @@ export default function App() {
               {gs.fishInventory.length === 0
                 ? <div className="empty">물고기가 없습니다.</div>
                 : <>
-                    <button className="sell-all-btn" onClick={sellAll}>
+                    <button tabIndex={-1} className="sell-all-btn" onClick={sellAll}>
                       전체 판매 ({totalFishVal}G)
                     </button>
                     <div className="fish-list">
@@ -411,7 +427,7 @@ export default function App() {
                           <span className="grow">{f.name}</span>
                           <span className="dim">{f.size}cm</span>
                           <span className="gold">{f.price}G</span>
-                          <button className="sell-btn" onClick={() => sellOne(f.id)}>판매</button>
+                          <button tabIndex={-1} className="sell-btn" onClick={() => sellOne(f.id)}>판매</button>
                         </div>
                       ))}
                     </div>
@@ -439,7 +455,7 @@ export default function App() {
           <div className="panel" onClick={e => e.stopPropagation()}>
             <div className="panel-head">
               <span>🏪 상점</span>
-              <button onClick={() => setShowShop(false)}>✕</button>
+              <button tabIndex={-1} onClick={() => setShowShop(false)}>✕</button>
             </div>
             <div className="shop-money">보유: {gs.money.toLocaleString()}G</div>
 
@@ -471,8 +487,9 @@ export default function App() {
                     </div>
                     <div style={{ marginTop: 6 }}>
                       {owned
-                        ? (!equipped && <button className="btn-eq" onClick={() => equipRod(key)}>장착</button>)
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipRod(key)}>장착</button>)
                         : <button
+                            tabIndex={-1}
                             className={canBuy || hasMats ? 'btn-buy' : 'btn-dis'}
                             onClick={() => buyRod(key)}
                             disabled={!canBuy && !hasMats}
@@ -490,7 +507,7 @@ export default function App() {
               <div className="section-title">물고기 판매</div>
               {gs.fishInventory.length === 0
                 ? <div className="empty">판매할 물고기 없음</div>
-                : <button className="sell-all-btn" onClick={() => { sellAll(); }}>
+                : <button tabIndex={-1} className="sell-all-btn" onClick={() => { sellAll(); }}>
                     전체 판매 ({totalFishVal}G)
                   </button>
               }

@@ -33,6 +33,7 @@ export default function Chat({ messages, onCommand }) {
           placeholder="!도움말"
           autoComplete="off"
           spellCheck="false"
+          tabIndex={1}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submit(e); } }}
         />
         <button type="submit" className="chat-send">전송</button>
