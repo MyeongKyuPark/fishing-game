@@ -772,6 +772,9 @@ export default function App() {
             <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!요리')}>
               <span>🍳</span><span className="action-btn-label">요리</span>
             </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => setShowRank(true)}>
+              <span>🏆</span><span className="action-btn-label">랭킹</span>
+            </button>
           </div>
         </div>
 
