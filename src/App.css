@@ -78,6 +78,25 @@
   color: rgba(255,255,255,0.2);
 }
 
+/* ── Room lobby ── */
+.room-list {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 55vh; overflow-y: auto;
+}
+.room-list::-webkit-scrollbar { width: 3px; }
+.room-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+
+.room-row {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px; padding: 12px 14px;
+}
+.room-info { display: flex; align-items: center; gap: 8px; }
+.room-title { flex: 1; font-weight: 700; font-size: 14px; color: #e8d888; }
+.room-host { font-size: 11px; color: rgba(255,255,255,0.4); }
+.room-lock { font-size: 13px; }
+.room-open { font-size: 13px; opacity: 0.5; }
+
 /* ── HUD nick chip ── */
 .hud-nick { color: #aaddff; }
 

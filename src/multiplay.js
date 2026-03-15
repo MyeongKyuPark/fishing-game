@@ -1,13 +1,13 @@
 import {
   doc, setDoc, deleteDoc, collection,
-  onSnapshot, serverTimestamp,
+  onSnapshot, serverTimestamp, query, where,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
-export async function updatePlayerPresence(nickname, x, y, state, facing, rod) {
+export async function updatePlayerPresence(nickname, roomId, x, y, state, facing, rod) {
   try {
-    await setDoc(doc(db, 'players', nickname), {
-      nickname, x, y, state, facing, rod,
+    await setDoc(doc(db, 'players', `${roomId}_${nickname}`), {
+      nickname, roomId, x, y, state, facing, rod,
       updatedAt: serverTimestamp(),
     });
   } catch (e) {
@@ -15,17 +15,18 @@ export async function updatePlayerPresence(nickname, x, y, state, facing, rod) {
   }
 }
 
-export async function removePlayerPresence(nickname) {
+export async function removePlayerPresence(nickname, roomId) {
   try {
-    await deleteDoc(doc(db, 'players', nickname));
+    await deleteDoc(doc(db, 'players', `${roomId}_${nickname}`));
   } catch (e) {
     console.warn('presence remove failed', e);
   }
 }
 
-// Returns unsubscribe fn. Filters out self and stale players (>30s).
-export function subscribeOtherPlayers(myNickname, callback) {
-  return onSnapshot(collection(db, 'players'), (snap) => {
+// Subscribe to other players in the same room, excluding self, filtering stale (>30s)
+export function subscribeOtherPlayers(myNickname, roomId, callback) {
+  const q = query(collection(db, 'players'), where('roomId', '==', roomId));
+  return onSnapshot(q, (snap) => {
     const now = Date.now();
     const players = snap.docs
       .map(d => d.data())

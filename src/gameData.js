@@ -93,9 +93,9 @@ export const COOKWARE = {
 };
 
 export const STAT_DEFS = {
-  힘:   { icon: '💪', desc: '물고기 판매가 +6%/레벨', color: '#ff7777' },
+  화술: { icon: '💬', desc: '물고기 판매가 +6%/레벨', color: '#ff9944' },
   민첩: { icon: '🏃', desc: '이동속도 +0.4/레벨',    color: '#66ccff' },
-  체력: { icon: '❤️',  desc: '낚시·채굴 시간 -5%/레벨', color: '#ffaa55' },
+  체력: { icon: '❤️',  desc: '낚시·채굴 시간 -5%/레벨', color: '#ff6666' },
   행운: { icon: '🍀', desc: '희귀 물고기 확률 상승',  color: '#66ff88' },
 };
 export const STAT_MAX = 10;

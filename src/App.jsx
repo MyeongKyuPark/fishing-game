@@ -4,6 +4,7 @@ import GameCanvas from './GameCanvas';
 import Chat from './Chat';
 import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
+import RoomLobby from './RoomLobby';
 import { saveFishRecord } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, STAT_DEFS, STAT_MAX, statCost, weightedPick, randInt, TILE_SIZE } from './gameData';
@@ -48,7 +49,7 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-const DEFAULT_STATS = { 힘: 1, 민첩: 1, 체력: 1, 행운: 1 };
+const DEFAULT_STATS = { 화술: 1, 민첩: 1, 체력: 1, 행운: 1 };
 
 const DEFAULT_STATE = {
   money: 100,
@@ -104,6 +105,8 @@ export default function App() {
   const lastPosRef = useRef({});
 
   const [nickname, setNickname] = useState('');
+  const [roomId, setRoomId] = useState(null);
+  const [roomTitle, setRoomTitle] = useState('');
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
   const [blocked, setBlocked] = useState(false);
 
@@ -138,36 +141,42 @@ export default function App() {
   // Keep stateRef in sync
   useEffect(() => { stateRef.current = gs; }, [gs]);
 
-  // Multiplayer: subscribe to other players
+  // Multiplayer: subscribe to other players in same room
   useEffect(() => {
-    if (!nickname) return;
-    const unsub = subscribeOtherPlayers(nickname, (players) => {
+    if (!nickname || !roomId) return;
+    const unsub = subscribeOtherPlayers(nickname, roomId, (players) => {
       otherPlayersRef.current = players;
     });
     return unsub;
-  }, [nickname]);
+  }, [nickname, roomId]);
 
   // Multiplayer: throttled position sync (5×/sec, only on change)
   useEffect(() => {
-    if (!nickname) return;
+    if (!nickname || !roomId) return;
     const id = setInterval(() => {
       const p = gameRef.current?.player;
       if (!p) return;
       const last = lastPosRef.current;
       if (p.x === last.x && p.y === last.y && p.state === last.state && p.facing === last.facing) return;
       lastPosRef.current = { x: p.x, y: p.y, state: p.state, facing: p.facing };
-      updatePlayerPresence(nickname, p.x, p.y, p.state, p.facing, stateRef.current?.rod ?? '초급낚시대');
+      updatePlayerPresence(nickname, roomId, p.x, p.y, p.state, p.facing, stateRef.current?.rod ?? '초급낚시대');
     }, 200);
     return () => clearInterval(id);
-  }, [nickname]);
+  }, [nickname, roomId]);
 
   // Multiplayer: cleanup on page close
+  const roomIdRef = useRef(null);
+  useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
   useEffect(() => {
-    const onUnload = () => { if (nicknameRef.current) removePlayerPresence(nicknameRef.current); };
+    const onUnload = () => {
+      if (nicknameRef.current && roomIdRef.current)
+        removePlayerPresence(nicknameRef.current, roomIdRef.current);
+    };
     window.addEventListener('beforeunload', onUnload);
     return () => {
       window.removeEventListener('beforeunload', onUnload);
-      if (nicknameRef.current) removePlayerPresence(nicknameRef.current);
+      if (nicknameRef.current && roomIdRef.current)
+        removePlayerPresence(nicknameRef.current, roomIdRef.current);
     };
   }, []);
 
@@ -200,7 +209,7 @@ export default function App() {
     if (!rod) return;
     const s = stateRef.current;
     const luckLv = s?.stats?.행운 ?? 1;
-    const 힘Lv = s?.stats?.힘 ?? 1;
+    const 힘Lv = s?.stats?.화술 ?? 1;
 
     // Build rarity boost from luck stat
     const luckBoost = { 흔함: 1, 보통: 1 + (luckLv-1)*0.12, 희귀: 1 + (luckLv-1)*0.22, 전설: 1 + (luckLv-1)*0.40, 신화: 1 + (luckLv-1)*0.60 };
@@ -510,9 +519,14 @@ export default function App() {
     channelRef.current?.postMessage({ type: 'gameStart', tabId: tabId.current });
     setBlocked(false);
     setNickname(name);
+  };
+
+  const handleJoinRoom = (id, title) => {
+    setRoomId(id);
+    setRoomTitle(title);
     setMessages([
-      { type: 'system', text: `⚓ 어서오세요, ${name}님!` },
-      { type: 'system', text: '방향키로 이동 · !도움말 로 명령어 확인' },
+      { type: 'system', text: `🏠 [${title}] 방에 입장했습니다!` },
+      { type: 'system', text: `👤 ${nickname} · 방향키로 이동 · !도움말` },
     ]);
   };
 
@@ -524,6 +538,7 @@ export default function App() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (!nickname) return <LoginScreen onLogin={handleLogin} />;
+  if (!roomId) return <RoomLobby nickname={nickname} onJoin={handleJoinRoom} />;
 
   if (blocked) return (
     <div className="login-bg">
@@ -556,6 +571,7 @@ export default function App() {
         {/* HUD */}
         <div className="hud">
           <div className="hud-chip hud-nick">👤 {nickname}</div>
+          <div className="hud-chip" style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>🏠 {roomTitle}</div>
           <div className="hud-chip">💰 {gs.money.toLocaleString()}G</div>
           <div className="hud-chip" style={{ color: RODS[gs.rod]?.color }}>
             🎣 {RODS[gs.rod]?.name}
@@ -736,7 +752,7 @@ export default function App() {
                       </div>
                       <div className="stat-desc">{def.desc}</div>
                       <div className="stat-effect" style={{ color: def.color }}>
-                        {stat === '힘'   && `현재 판매가 +${((lv-1)*6)}%`}
+                        {stat === '화술' && `현재 판매가 +${((lv-1)*6)}%`}
                         {stat === '민첩' && `현재 속도 +${((lv-1)*0.4).toFixed(1)}`}
                         {stat === '체력' && `현재 시간 -${((lv-1)*5)}%`}
                         {stat === '행운' && `현재 희귀 가중치 +${((lv-1)*22)}%`}
