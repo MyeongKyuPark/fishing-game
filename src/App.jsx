@@ -178,7 +178,8 @@ export default function App() {
       otherPlayersRef.current = players;
     });
     return () => { unsub(); prevOtherPlayersRef.current = []; };
-  }, [nickname, roomId, addMsg]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nickname, roomId]);
 
   // Multiplayer: throttled position sync (5×/sec, only on change) + immediate write on join
   useEffect(() => {
