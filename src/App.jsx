@@ -727,14 +727,7 @@ export default function App() {
   return (
     <div className="root">
       <div className="canvas-area">
-        {indoorRoom ? (
-          <IndoorCanvas
-            roomId={indoorRoom}
-            nickname={nickname}
-            gameRef={gameRef}
-            onExit={handleExitRoom}
-          />
-        ) : (
+        {/* GameCanvas always mounted to preserve player state */}
         <GameCanvas
           gameRef={gameRef}
           onFishCaught={onFishCaught}
@@ -748,6 +741,14 @@ export default function App() {
           onEnterRoom={handleEnterRoom}
           onNearDoorChange={setNearDoor}
         />
+        {/* IndoorCanvas overlays when inside a room */}
+        {indoorRoom && (
+          <IndoorCanvas
+            roomId={indoorRoom}
+            nickname={nickname}
+            gameRef={gameRef}
+            onExit={handleExitRoom}
+          />
         )}
 
         {/* HUD */}
