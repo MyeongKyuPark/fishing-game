@@ -4,6 +4,7 @@ import GameCanvas from './GameCanvas';
 import Chat from './Chat';
 import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
+import RankSidebar from './RankSidebar';
 import RoomLobby from './RoomLobby';
 import { saveFishRecord } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
@@ -758,6 +759,9 @@ export default function App() {
             </div>
           ))}
         </div>
+
+        {/* Rank sidebar (desktop only) */}
+        <RankSidebar myNickname={nickname} />
 
         {/* Shortcut buttons (desktop only) */}
         <div className="shortcut-bar">
