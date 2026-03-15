@@ -353,6 +353,8 @@ export default function App() {
 
   return (
     <div className="root">
+      <Chat messages={messages} onCommand={handleCommand} />
+
       <div className="canvas-area">
         <GameCanvas
           gameRef={gameRef}
@@ -382,8 +384,6 @@ export default function App() {
           <button onClick={() => setShowShop(v => !v)}>🏪 상점</button>
         </div>
       </div>
-
-      <Chat messages={messages} onCommand={handleCommand} />
 
       {/* Inventory modal */}
       {showInv && (
