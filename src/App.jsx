@@ -93,6 +93,17 @@ function loadSave(nickname) {
   } catch { return DEFAULT_STATE; }
 }
 
+const DAILY_BONUS = 300; // G per day
+
+function checkDailyBonus(nickname) {
+  const key = `fishingGame_daily_${nickname}`;
+  const last = localStorage.getItem(key);
+  const today = new Date().toDateString();
+  if (last === today) return 0;
+  localStorage.setItem(key, today);
+  return DAILY_BONUS;
+}
+
 function rarityColor(r) {
   return { 흔함: '#909090', 보통: '#44aaff', 희귀: '#aa44ff', 전설: '#ffaa00', 신화: '#ff44ff' }[r] ?? '#fff';
 }
@@ -104,6 +115,7 @@ export default function App() {
   const channelRef = useRef(null);
   const nicknameRef = useRef('');
   const otherPlayersRef = useRef([]);
+  const prevOtherPlayersRef = useRef([]);
   const lastPosRef = useRef({});
 
   const [nickname, setNickname] = useState('');
@@ -143,18 +155,42 @@ export default function App() {
   // Keep stateRef in sync
   useEffect(() => { stateRef.current = gs; }, [gs]);
 
-  // Multiplayer: subscribe to other players in same room
+  // Multiplayer: subscribe to other players in same room + join/leave notifications
   useEffect(() => {
     if (!nickname || !roomId) return;
+    let firstCall = true;
     const unsub = subscribeOtherPlayers(nickname, roomId, (players) => {
+      if (!firstCall) {
+        const prev = prevOtherPlayersRef.current;
+        const prevNicks = new Set(prev.map(p => p.nickname));
+        const currNicks = new Set(players.map(p => p.nickname));
+        for (const p of players) {
+          if (!prevNicks.has(p.nickname))
+            addMsg(`👤 ${p.nickname}님이 입장했습니다.`, 'system');
+        }
+        for (const p of prev) {
+          if (!currNicks.has(p.nickname))
+            addMsg(`👤 ${p.nickname}님이 퇴장했습니다.`, 'system');
+        }
+      }
+      firstCall = false;
+      prevOtherPlayersRef.current = players;
       otherPlayersRef.current = players;
     });
-    return unsub;
-  }, [nickname, roomId]);
+    return () => { unsub(); prevOtherPlayersRef.current = []; };
+  }, [nickname, roomId, addMsg]);
 
-  // Multiplayer: throttled position sync (5×/sec, only on change)
+  // Multiplayer: throttled position sync (5×/sec, only on change) + immediate write on join
   useEffect(() => {
     if (!nickname || !roomId) return;
+    // Write immediately so others see us right away
+    const writeNow = () => {
+      const p = gameRef.current?.player;
+      if (!p) return;
+      lastPosRef.current = { x: p.x, y: p.y, state: p.state, facing: p.facing };
+      updatePlayerPresence(nickname, roomId, p.x, p.y, p.state, p.facing, stateRef.current?.rod ?? '초급낚시대');
+    };
+    const initTimer = setTimeout(writeNow, 300);
     const id = setInterval(() => {
       const p = gameRef.current?.player;
       if (!p) return;
@@ -163,7 +199,7 @@ export default function App() {
       lastPosRef.current = { x: p.x, y: p.y, state: p.state, facing: p.facing };
       updatePlayerPresence(nickname, roomId, p.x, p.y, p.state, p.facing, stateRef.current?.rod ?? '초급낚시대');
     }, 200);
-    return () => clearInterval(id);
+    return () => { clearTimeout(initTimer); clearInterval(id); };
   }, [nickname, roomId]);
 
   // Multiplayer: cleanup on page close
@@ -193,7 +229,15 @@ export default function App() {
   // Load save when nickname is established (nickname-keyed, room-independent)
   useEffect(() => {
     if (!nickname) return;
-    setGs(loadSave(nickname));
+    const saved = loadSave(nickname);
+    const bonus = checkDailyBonus(nickname);
+    if (bonus > 0) {
+      setGs({ ...saved, money: saved.money + bonus });
+      // Show bonus message after room join (delayed so addMsg is ready)
+      setTimeout(() => addMsg(`🎁 오늘의 출석 보너스 +${bonus}G!`, 'catch'), 1200);
+    } else {
+      setGs(saved);
+    }
   }, [nickname]);
 
   // Save to localStorage keyed by nickname
@@ -353,6 +397,15 @@ export default function App() {
       const nearest = nearestChair(player.x, player.y);
       if (!nearest || nearest.dist > CHAIR_RANGE) {
         addMsg('🪑 낚시 의자 근처로 이동하세요! (지도 아래쪽 낚시터)', 'error');
+        return;
+      }
+      // Check if another player is already fishing at this chair
+      const chairOccupied = otherPlayersRef.current.some(op =>
+        op.state === 'fishing' &&
+        Math.hypot(op.x - nearest.cx, op.y - nearest.cy) < 2 * TILE_SIZE
+      );
+      if (chairOccupied) {
+        addMsg('🪑 이미 다른 플레이어가 앉아 있습니다! 다른 의자를 이용하세요.', 'error');
         return;
       }
       player.x = nearest.cx;

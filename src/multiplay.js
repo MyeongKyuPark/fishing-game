@@ -31,7 +31,11 @@ export function subscribeOtherPlayers(myNickname, roomId, callback) {
     const players = snap.docs
       .map(d => d.data())
       .filter(p => p.nickname !== myNickname)
-      .filter(p => !p.updatedAt || (now - p.updatedAt.toMillis()) < 30000);
+      .filter(p => {
+        if (!p.updatedAt) return true;
+        try { return (now - p.updatedAt.toMillis()) < 30000; }
+        catch { return true; }
+      });
     callback(players);
   }, err => console.warn('subscribe players error', err));
 }

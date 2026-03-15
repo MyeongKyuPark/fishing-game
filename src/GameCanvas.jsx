@@ -97,14 +97,20 @@ function drawShopBuilding(ctx, camX, camY) {
   ctx.fillText('🏪  상  점', bx + bw / 2, by + 21);
 }
 
-function drawChair(ctx, sx, sy) {
-  ctx.fillStyle = '#5a3a1a';
+function drawChair(ctx, sx, sy, occupied) {
+  ctx.fillStyle = occupied ? '#3a1a0a' : '#5a3a1a';
   ctx.fillRect(sx + 4, sy + 14, TILE_SIZE - 8, TILE_SIZE - 18);
-  ctx.fillStyle = '#4a2a0a';
+  ctx.fillStyle = occupied ? '#2a0a00' : '#4a2a0a';
   ctx.fillRect(sx + 4, sy + 4, TILE_SIZE - 8, 12);
-  ctx.fillStyle = '#6a4a2a';
+  ctx.fillStyle = occupied ? '#4a2a0a' : '#6a4a2a';
   ctx.fillRect(sx + 2, sy + 10, 4, 16);
   ctx.fillRect(sx + TILE_SIZE - 6, sy + 10, 4, 16);
+  if (occupied) {
+    ctx.fillStyle = 'rgba(255,80,80,0.7)';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('사용중', sx + TILE_SIZE / 2, sy + 2);
+  }
 }
 
 function drawFishingSign(ctx, sx, sy) {
@@ -537,11 +543,16 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
           drawFishingSign(ctx, sx, sy);
       }
 
-      // Fishing chairs
+      // Fishing chairs (mark occupied ones)
       for (const c of FISHING_CHAIRS) {
+        const cx = c.tx * TILE_SIZE + TILE_SIZE / 2;
+        const cy = c.ty * TILE_SIZE + TILE_SIZE / 2;
+        const occupied = (otherPlayersRef?.current ?? []).some(op =>
+          op.state === 'fishing' && Math.hypot(op.x - cx, op.y - cy) < 2 * TILE_SIZE
+        );
         const sx = c.tx * TILE_SIZE - camX, sy = c.ty * TILE_SIZE - camY;
         if (sx > -TILE_SIZE && sx < W && sy > -TILE_SIZE && sy < H)
-          drawChair(ctx, sx, sy);
+          drawChair(ctx, sx, sy, occupied);
       }
 
       // Mine entrance
