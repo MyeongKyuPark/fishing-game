@@ -364,6 +364,7 @@ html, body {
 .stat-name { font-weight: 700; font-size: 13px; flex: 1; }
 .stat-level { font-size: 11px; color: #e0d070; font-weight: 700; }
 .stat-desc { font-size: 10px; color: rgba(255,255,255,0.45); margin-bottom: 2px; }
+.stat-effect { font-size: 10px; font-weight: 600; margin-bottom: 2px; }
 
 /* ── Leaderboard ── */
 .rank-tabs {

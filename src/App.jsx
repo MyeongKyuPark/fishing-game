@@ -113,6 +113,7 @@ export default function App() {
   const [showInv, setShowInv] = useState(false);
   const [showShop, setShowShop] = useState(false);
   const [showRank, setShowRank] = useState(false);
+  const [showStats, setShowStats] = useState(false);
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -240,6 +241,7 @@ export default function App() {
        '!판매  – 물고기 전체 판매 (상점 근처)',
        '!인벤  – 인벤토리 열기/닫기',
        '!랭킹  – 랭킹 보기',
+       '!스탯  – 캐릭터 스탯 보기',
       ].forEach(t => addMsg(t));
       return;
     }
@@ -251,6 +253,11 @@ export default function App() {
 
     if (cmd === '!랭킹') {
       setShowRank(v => !v);
+      return;
+    }
+
+    if (cmd === '!스탯' || cmd === '!캐릭터') {
+      setShowStats(v => !v);
       return;
     }
 
@@ -527,6 +534,7 @@ export default function App() {
         <div className="shortcut-bar">
           <button tabIndex={-1} onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
           <button tabIndex={-1} onClick={() => setShowShop(v => !v)}>🏪 상점</button>
+          <button tabIndex={-1} onClick={() => setShowStats(v => !v)}>📊 스탯</button>
           <button tabIndex={-1} onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
         </div>
 
@@ -551,6 +559,9 @@ export default function App() {
             </button>
             <button className="action-btn" tabIndex={-1} onClick={() => setShowRank(v => !v)}>
               <span>🏆</span><span className="action-btn-label">랭킹</span>
+            </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => setShowStats(v => !v)}>
+              <span>📊</span><span className="action-btn-label">스탯</span>
             </button>
             <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!요리')}>
               <span>🍳</span><span className="action-btn-label">요리</span>
@@ -662,6 +673,54 @@ export default function App() {
           </div>
         );
       })()}
+
+      {/* Stats modal */}
+      {showStats && (
+        <div className="overlay" onClick={() => setShowStats(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>📊 캐릭터 스탯</span>
+              <button tabIndex={-1} onClick={() => setShowStats(false)}>✕</button>
+            </div>
+            <div className="shop-money">보유: {gs.money.toLocaleString()}G</div>
+            <div className="section">
+              <div className="stat-grid">
+                {Object.entries(STAT_DEFS).map(([stat, def]) => {
+                  const lv = gs.stats?.[stat] ?? 1;
+                  const cost = statCost(lv);
+                  const maxed = lv >= STAT_MAX;
+                  const canUp = !maxed && gs.money >= cost;
+                  return (
+                    <div key={stat} className="stat-card">
+                      <div className="stat-top">
+                        <span className="stat-icon">{def.icon}</span>
+                        <span className="stat-name" style={{ color: def.color }}>{stat}</span>
+                        <span className="stat-level">Lv.{lv} / {STAT_MAX}</span>
+                      </div>
+                      <div className="stat-desc">{def.desc}</div>
+                      <div className="stat-effect" style={{ color: def.color }}>
+                        {stat === '힘'   && `현재 판매가 +${((lv-1)*6)}%`}
+                        {stat === '민첩' && `현재 속도 +${((lv-1)*0.4).toFixed(1)}`}
+                        {stat === '체력' && `현재 시간 -${((lv-1)*5)}%`}
+                        {stat === '행운' && `현재 희귀 가중치 +${((lv-1)*22)}%`}
+                      </div>
+                      <button
+                        tabIndex={-1}
+                        className={canUp ? 'btn-buy' : 'btn-dis'}
+                        style={{ marginTop: 6, width: '100%', fontSize: 11 }}
+                        onClick={() => upgradeStat(stat)}
+                        disabled={!canUp}
+                      >
+                        {maxed ? '✨ MAX' : `${cost}G 강화 → Lv.${lv+1}`}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Ranking modal */}
       {showRank && <Leaderboard onClose={() => setShowRank(false)} myNickname={nickname} />}
@@ -821,38 +880,6 @@ export default function App() {
                   </div>
                 );
               })}
-            </div>
-
-            {/* ── Stats ── */}
-            <div className="section">
-              <div className="section-title">캐릭터 스탯</div>
-              <div className="stat-grid">
-                {Object.entries(STAT_DEFS).map(([stat, def]) => {
-                  const lv = gs.stats?.[stat] ?? 1;
-                  const cost = statCost(lv);
-                  const maxed = lv >= STAT_MAX;
-                  const canUp = !maxed && gs.money >= cost;
-                  return (
-                    <div key={stat} className="stat-card">
-                      <div className="stat-top">
-                        <span className="stat-icon">{def.icon}</span>
-                        <span className="stat-name" style={{ color: def.color }}>{stat}</span>
-                        <span className="stat-level">Lv.{lv}</span>
-                      </div>
-                      <div className="stat-desc">{def.desc}</div>
-                      <button
-                        tabIndex={-1}
-                        className={canUp ? 'btn-buy' : 'btn-dis'}
-                        style={{ marginTop: 5, width: '100%', fontSize: 11 }}
-                        onClick={() => upgradeStat(stat)}
-                        disabled={!canUp}
-                      >
-                        {maxed ? 'MAX' : `${cost}G 강화`}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
 
             {/* ── Sell fish ── */}
