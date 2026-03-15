@@ -286,19 +286,6 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   }, [gameRef]);
 
-  // Canvas resize
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const resize = () => {
-      canvas.width = canvas.parentElement?.clientWidth || 800;
-      canvas.height = canvas.parentElement?.clientHeight || 600;
-    };
-    resize();
-    const ro = new ResizeObserver(resize);
-    if (canvas.parentElement) ro.observe(canvas.parentElement);
-    return () => ro.disconnect();
-  }, []);
-
   // Game loop
   useEffect(() => {
     let rafId;
@@ -310,7 +297,14 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
 
       const canvas = canvasRef.current;
       const g = gameRef.current;
-      if (!canvas || !g || canvas.width === 0) { rafId = requestAnimationFrame(loop); return; }
+      if (!canvas || !g || !g.player) { rafId = requestAnimationFrame(loop); return; }
+
+      // Sync canvas size to parent every frame (handles all resize cases)
+      const pw = canvas.parentElement?.clientWidth || window.innerWidth;
+      const ph = canvas.parentElement?.clientHeight || window.innerHeight;
+      if (pw > 0 && canvas.width !== pw) canvas.width = pw;
+      if (ph > 0 && canvas.height !== ph) canvas.height = ph;
+      if (canvas.width === 0 || canvas.height === 0) { rafId = requestAnimationFrame(loop); return; }
 
       const ctx = canvas.getContext('2d');
       const { player, keys } = g;

@@ -80,16 +80,21 @@
 /* ── HUD nick chip ── */
 .hud-nick { color: #aaddff; }
 
-body {
+html, body {
   display: block !important;
-  place-items: unset !important;
-  width: 100vw; height: 100vh;
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
   overflow: hidden;
   background: #111;
   font-family: 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
 }
 
-#root { width: 100vw; height: 100vh; }
+#root {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
 
 /* ── Layout ── */
 .root {
