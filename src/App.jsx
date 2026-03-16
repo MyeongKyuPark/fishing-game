@@ -154,6 +154,7 @@ const DEFAULT_STATE = {
   skinColor: '#f6cc88',
   gender: 'male',
   caughtSpecies: [],
+  firstLoginDate: null,
 };
 
 function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
@@ -201,6 +202,7 @@ function loadSave(nickname) {
       skinColor: s.skinColor ?? '#f6cc88',
       gender: s.gender ?? 'male',
       caughtSpecies: s.caughtSpecies ?? [],
+      firstLoginDate: s.firstLoginDate ?? null,
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -283,6 +285,7 @@ export default function App() {
   const [nearDoor, setNearDoor] = useState(null);
   const [nearIndoorNpc, setNearIndoorNpc] = useState(null);
   const prevTitleRef = useRef(null);
+  const prevServerStatsRef = useRef({});
   const [serverAnnouncements, setServerAnnouncements] = useState([]);
   const [serverStats, setServerStats] = useState({});
   const [showDex, setShowDex] = useState(false);
@@ -407,6 +410,20 @@ export default function App() {
     return subscribeServerStats(setServerStats);
   }, [nickname, roomId]);
 
+  // Server collective quest milestone announcements
+  useEffect(() => {
+    const prev = prevServerStatsRef.current;
+    const curr = serverStats;
+    const milestones = [1000, 5000, 10000, 50000, 100000];
+    for (const m of milestones) {
+      if ((prev.totalFishCaught ?? 0) < m && (curr.totalFishCaught ?? 0) >= m) {
+        addMsg(`🌍 서버 전체 물고기 ${m.toLocaleString()}마리 달성! 모든 플레이어 +500G 보상!`, 'catch');
+        setGs(prev2 => ({ ...prev2, money: prev2.money + 500 }));
+      }
+    }
+    prevServerStatsRef.current = curr;
+  }, [serverStats, addMsg]);
+
   // Sync speed bonus to game loop
   useEffect(() => {
     if (!gameRef.current) return;
@@ -440,6 +457,9 @@ export default function App() {
     const quests = getDailyQuests();
     const questProgress = saved.questDate === today ? (saved.questProgress ?? {}) : {};
     const base = { ...saved, dailyQuests: quests, questProgress, questDate: today };
+    if (!saved.firstLoginDate) {
+      base.firstLoginDate = new Date().toISOString();
+    }
     const now2 = Date.now();
     const awayMs = Math.max(0, now2 - (saved.lastSaveTime ?? now2));
     const awayMins = Math.floor(awayMs / 60000);
@@ -447,7 +467,14 @@ export default function App() {
     const effectiveMins = Math.min(awayMins, maxMins);
     const offlineReward = Math.floor(effectiveMins * 8);
     if (bonus > 0) {
-      setGs({ ...base, money: saved.money + bonus });
+      if (streak >= 7) {
+        setGs({ ...base, money: saved.money + bonus,
+          baitInventory: { ...(base.baitInventory ?? {}), 전설미끼: ((base.baitInventory ?? {})['전설미끼'] ?? 0) + 1 },
+          ownedBait: base.ownedBait?.includes('전설미끼') ? base.ownedBait : [...(base.ownedBait ?? []), '전설미끼'],
+        });
+      } else {
+        setGs({ ...base, money: saved.money + bonus });
+      }
       setTimeout(() => {
         addMsg(`🎁 오늘의 출석 보너스 +${bonus}G! (${streak}일 연속 접속)`, 'catch');
         if (streak >= 14) addMsg(`🏆 14일 연속 접속! +1000G 추가 보너스!`, 'catch');
@@ -481,10 +508,19 @@ export default function App() {
   const grantAbility = useCallback((abilName, amount) => {
     const current = stateRef.current?.abilities?.[abilName] ?? { value: 0, grade: 0 };
     const partyBonus = (otherPlayersRef.current?.length ?? 0) > 0;
-    const result = gainAbility(current, amount, partyBonus);
+    const firstLogin = stateRef.current?.firstLoginDate;
+    const isNewPlayer = firstLogin && (Date.now() - new Date(firstLogin).getTime()) < 7 * 24 * 60 * 60 * 1000;
+    const newPlayerMult = isNewPlayer ? 2 : 1;
+    const result = gainAbility(current, amount * newPlayerMult, partyBonus);
     if (result.reachedMax && current.value < 100) {
       const def = ABILITY_DEFS[abilName];
       setTimeout(() => addMsg(`🌟 ${def?.icon ?? ''} ${abilName} 100.00 달성! 스킬창에서 그레이드업 가능!`, 'catch'), 0);
+    }
+    // Level-up flash at 25/50/75 milestones
+    const milestones = [25, 50, 75];
+    const crossedMilestone = milestones.some(m => current.value < m && result.value >= m);
+    if (crossedMilestone && gameRef.current) {
+      gameRef.current.levelUpEffect = { age: 0 };
     }
     setGs(prev => ({
       ...prev,
@@ -537,6 +573,13 @@ export default function App() {
     const gradeBoostPct = gradeRareBonus(fishGrade);
     if (gradeBoostPct > 0) {
       table = applyBoosts(table, { 보통: 1 + gradeBoostPct * 0.5, 희귀: 1 + gradeBoostPct, 전설: 1 + gradeBoostPct * 1.5, 신화: 1 + gradeBoostPct * 2 });
+    }
+
+    // Party rarity bonus: when 2+ other players nearby, boost rare fish odds
+    const partySize = otherPlayersRef.current?.length ?? 0;
+    if (partySize >= 1) {
+      const partyBoost = Math.min(0.3, partySize * 0.08); // up to 30% boost for 4 players
+      table = applyBoosts(table, { 희귀: 1 + partyBoost, 전설: 1 + partyBoost * 1.5, 신화: 1 + partyBoost * 2 });
     }
 
     // Bait boost
@@ -603,6 +646,26 @@ export default function App() {
       if (gameRef.current) gameRef.current.rareEffect = { age: 0, color: rarityColor(fd.rarity) };
     }
 
+    // Spawn fish jump particles for rare+
+    if (fd.rarity === '전설' || fd.rarity === '신화' || fd.rarity === '희귀') {
+      const p = gameRef.current?.player;
+      if (p) {
+        const emoji = fd.rarity === '신화' ? '🌟' : fd.rarity === '전설' ? '⭐' : '✨';
+        const particles = [];
+        for (let i = 0; i < 5; i++) {
+          particles.push({
+            x: p.x + (Math.random() - 0.5) * 30,
+            y: p.y - 20,
+            vx: (Math.random() - 0.5) * 3,
+            vy: -(3 + Math.random() * 4),
+            emoji,
+            age: 0,
+          });
+        }
+        gameRef.current.fishParticles = [...(gameRef.current.fishParticles ?? []), ...particles];
+      }
+    }
+
     // Fish encyclopedia (caughtSpecies)
     setGs(prev => {
       if (!prev.caughtSpecies?.includes(name)) {
@@ -648,6 +711,7 @@ export default function App() {
       addMsg(`💥 대박! ${oreName} ${extra}개 추가 획득!`, 'catch');
       if (gameRef.current?.player)
         gameRef.current.player.floatText = { text: `💥 ${oreName} ×${extra+1}!`, age: 0, color: '#ffdd00' };
+      if (gameRef.current) gameRef.current.shakeEffect = { age: 0, intensity: 8 };
     }
     grantAbility('채굴', ORE_ABILITY_GAIN[oreName] ?? 0.40);
     grantAbility('체력', STAMINA_GAIN);

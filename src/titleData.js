@@ -24,6 +24,8 @@ export const TITLES = [
   { label: '대부호',        color: '#ffd700', condition: (gs)  => (gs.money ?? 0) >= 100000 },
   { label: '낚시 명인',     color: '#0055ff', condition: (gs)  => abilVal(gs, '낚시') >= 80 },
   { label: '전설의 용사',   color: '#ff44ff', condition: (gs)  => totalAbil(gs) >= 350 },
+  { label: '박물학자',      color: '#44ffaa', condition: (gs)  => (gs.caughtSpecies?.length ?? 0) >= 22 },
+  { label: '부호',          color: '#ffdd00', condition: (gs)  => (gs.money ?? 0) >= 1000000 },
   { label: '낚시의 신',     color: '#ff4444', condition: (gs)  => abilVal(gs, '낚시') >= 99 },
 ];
 

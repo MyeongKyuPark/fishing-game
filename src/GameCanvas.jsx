@@ -1377,6 +1377,22 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
       // ── Render ──
       ctx.clearRect(0, 0, W, H);
 
+      // Screen shake
+      let shakeX = 0, shakeY = 0;
+      const shk = gameRef.current?.shakeEffect;
+      if (shk) {
+        shk.age = (shk.age ?? 0) + 1;
+        const amt = Math.max(0, shk.intensity * (1 - shk.age / 20));
+        if (amt > 0) {
+          shakeX = (Math.random() - 0.5) * 2 * amt;
+          shakeY = (Math.random() - 0.5) * 2 * amt;
+        } else {
+          gameRef.current.shakeEffect = null;
+        }
+      }
+      ctx.save();
+      ctx.translate(shakeX, shakeY);
+
       const stx = Math.max(0, Math.floor(camX / TILE_SIZE));
       const sty = Math.max(0, Math.floor(camY / TILE_SIZE));
       const etx = Math.min(MAP_W, Math.ceil((camX + W) / TILE_SIZE));
@@ -1537,6 +1553,25 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
         }
       }
 
+      // Fish jump particles (rare+)
+      const fishParticles = gameRef.current?.fishParticles ?? [];
+      gameRef.current.fishParticles = fishParticles;
+      for (let i = fishParticles.length - 1; i >= 0; i--) {
+        const fp = fishParticles[i];
+        fp.age = (fp.age ?? 0) + 1;
+        fp.vy -= 0.4; // gravity
+        fp.y += fp.vy;
+        fp.x += fp.vx;
+        const alpha = Math.max(0, 1 - fp.age / 40);
+        if (alpha <= 0) { fishParticles.splice(i, 1); continue; }
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = `${Math.round(14 + fp.age * 0.3)}px serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(fp.emoji, fp.x - camX, fp.y - camY);
+        ctx.restore();
+      }
+
       // Other players
       const others = otherPlayersRef?.current ?? [];
       const screenPositions = [];
@@ -1584,6 +1619,8 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
       if (showFullMapRef.current) {
         drawFullMap(ctx, W, H, player.x, player.y, others, nickname);
       }
+
+      ctx.restore();
 
       rafId = requestAnimationFrame(loop);
     }
