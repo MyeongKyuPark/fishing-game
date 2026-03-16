@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import {
-  TILE_SIZE, MAP_W, MAP_H, TILE, TILE_COLOR, WALKABLE, RODS, ORES, randInt,
+  TILE_SIZE, MAP_W, MAP_H, TILE, TILE_COLOR, WALKABLE, RODS, ORES, HERBS, randInt,
 } from './gameData';
 import {
   MAP_TILES, FISHING_CHAIRS, MINE_ENTRANCE,
-  PLAYER_START_X, PLAYER_START_Y, pickOre,
+  PLAYER_START_X, PLAYER_START_Y, pickOre, pickHerb,
   COOKING_TX, COOKING_TY, DOOR_TRIGGERS,
 } from './mapData';
 
@@ -89,6 +89,25 @@ function drawTile(ctx, tx, ty, sx, sy) {
     ctx.moveTo(sx, sy + TILE_SIZE / 3); ctx.lineTo(sx + TILE_SIZE, sy + TILE_SIZE / 3);
     ctx.moveTo(sx, sy + TILE_SIZE * 2 / 3); ctx.lineTo(sx + TILE_SIZE, sy + TILE_SIZE * 2 / 3);
     ctx.stroke();
+  } else if (t === TILE.FOREST) {
+    // Dark green forest floor
+    const v = ((tx * 5 + ty * 11) % 8) / 8;
+    const r = 30 + Math.floor(v * 12);
+    const g = 72 + Math.floor(v * 20);
+    const b = 22 + Math.floor(v * 10);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    // Occasional small tree / bush indicator
+    const seed = tx * 17 + ty * 31;
+    if (seed % 5 === 0) {
+      // Small circular canopy
+      const cx2 = sx + (seed % 20) + 6;
+      const cy2 = sy + ((seed >> 2) % 16) + 6;
+      ctx.fillStyle = `rgba(28,68,18,0.70)`;
+      ctx.beginPath(); ctx.arc(cx2, cy2, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(50,100,30,0.50)`;
+      ctx.beginPath(); ctx.arc(cx2 - 3, cy2 - 2, 5, 0, Math.PI * 2); ctx.fill();
+    }
   } else {
     ctx.fillStyle = TILE_COLOR[t] ?? '#333';
     ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
@@ -380,6 +399,91 @@ function drawCookingBuilding(ctx, camX, camY) {
   ctx.fillText('🍳 요리소', cx, by - 24 - sh + sh * 0.68);
 }
 
+function drawInnBuilding(ctx, camX, camY) {
+  const bx = 20 * TILE_SIZE - camX;
+  const by = 1 * TILE_SIZE - camY;
+  const bw = 9 * TILE_SIZE;
+  const bh = 9 * TILE_SIZE;
+  const cx = bx + bw / 2;
+
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.16)';
+  ctx.fillRect(bx + 8, by + 8, bw, bh);
+
+  // Wall — soft lavender
+  ctx.fillStyle = '#e8daf0';
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.fillStyle = '#d4c4e0';
+  ctx.fillRect(bx, by + bh * 0.5, bw, bh * 0.5);
+
+  // Timber frame
+  ctx.fillStyle = '#6a4888';
+  [0.48].forEach(r => ctx.fillRect(bx, by + bh * r, bw, 6));
+  [0, 1/3, 2/3, 1].forEach(r => ctx.fillRect(bx + bw * r - (r > 0 ? 4 : 0), by, 7, bh));
+
+  // Roof
+  ctx.fillStyle = '#5a2878';
+  ctx.beginPath();
+  ctx.moveTo(bx - 12, by + 2);
+  ctx.lineTo(cx, by - 58);
+  ctx.lineTo(bx + bw + 12, by + 2);
+  ctx.closePath(); ctx.fill();
+  // Shingles
+  for (let row = 0; row < 4; row++) {
+    const t = row / 4;
+    const rowY = by - 58 + row * 15;
+    const half = (bw / 2 + 12) * t + 5;
+    ctx.fillStyle = row % 2 === 0 ? '#481a68' : '#3e1260';
+    for (let c = 0; c < Math.ceil(half * 2 / 16); c++) {
+      const sx2 = cx - half + c * 16 + (row % 2 ? 8 : 0);
+      ctx.fillRect(sx2, rowY, 14, 13);
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 0.7;
+      ctx.strokeRect(sx2, rowY, 14, 13);
+    }
+  }
+  ctx.fillStyle = '#9955cc';
+  ctx.fillRect(bx - 14, by - 3, bw + 28, 7);
+  ctx.fillStyle = '#ddaaff';
+  ctx.fillRect(bx - 14, by - 3, bw + 28, 3);
+
+  // Windows
+  const now = Date.now();
+  const winColor = `rgba(255,240,${180 + Math.floor(Math.sin(now / 600) * 15)},0.9)`;
+  [{ x: bx + 18, y: by + 35 }, { x: bx + bw - 50, y: by + 35 }].forEach(w => {
+    const gw = ctx.createRadialGradient(w.x + 16, w.y + 14, 2, w.x + 16, w.y + 14, 30);
+    gw.addColorStop(0, 'rgba(255,230,100,0.38)'); gw.addColorStop(1, 'rgba(255,200,50,0)');
+    ctx.fillStyle = gw; ctx.fillRect(w.x - 8, w.y - 8, 48, 42);
+    ctx.fillStyle = winColor; ctx.fillRect(w.x, w.y, 32, 26);
+    ctx.strokeStyle = '#6a3888'; ctx.lineWidth = 3; ctx.strokeRect(w.x, w.y, 32, 26);
+    ctx.strokeStyle = '#8855aa'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(w.x + 16, w.y); ctx.lineTo(w.x + 16, w.y + 26);
+    ctx.moveTo(w.x, w.y + 13); ctx.lineTo(w.x + 32, w.y + 13);
+    ctx.stroke();
+  });
+
+  // Door
+  const dw = 44, dh = 56, dx = cx - dw/2, dy2 = by + bh - dh;
+  ctx.fillStyle = '#4a1e6a'; ctx.fillRect(dx, dy2, dw, dh);
+  ctx.beginPath(); ctx.arc(dx + dw/2, dy2, dw/2, Math.PI, 0); ctx.fill();
+  ctx.strokeStyle = '#8844aa'; ctx.lineWidth = 3; ctx.strokeRect(dx, dy2, dw, dh);
+  ctx.beginPath(); ctx.arc(dx + dw/2, dy2, dw/2, Math.PI, 0); ctx.stroke();
+  ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(dx + dw - 9, dy2 + dh/2, 3, 0, Math.PI*2); ctx.fill();
+
+  // Sign
+  const sw = 100, sh = 30;
+  ctx.strokeStyle = '#8855aa'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - sw/2 + 10, by - 38); ctx.lineTo(cx - sw/2 + 10, by - 22 - sh);
+  ctx.moveTo(cx + sw/2 - 10, by - 38); ctx.lineTo(cx + sw/2 - 10, by - 22 - sh);
+  ctx.stroke();
+  ctx.fillStyle = '#7744aa';
+  ctx.beginPath(); ctx.roundRect(cx - sw/2, by - 22 - sh, sw, sh, 6); ctx.fill();
+  ctx.strokeStyle = '#5522aa'; ctx.lineWidth = 2.5; ctx.stroke();
+  ctx.fillStyle = '#fff8ff'; ctx.font = 'bold 13px "Noto Sans KR", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('🏨 여관', cx, by - 22 - sh + sh * 0.68);
+}
+
 function drawFullMap(ctx, W, H, playerX, playerY, otherPlayers, nickname) {
   // Dark overlay
   ctx.fillStyle = 'rgba(0,0,0,0.88)';
@@ -399,15 +503,18 @@ function drawFullMap(ctx, W, H, playerX, playerY, otherPlayers, nickname) {
   };
 
   // Zones
-  fill('rgba(50,100,40,0.95)',   0,  0, 27, 30);
-  fill('rgba(80,70,65,0.95)',   27,  0, 13, 19);
-  fill('rgba(180,155,60,0.9)',   0, 17, 27,  2);
-  fill('rgba(110,80,15,0.95)',   3, 19, 22,  2);
-  fill('rgba(20,70,180,0.95)',   0, 21, 27,  9);
-  fill('rgba(20,70,180,0.95)',  27, 19, 13, 11);
-  fill('rgba(130,105,65,0.9)',   0, 12, 27,  2);
-  fill('rgba(60,35,20,0.95)',    1,  1,  9, 10);
-  fill('rgba(70,25,10,0.95)',   11,  2,  8,  8);
+  fill('rgba(50,100,40,0.95)',   0,  0, 30, 18);  // grass village
+  fill('rgba(28,72,22,0.95)',   30,  0, 15, 19);  // forest
+  fill('rgba(80,70,65,0.95)',   45,  0, 25, 23);  // mine
+  fill('rgba(180,155,60,0.9)',   0, 18, 45,  3);  // sand beach
+  fill('rgba(110,80,15,0.95)',   3, 21, 40,  2);  // dock
+  fill('rgba(110,80,15,0.95)',  20, 23, 11,  4);  // deep pier
+  fill('rgba(20,70,180,0.95)',   0, 27, 45, 23);  // water
+  fill('rgba(20,70,180,0.95)',  45, 23, 25, 27);  // mine water
+  fill('rgba(130,105,65,0.9)',   0, 12, 45,  2);  // main path
+  fill('rgba(60,35,20,0.95)',    1,  1,  9, 10);  // shop
+  fill('rgba(70,25,10,0.95)',   11,  2,  8,  8);  // cooking
+  fill('rgba(60,35,20,0.95)',   20,  1,  9,  9);  // inn
 
   // Map border
   ctx.strokeStyle = 'rgba(255,255,255,0.3)';
@@ -428,8 +535,10 @@ function drawFullMap(ctx, W, H, playerX, playerY, otherPlayers, nickname) {
   };
   label('🏪 상점',    5,  6);
   label('🍳 요리소', 15,  6);
-  label('🎣 낚시터', 13, 20);
-  label('⛏ 광산',   33,  9);
+  label('🏨 여관',   25,  6);
+  label('🌲 숲',     37,  9);
+  label('🎣 낚시터', 20, 25);
+  label('⛏ 광산',   57, 11);
 
   // Chairs dots
   for (const c of FISHING_CHAIRS) {
@@ -493,15 +602,18 @@ function drawMinimap(ctx, W, H, camX, camY, playerX, playerY, otherPlayers) {
   ctx.fillRect(MX - 1, MY - 1, MW + 2, MH + 2);
 
   // Zones
-  fill('rgba(50,100,40,0.95)',  0,  0, 27, 30); // grass base
-  fill('rgba(80,70,65,0.95)',  27,  0, 13, 19); // mine
-  fill('rgba(180,155,60,0.9)',  0, 17, 27,  2); // sand
-  fill('rgba(110,80,15,0.95)',  3, 19, 22,  2); // dock
-  fill('rgba(20,70,180,0.95)',  0, 21, 27,  9); // water
-  fill('rgba(20,70,180,0.95)', 27, 19, 13, 11); // mine water
-  fill('rgba(130,105,65,0.9)',  0, 12, 27,  2); // main path
+  fill('rgba(50,100,40,0.95)',  0,  0, 30, 18); // grass village
+  fill('rgba(28,72,22,0.95)',  30,  0, 15, 19); // forest
+  fill('rgba(80,70,65,0.95)',  45,  0, 25, 23); // mine
+  fill('rgba(180,155,60,0.9)',  0, 18, 45,  3); // sand
+  fill('rgba(110,80,15,0.95)',  3, 21, 40,  2); // dock
+  fill('rgba(110,80,15,0.95)', 20, 23, 11,  4); // deep pier
+  fill('rgba(20,70,180,0.95)',  0, 27, 45, 23); // water
+  fill('rgba(20,70,180,0.95)', 45, 23, 25, 27); // mine water
+  fill('rgba(130,105,65,0.9)',  0, 12, 45,  2); // main path
   fill('rgba(60,35,20,0.95)',   1,  1,  9, 10); // shop
   fill('rgba(70,25,10,0.95)',  11,  2,  8,  8); // cooking
+  fill('rgba(60,35,20,0.95)',  20,  1,  9,  9); // inn
 
   // Viewport box
   ctx.strokeStyle = 'rgba(255,255,255,0.22)';
@@ -620,16 +732,21 @@ function drawMineEntrance(ctx, sx, sy) {
 
 // ── Decoration positions (world tile coords) ──────────────────────────────────
 const TREE_POSITIONS = [
-  // Left edge
+  // Left edge village
   { tx: 0.4, ty: 10.6 }, { tx: 0.4, ty: 14.2 },
   // Between buildings & path
   { tx: 10.2, ty: 10.8 }, { tx: 10.1, ty: 13.8 },
-  // Upper-right grass
-  { tx: 19.3, ty: 0.5 }, { tx: 21.5, ty: 1.0 }, { tx: 23.8, ty: 0.4 }, { tx: 25.2, ty: 2.3 },
-  // Mid-right
-  { tx: 20.1, ty: 5.5 }, { tx: 22.5, ty: 6.2 }, { tx: 24.3, ty: 4.1 }, { tx: 26.0, ty: 5.8 },
-  // Lower-right before path
-  { tx: 19.5, ty: 10.2 }, { tx: 21.8, ty: 10.6 }, { tx: 24.0, ty: 9.4 },
+  // Forest zone — dense trees (cols 30-44, rows 0-18)
+  { tx: 30.4, ty: 1.2 }, { tx: 32.1, ty: 0.6 }, { tx: 34.5, ty: 1.5 }, { tx: 36.2, ty: 0.4 },
+  { tx: 38.8, ty: 1.1 }, { tx: 40.3, ty: 0.7 }, { tx: 42.6, ty: 1.4 }, { tx: 44.1, ty: 0.9 },
+  { tx: 31.0, ty: 4.2 }, { tx: 33.5, ty: 3.6 }, { tx: 35.8, ty: 4.8 }, { tx: 37.4, ty: 3.2 },
+  { tx: 39.2, ty: 4.5 }, { tx: 41.7, ty: 3.9 }, { tx: 43.3, ty: 4.1 },
+  { tx: 30.6, ty: 7.8 }, { tx: 32.9, ty: 7.1 }, { tx: 34.2, ty: 8.4 }, { tx: 36.7, ty: 7.5 },
+  { tx: 38.5, ty: 8.2 }, { tx: 40.8, ty: 7.3 }, { tx: 42.4, ty: 8.6 }, { tx: 44.0, ty: 7.9 },
+  { tx: 31.3, ty: 11.5 }, { tx: 33.6, ty: 10.8 }, { tx: 35.1, ty: 12.1 }, { tx: 37.8, ty: 11.3 },
+  { tx: 39.4, ty: 12.4 }, { tx: 41.2, ty: 11.0 }, { tx: 43.7, ty: 12.7 },
+  { tx: 30.8, ty: 15.2 }, { tx: 33.1, ty: 14.6 }, { tx: 35.5, ty: 15.9 }, { tx: 37.2, ty: 14.4 },
+  { tx: 39.9, ty: 15.6 }, { tx: 42.1, ty: 14.8 }, { tx: 44.3, ty: 15.3 },
 ];
 
 function drawTree(ctx, wx, wy) {
@@ -679,7 +796,7 @@ function drawFlowerPatch(ctx, wx, wy, seed) {
   }
 }
 
-function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
+function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor, bodyColor, skinColor, gender) {
   const { facing, state, activityProgress } = player;
   const now = Date.now();
 
@@ -690,7 +807,8 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
   ctx.fill();
 
   // ── Chibi body ──
-  const bodyCol = state === 'fishing' ? '#4a9a60' : state === 'mining' ? '#c47840' : '#5a7aaa';
+  const defaultBodyColor = bodyColor ?? '#5a7aaa';
+  const bodyCol = state === 'fishing' ? '#4a9a60' : state === 'mining' ? '#c47840' : defaultBodyColor;
   const bodyColDark = state === 'fishing' ? '#2e7040' : state === 'mining' ? '#8a4e20' : '#3a5280';
 
   // Walking legs
@@ -728,18 +846,32 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
 
   // ── Chibi head ──
   const headY = py - 14;
+  const skin = skinColor ?? '#f6cc88';
+  const isFemale = gender === 'female';
   // Head
-  ctx.fillStyle = '#f6cc88';
+  ctx.fillStyle = skin;
   ctx.beginPath(); ctx.arc(px, headY, 12, 0, Math.PI * 2); ctx.fill();
   // Cheek blush
   ctx.fillStyle = 'rgba(255,120,120,0.38)';
   ctx.beginPath(); ctx.ellipse(px - 8, headY + 3, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.ellipse(px + 8, headY + 3, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
   // Hair
-  ctx.fillStyle = '#5a3010';
+  const hc = hairColor ?? '#5a3010';
+  ctx.fillStyle = hc;
   ctx.beginPath(); ctx.arc(px, headY, 12, Math.PI, 0); ctx.fill();
   ctx.beginPath(); ctx.arc(px - 5, headY - 4, 7, Math.PI, Math.PI * 1.8); ctx.fill();
   ctx.beginPath(); ctx.arc(px + 5, headY - 4, 7, Math.PI * 1.2, 0); ctx.fill();
+  if (isFemale) {
+    // Longer side hair for female
+    ctx.beginPath(); ctx.arc(px - 14, headY + 2, 5, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
+    ctx.beginPath(); ctx.arc(px + 14, headY + 2, 5, Math.PI * 1.5, Math.PI * 0.5); ctx.fill();
+    // Small bow
+    ctx.fillStyle = '#ff88aa';
+    ctx.beginPath(); ctx.ellipse(px + 10, headY - 12, 5, 3, 0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + 10, headY - 12, 5, 3, -0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffaabb';
+    ctx.beginPath(); ctx.arc(px + 10, headY - 12, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
   // Hair highlight
   ctx.fillStyle = 'rgba(255,200,120,0.18)';
   ctx.beginPath(); ctx.arc(px - 3, headY - 8, 5, 0, Math.PI * 2); ctx.fill();
@@ -937,7 +1069,7 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
     const bx = px - bw / 2, by2 = py - PH / 2 - 14;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(bx, by2, bw, bh);
-    ctx.fillStyle = state === 'fishing' ? '#44aaff' : '#ffaa44';
+    ctx.fillStyle = state === 'fishing' ? '#44aaff' : state === 'gathering' ? '#44cc44' : '#ffaa44';
     ctx.fillRect(bx, by2, bw * (activityProgress || 0), bh);
     ctx.strokeStyle = 'rgba(255,255,255,0.25)';
     ctx.lineWidth = 1;
@@ -989,23 +1121,32 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivityChange, nickname, title, titleColor, otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange }) {
+export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGathered, onActivityChange, nickname, title, titleColor, otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, hairColor, bodyColor, skinColor, gender }) {
   const canvasRef = useRef(null);
-  const cbRef = useRef({ onFishCaught, onOreMined, onActivityChange });
+  const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange });
   const showFullMapRef = useRef(false);
+  const weatherParticlesRef = useRef([]);
   const minimapBoundsRef = useRef({ x: 0, y: 0, w: 100, h: 75 });
   const otherPlayerScreenPosRef = useRef([]); // [{op, sx, sy}] updated each frame
   const onPlayerInspectRef = useRef(onPlayerInspect);
   const onEnterRoomRef = useRef(onEnterRoom);
   const onNearDoorChangeRef = useRef(onNearDoorChange);
   const nearDoorRef = useRef(null);
+  const hairColorRef = useRef(hairColor ?? '#5a3010');
+  const bodyColorRef = useRef(bodyColor ?? '#5a7aaa');
+  const skinColorRef = useRef(skinColor ?? '#f6cc88');
+  const genderRef = useRef(gender ?? 'male');
   useEffect(() => { onPlayerInspectRef.current = onPlayerInspect; });
   useEffect(() => { onEnterRoomRef.current = onEnterRoom; });
   useEffect(() => { onNearDoorChangeRef.current = onNearDoorChange; });
+  useEffect(() => { hairColorRef.current = hairColor ?? '#5a3010'; }, [hairColor]);
+  useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
+  useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
+  useEffect(() => { genderRef.current = gender ?? 'male'; }, [gender]);
 
   // Always keep callbacks fresh
   useEffect(() => {
-    cbRef.current = { onFishCaught, onOreMined, onActivityChange };
+    cbRef.current = { onFishCaught, onOreMined, onHerbGathered, onActivityChange };
   });
 
   // Init player state
@@ -1021,6 +1162,8 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
         activityProgress: 0,
         currentRod: '초급낚시대',
         currentOre: null,
+        currentHerb: null,
+        seaFishing: false,
         floatText: null,
       },
       keys: {},
@@ -1190,6 +1333,14 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
               player.currentOre = pickOre();
               const [mn, mx] = ORES[player.currentOre].mineRange;
               player.activityDuration = randInt(mn, mx);
+            } else if (player.state === 'gathering') {
+              cbRef.current.onHerbGathered?.(player.currentHerb);
+              player.currentHerb = pickHerb?.() ?? player.currentHerb;
+              const herbData = HERBS?.[player.currentHerb];
+              if (herbData) {
+                const [mn, mx] = herbData.gatherRange;
+                player.activityDuration = randInt(mn, mx);
+              }
             }
             player.activityStart = ts;
             player.activityProgress = 0;
@@ -1257,10 +1408,15 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       if (ckx > -10 * TILE_SIZE && ckx < W + 2 * TILE_SIZE && cky > -10 * TILE_SIZE && cky < H)
         drawCookingBuilding(ctx, camX, camY);
 
-      // Fishing area sign (tx=13, ty=17 — top of sand beach)
+      // Inn building decoration
+      const innbx = 20 * TILE_SIZE - camX, innby = 1 * TILE_SIZE - camY;
+      if (innbx > -12 * TILE_SIZE && innbx < W + 2 * TILE_SIZE && innby > -10 * TILE_SIZE && innby < H)
+        drawInnBuilding(ctx, camX, camY);
+
+      // Fishing area sign (tx=13, ty=18 — top of sand beach)
       {
         const sx = 13 * TILE_SIZE + TILE_SIZE / 2 - camX;
-        const sy = 17 * TILE_SIZE - camY;
+        const sy = 18 * TILE_SIZE - camY;
         if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
           drawFishingSign(ctx, sx, sy);
       }
@@ -1291,6 +1447,46 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       if (mx > -6 * TILE_SIZE && mx < W && my > -5 * TILE_SIZE && my < H)
         drawMineEntrance(ctx, mx, my);
 
+      // ── Weather particles ──
+      {
+        const wx = gameRef.current?.weather?.id ?? 'clear';
+        const parts = weatherParticlesRef.current;
+
+        if (wx === 'rain' || wx === 'storm') {
+          const spawnCount = wx === 'storm' ? 4 : 2;
+          for (let i = 0; i < spawnCount; i++) {
+            parts.push({ x: Math.random() * W, y: -10, vx: wx === 'storm' ? -2.5 : -1.2, vy: wx === 'storm' ? 14 : 9 });
+          }
+          ctx.strokeStyle = wx === 'storm' ? 'rgba(140,180,255,0.65)' : 'rgba(120,160,255,0.45)';
+          ctx.lineWidth = wx === 'storm' ? 1.5 : 1;
+          ctx.beginPath();
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const p = parts[i];
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p.x + p.vx * 2, p.y + p.vy * 2);
+            p.x += p.vx; p.y += p.vy;
+            if (p.y > H + 10) parts.splice(i, 1);
+          }
+          ctx.stroke();
+          if (wx === 'storm' && Math.random() < 0.002) {
+            ctx.fillStyle = 'rgba(200,220,255,0.18)';
+            ctx.fillRect(0, 0, W, H);
+          }
+          if (parts.length > 300) parts.splice(0, parts.length - 300);
+        } else if (wx === 'fog') {
+          weatherParticlesRef.current = [];
+          const t2 = performance.now() / 3000;
+          const alpha = 0.18 + 0.08 * Math.sin(t2);
+          ctx.fillStyle = `rgba(200,210,220,${alpha})`;
+          ctx.fillRect(0, 0, W, H);
+          const alpha2 = 0.10 + 0.06 * Math.sin(t2 * 1.4 + 1);
+          ctx.fillStyle = `rgba(180,195,210,${alpha2})`;
+          ctx.fillRect(0, H * 0.3, W, H * 0.4);
+        } else {
+          weatherParticlesRef.current = [];
+        }
+      }
+
       // Area labels
       ctx.font = 'bold 12px "Noto Sans KR", sans-serif';
       ctx.textAlign = 'center';
@@ -1301,6 +1497,45 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       const ml = [34 * TILE_SIZE - camX, 1 * TILE_SIZE - camY];
       if (ml[0] > 0 && ml[0] < W && ml[1] > 0 && ml[1] < H)
         ctx.fillText('광산 지역', ml[0], ml[1]);
+
+      // Level-up screen flash effect
+      const lvEffect = gameRef.current?.levelUpEffect;
+      if (lvEffect) {
+        lvEffect.age = (lvEffect.age ?? 0) + 1;
+        const alpha = Math.max(0, 0.5 - lvEffect.age * 0.02);
+        if (alpha > 0) {
+          ctx.fillStyle = `rgba(255,230,100,${alpha})`;
+          ctx.fillRect(0, 0, W, H);
+          const cx2 = W / 2, cy2 = H / 2;
+          const burst = ctx.createRadialGradient(cx2, cy2, 0, cx2, cy2, Math.min(W, H) * 0.4);
+          burst.addColorStop(0, `rgba(255,255,100,${alpha * 0.8})`);
+          burst.addColorStop(1, `rgba(255,200,0,0)`);
+          ctx.fillStyle = burst;
+          ctx.fillRect(0, 0, W, H);
+        } else {
+          gameRef.current.levelUpEffect = null;
+        }
+      }
+
+      // Rare fish screen flash effect
+      const rareEff = gameRef.current?.rareEffect;
+      if (rareEff) {
+        rareEff.age = (rareEff.age ?? 0) + 1;
+        const rAlpha = Math.max(0, 0.6 - rareEff.age * 0.02);
+        if (rAlpha > 0) {
+          const rc2 = rareEff.color ?? '#ffaaff';
+          ctx.fillStyle = `rgba(${rc2 === '#ffaa00' ? '255,170,0' : '255,68,255'},${rAlpha * 0.35})`;
+          ctx.fillRect(0, 0, W, H);
+          const cx3 = W / 2, cy3 = H / 2;
+          const burst2 = ctx.createRadialGradient(cx3, cy3, 0, cx3, cy3, Math.min(W, H) * 0.5);
+          burst2.addColorStop(0, `rgba(${rc2 === '#ffaa00' ? '255,170,0' : '255,68,255'},${rAlpha * 0.7})`);
+          burst2.addColorStop(1, `rgba(${rc2 === '#ffaa00' ? '255,170,0' : '255,68,255'},0)`);
+          ctx.fillStyle = burst2;
+          ctx.fillRect(0, 0, W, H);
+        } else {
+          gameRef.current.rareEffect = null;
+        }
+      }
 
       // Other players
       const others = otherPlayersRef?.current ?? [];
@@ -1318,7 +1553,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onActivi
       otherPlayerScreenPosRef.current = screenPositions;
 
       // My player (on top)
-      drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname, title, titleColor);
+      drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname, title, titleColor, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current);
 
       // Door entry prompt
       if (nearDoorRef.current) {

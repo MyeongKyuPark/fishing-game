@@ -1,57 +1,101 @@
-import { TILE, MAP_W, MAP_H, TILE_SIZE, ORES, weightedPick } from './gameData';
+import { TILE, MAP_W, MAP_H, TILE_SIZE, ORES, HERBS, weightedPick } from './gameData';
 
 function buildMap() {
   const t = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILE.GRASS));
 
-  // Mine zone: cols 27-39, rows 0-18
-  for (let r = 0; r < 19; r++)
-    for (let c = 27; c < MAP_W; c++)
+  // ── Mine zone: cols 45-69, rows 0-22 ──────────────────────────────────────
+  for (let r = 0; r <= 22; r++)
+    for (let c = 45; c < MAP_W; c++)
       t[r][c] = TILE.STONE;
 
-  // Shop building (not walkable): cols 1-9, rows 1-10
+  // ── Shop building: cols 1-9, rows 1-10 ────────────────────────────────────
   for (let r = 1; r <= 10; r++)
     for (let c = 1; c <= 9; c++)
       t[r][c] = TILE.BUILDING;
 
-  // Shop entrance path: row 11, cols 4-5
+  // Shop entrance path: rows 10-11, cols 4-5
+  t[10][4] = TILE.PATH;
+  t[10][5] = TILE.PATH;
   t[11][4] = TILE.PATH;
   t[11][5] = TILE.PATH;
 
-  // Cooking area building: cols 11-18, rows 2-9
+  // ── Cooking building: cols 11-18, rows 2-9 ────────────────────────────────
   for (let r = 2; r <= 9; r++)
     for (let c = 11; c <= 18; c++)
       t[r][c] = TILE.BUILDING;
 
-  // Cooking entrance path: row 10-11, cols 13-14
+  // Cooking entrance path: rows 10-11, cols 13-14
   t[10][13] = TILE.PATH;
   t[10][14] = TILE.PATH;
   t[11][13] = TILE.PATH;
   t[11][14] = TILE.PATH;
 
-  // Main horizontal path: rows 12-13, cols 0-26
-  for (let c = 0; c < 27; c++) {
+  // ── INN building: cols 20-28, rows 1-9 ────────────────────────────────────
+  for (let r = 1; r <= 9; r++)
+    for (let c = 20; c <= 28; c++)
+      t[r][c] = TILE.BUILDING;
+
+  // INN entrance path: rows 10-11, cols 23-24
+  t[10][23] = TILE.PATH;
+  t[10][24] = TILE.PATH;
+  t[11][23] = TILE.PATH;
+  t[11][24] = TILE.PATH;
+
+  // ── Main horizontal path: rows 12-13, cols 0-44 ────────────────────────────
+  for (let c = 0; c <= 44; c++) {
     t[12][c] = TILE.PATH;
     t[13][c] = TILE.PATH;
   }
 
-  // Sand beach: rows 17-18, cols 0-26
-  for (let r = 17; r <= 18; r++)
-    for (let c = 0; c < 27; c++)
+  // ── Vertical path: cols 13-14, rows 0-12 ──────────────────────────────────
+  for (let r = 0; r <= 12; r++) {
+    t[r][13] = TILE.PATH;
+    t[r][14] = TILE.PATH;
+  }
+
+  // ── Forest zone: cols 30-44, rows 0-18 ────────────────────────────────────
+  for (let r = 0; r <= 18; r++)
+    for (let c = 30; c <= 44; c++)
+      t[r][c] = TILE.FOREST;
+
+  // Scatter a few stone rocks in forest
+  const forestRocks = [
+    [3,32],[5,35],[2,38],[8,31],[10,40],[6,44],[14,33],[16,37],[12,42],
+  ];
+  for (const [r, c] of forestRocks) {
+    if (r >= 0 && r <= 18 && c >= 30 && c <= 44)
+      t[r][c] = TILE.STONE;
+  }
+
+  // ── Sand beach: rows 18-20, cols 0-44 ─────────────────────────────────────
+  for (let r = 18; r <= 20; r++)
+    for (let c = 0; c <= 44; c++)
       t[r][c] = TILE.SAND;
 
-  // Dock: rows 19-20, cols 3-24
-  for (let r = 19; r <= 20; r++)
-    for (let c = 3; c <= 24; c++)
+  // ── Main dock: rows 21-22, cols 3-42 ──────────────────────────────────────
+  for (let r = 21; r <= 22; r++)
+    for (let c = 3; c <= 42; c++)
       t[r][c] = TILE.WOOD;
 
-  // Water: rows 21+
-  for (let r = 21; r < MAP_H; r++)
-    for (let c = 0; c < MAP_W; c++)
+  // ── Deep sea pier: rows 23-26, cols 20-30 ─────────────────────────────────
+  for (let r = 23; r <= 26; r++)
+    for (let c = 20; c <= 30; c++)
+      t[r][c] = TILE.WOOD;
+
+  // ── Water: rows 27+ for cols 0-44 ─────────────────────────────────────────
+  for (let r = 27; r < MAP_H; r++)
+    for (let c = 0; c <= 44; c++)
       t[r][c] = TILE.WATER;
 
-  // Mine side water at bottom
-  for (let r = 19; r < MAP_H; r++)
-    for (let c = 27; c < MAP_W; c++)
+  // Also rows 23-26 outside the pier (cols 0-19 and 31-44) are water
+  for (let r = 23; r <= 26; r++) {
+    for (let c = 0; c < 20; c++) t[r][c] = TILE.WATER;
+    for (let c = 31; c <= 44; c++) t[r][c] = TILE.WATER;
+  }
+
+  // ── Mine area water: rows 23+ for cols 45-69 ──────────────────────────────
+  for (let r = 23; r < MAP_H; r++)
+    for (let c = 45; c < MAP_W; c++)
       t[r][c] = TILE.WATER;
 
   return t;
@@ -60,25 +104,40 @@ function buildMap() {
 export const MAP_TILES = buildMap();
 
 export const FISHING_CHAIRS = [
-  { tx: 5,  ty: 20 },
-  { tx: 9,  ty: 20 },
-  { tx: 13, ty: 20 },
-  { tx: 17, ty: 20 },
-  { tx: 21, ty: 20 },
+  // Main dock chairs (row 22)
+  { tx: 5,  ty: 22 },
+  { tx: 9,  ty: 22 },
+  { tx: 13, ty: 22 },
+  { tx: 17, ty: 22 },
+  { tx: 21, ty: 22 },
+  { tx: 25, ty: 22 },
+  { tx: 29, ty: 22 },
+  { tx: 33, ty: 22 },
+  // Deep pier chairs (row 26) — sea fishing zone
+  { tx: 22, ty: 26, seaFishing: true },
+  { tx: 24, ty: 26, seaFishing: true },
+  { tx: 26, ty: 26, seaFishing: true },
+  { tx: 28, ty: 26, seaFishing: true },
 ];
 
 export const CHAIR_RANGE = 3 * TILE_SIZE;
 
 export const SHOP_TX = 5;
-export const SHOP_TY = 11;
+export const SHOP_TY = 12;
 export const SHOP_RANGE = 4 * TILE_SIZE;
 
-export const MINE_ZONE = { tx1: 27, ty1: 0, tx2: 39, ty2: 18 };
-export const MINE_ENTRANCE = { tx: 29, ty: 6 };
+export const MINE_ZONE = { tx1: 45, ty1: 0, tx2: 69, ty2: 22 };
+export const MINE_ENTRANCE = { tx: 47, ty: 8 };
 
 export const COOKING_TX = 13;
 export const COOKING_TY = 11;
 export const COOKING_RANGE = 4 * TILE_SIZE;
+
+export const INN_TX = 23;
+export const INN_TY = 11;
+export const INN_RANGE = 4 * TILE_SIZE;
+
+export const FOREST_ZONE = { tx1: 30, ty1: 0, tx2: 44, ty2: 18 };
 
 export const PLAYER_START_X = 15 * TILE_SIZE + TILE_SIZE / 2;
 export const PLAYER_START_Y = 14 * TILE_SIZE + TILE_SIZE / 2;
@@ -100,11 +159,18 @@ export const DOOR_TRIGGERS = [
     exitWx: 13.5 * TILE_SIZE, exitWy: 12 * TILE_SIZE,
   },
   {
+    id: 'inn',
+    label: '🏨 여관 입장',
+    wx: 23.5 * TILE_SIZE, wy: 10 * TILE_SIZE,
+    range: 1.8 * TILE_SIZE,
+    exitWx: 23.5 * TILE_SIZE, exitWy: 12 * TILE_SIZE,
+  },
+  {
     id: 'mine',
     label: '⛏ 광산 입장',
-    wx: 29.5 * TILE_SIZE, wy: 6.5 * TILE_SIZE,
+    wx: 47.5 * TILE_SIZE, wy: 8.5 * TILE_SIZE,
     range: 2.2 * TILE_SIZE,
-    exitWx: 29.5 * TILE_SIZE, exitWy: 8.5 * TILE_SIZE,
+    exitWx: 47.5 * TILE_SIZE, exitWy: 10.5 * TILE_SIZE,
   },
 ];
 
@@ -112,6 +178,18 @@ export function isInMineZone(px, py) {
   const tx = Math.floor(px / TILE_SIZE);
   const ty = Math.floor(py / TILE_SIZE);
   return tx >= MINE_ZONE.tx1 && tx <= MINE_ZONE.tx2 && ty >= MINE_ZONE.ty1 && ty <= MINE_ZONE.ty2;
+}
+
+export function isInForestZone(px, py) {
+  const tx = Math.floor(px / TILE_SIZE);
+  const ty = Math.floor(py / TILE_SIZE);
+  return tx >= FOREST_ZONE.tx1 && tx <= FOREST_ZONE.tx2 && ty >= FOREST_ZONE.ty1 && ty <= FOREST_ZONE.ty2;
+}
+
+export function nearInn(px, py) {
+  const ix = INN_TX * TILE_SIZE + TILE_SIZE / 2;
+  const iy = INN_TY * TILE_SIZE + TILE_SIZE / 2;
+  return Math.hypot(px - ix, py - iy) <= INN_RANGE;
 }
 
 export function nearestChair(px, py) {
@@ -140,4 +218,12 @@ export function nearCooking(px, py) {
 export function pickOre() {
   const entries = Object.entries(ORES).map(([k, v]) => ({ f: k, w: v.w }));
   return weightedPick(entries);
+}
+
+export function pickHerb() {
+  const entries = Object.entries(HERBS).map(([k]) => ({ f: k, w: 1 }));
+  // Weighted: 들풀 most common, 희귀허브 rarest
+  const weights = { 들풀: 50, 버섯: 30, 희귀허브: 10 };
+  const weighted = Object.entries(HERBS).map(([k]) => ({ f: k, w: weights[k] ?? 10 }));
+  return weightedPick(weighted);
 }

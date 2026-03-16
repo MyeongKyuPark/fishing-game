@@ -51,6 +51,29 @@ const ROOMS = {
     exitTx: 5, exitTy: 9,
     entryTx: 5, entryTy: 7,
   },
+  inn: {
+    label: '🏨 여관',
+    w: 12, h: 10,
+    tiles: [
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','B','B','F','F','B','B','F','F','F','W'],
+      ['W','F','B','B','F','F','B','B','F','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','R','R','R','R','R','R','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','W','W','W','W','D','W','W','W','W','W','W'],
+    ],
+    floor: '#c8a878', wall: '#7a5a3a', rug: '#4444aa',
+    npcs: [
+      { tx: 5, ty: 2, name: '미나', bodyColor: '#ff99cc', hairColor: '#4a2000',
+        dialog: '어서오세요! 쉬고 싶으시면\n말씀해주세요~ 🌙', facing: 'down' },
+    ],
+    exitTx: 5, exitTy: 9,
+    entryTx: 5, entryTy: 7,
+  },
   mine: {
     label: '⛏ 광산 내부',
     w: 12, h: 10,
@@ -154,6 +177,17 @@ function drawRoomTile(ctx, tile, x, y, room, now) {
       ctx.strokeStyle = 'rgba(0,0,0,0.25)';
       ctx.lineWidth = 1;
       ctx.strokeRect(x + 3.5, y + 3.5, TS - 7, TS - 7);
+      break;
+    }
+    case 'B': {
+      ctx.fillStyle = room.floor ?? '#c8a878';
+      ctx.fillRect(x, y, TS, TS);
+      ctx.fillStyle = '#e8c8b0';  // bed frame
+      ctx.fillRect(x + 2, y + 2, TS - 4, TS - 4);
+      ctx.fillStyle = '#ffffff';  // pillow
+      ctx.beginPath(); ctx.roundRect(x + 4, y + 4, TS - 8, 8, 2); ctx.fill();
+      ctx.fillStyle = '#f0d8e8';  // blanket
+      ctx.fillRect(x + 2, y + 12, TS - 4, TS - 14);
       break;
     }
     case 'K': {
@@ -275,13 +309,13 @@ function drawIndoorNPC(ctx, sx, sy, npc, speaking, now) {
 }
 
 // ── Player drawing (indoor) ───────────────────────────────────────────────────
-function drawIndoorPlayer(ctx, sx, sy, facing, nickname) {
+function drawIndoorPlayer(ctx, sx, sy, facing, nickname, hairColor, bodyColor, skinColor, gender) {
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.beginPath(); ctx.ellipse(sx, sy + 5, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
 
   // Body
-  ctx.fillStyle = '#5a7aaa';
+  ctx.fillStyle = bodyColor ?? '#5a7aaa';
   ctx.beginPath(); ctx.roundRect(sx - 7, sy - 18, 14, 13, 3); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.15)';
   ctx.beginPath(); ctx.roundRect(sx - 5, sy - 16, 6, 6, 2); ctx.fill();
@@ -292,14 +326,26 @@ function drawIndoorPlayer(ctx, sx, sy, facing, nickname) {
   ctx.beginPath(); ctx.roundRect(sx + 2, sy - 6, 5, 12, 2); ctx.fill();
 
   // Head
-  ctx.fillStyle = '#f6cc88';
+  const skin = skinColor ?? '#f6cc88';
+  const isFemale = gender === 'female';
+  ctx.fillStyle = skin;
   ctx.beginPath(); ctx.arc(sx, sy - 24, 10, 0, Math.PI * 2); ctx.fill();
 
   // Hair
-  ctx.fillStyle = '#5a3010';
+  const hc = hairColor ?? '#5a3010';
+  ctx.fillStyle = hc;
   ctx.beginPath(); ctx.arc(sx, sy - 28, 10, Math.PI, 0); ctx.fill();
   ctx.beginPath(); ctx.arc(sx - 9, sy - 23, 5, Math.PI * 1.1, Math.PI * 0.4); ctx.fill();
   ctx.beginPath(); ctx.arc(sx + 9, sy - 23, 5, Math.PI * 0.6, Math.PI * 1.9); ctx.fill();
+  if (isFemale) {
+    ctx.beginPath(); ctx.arc(sx - 12, sy - 22, 4, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
+    ctx.beginPath(); ctx.arc(sx + 12, sy - 22, 4, Math.PI * 1.5, Math.PI * 0.5); ctx.fill();
+    ctx.fillStyle = '#ff88aa';
+    ctx.beginPath(); ctx.ellipse(sx + 9, sy - 33, 4, 2.5, 0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx + 9, sy - 33, 4, 2.5, -0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffaabb';
+    ctx.beginPath(); ctx.arc(sx + 9, sy - 33, 2, 0, Math.PI * 2); ctx.fill();
+  }
 
   // Eyes
   ctx.fillStyle = '#333';
@@ -349,11 +395,23 @@ function drawMineLanterns(ctx, offX, offY, now) {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function IndoorCanvas({ roomId, nickname, gameRef, onExit }) {
+export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcInteract, onNearNpcChange, hairColor, bodyColor, skinColor, gender }) {
   const canvasRef = useRef(null);
   const playerRef = useRef(null);
   const onExitRef = useRef(onExit);
+  const onNpcInteractRef = useRef(onNpcInteract);
+  const onNearNpcChangeRef = useRef(onNearNpcChange);
+  const hairColorRef = useRef(hairColor ?? '#5a3010');
+  const bodyColorRef = useRef(bodyColor ?? '#5a7aaa');
+  const skinColorRef = useRef(skinColor ?? '#f6cc88');
+  const genderRef = useRef(gender ?? 'male');
   useEffect(() => { onExitRef.current = onExit; });
+  useEffect(() => { onNpcInteractRef.current = onNpcInteract; });
+  useEffect(() => { onNearNpcChangeRef.current = onNearNpcChange; });
+  useEffect(() => { hairColorRef.current = hairColor ?? '#5a3010'; }, [hairColor]);
+  useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
+  useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
+  useEffect(() => { genderRef.current = gender ?? 'male'; }, [gender]);
 
   const room = ROOMS[roomId];
 
@@ -374,6 +432,8 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit }) {
     let rafId;
     const SPEED = 2.8;
     const FRIC = 0.80;
+    let enterWasDown = false;
+    let prevNearNpcName = null;
 
     function canWalkHere(px, py) {
       // Check 4 corners of a small bounding box
@@ -434,9 +494,31 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit }) {
         return;
       }
 
+      // NPC proximity
+      let nearNpc = null;
+      let nearNpcDist = Infinity;
+      for (const npc of room.npcs) {
+        const d = Math.hypot(player.x - (npc.tx + 0.5) * TS, player.y - (npc.ty + 0.5) * TS);
+        if (d < 2.5 * TS && d < nearNpcDist) { nearNpc = npc; nearNpcDist = d; }
+      }
+
+      // Notify parent of nearNpc changes
+      const curName = nearNpc?.name ?? null;
+      if (curName !== prevNearNpcName) {
+        onNearNpcChangeRef.current?.(nearNpc ?? null);
+        prevNearNpcName = curName;
+      }
+
+      // Enter key interaction (edge trigger)
+      const enterDown = !!(keys.Enter || keys[' ']);
+      if (enterDown && !enterWasDown && nearNpc) {
+        onNpcInteractRef.current?.(nearNpc.name);
+      }
+      enterWasDown = enterDown;
+
       // ── Render ──
       // Dark background
-      const bgColor = roomId === 'mine' ? '#141420' : '#2a1a0a';
+      const bgColor = roomId === 'mine' ? '#141420' : roomId === 'inn' ? '#1a100a' : '#2a1a0a';
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, W, H);
 
@@ -464,7 +546,7 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit }) {
       }
 
       // Player
-      drawIndoorPlayer(ctx, offX + player.x, offY + player.y, player.facing, nickname);
+      drawIndoorPlayer(ctx, offX + player.x, offY + player.y, player.facing, nickname, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current);
 
       // Header bar
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
@@ -479,6 +561,22 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit }) {
       ctx.font = '11px "Noto Sans KR", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('↓ 출구 문으로 이동하면 나갑니다', W / 2, H - 8);
+
+      // NPC interaction hint
+      if (nearNpc) {
+        const hint = `Enter · Space : ${nearNpc.name}와(과) 대화`;
+        const hm = ctx.measureText(hint);
+        const hw = hm.width + 24;
+        const hx = W / 2 - hw / 2;
+        const hy = H - 52;
+        const pulse = 0.7 + 0.3 * Math.sin(now / 400);
+        ctx.fillStyle = `rgba(40,30,20,${0.78 * pulse})`;
+        ctx.beginPath(); ctx.roundRect(hx, hy, hw, 22, 8); ctx.fill();
+        ctx.fillStyle = `rgba(255,240,180,${pulse})`;
+        ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(hint, W / 2, hy + 15);
+      }
 
       rafId = requestAnimationFrame(loop);
     }

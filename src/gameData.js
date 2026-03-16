@@ -1,8 +1,8 @@
 export const TILE_SIZE = 32;
-export const MAP_W = 40;
-export const MAP_H = 30;
+export const MAP_W = 70;
+export const MAP_H = 50;
 
-export const TILE = { GRASS: 0, WATER: 1, STONE: 2, WOOD: 3, SAND: 4, BUILDING: 5, PATH: 6 };
+export const TILE = { GRASS: 0, WATER: 1, STONE: 2, WOOD: 3, SAND: 4, BUILDING: 5, PATH: 6, FOREST: 7 };
 
 export const TILE_COLOR = [
   '#4a7c3a', // GRASS
@@ -12,9 +12,10 @@ export const TILE_COLOR = [
   '#c4a44a', // SAND
   '#5a3a28', // BUILDING
   '#9e8050', // PATH
+  '#2d5a1e', // FOREST
 ];
 
-export const WALKABLE = [true, false, true, true, true, false, true];
+export const WALKABLE = [true, false, true, true, true, false, true, true];
 
 // ── Fish ─────────────────────────────────────────────────────────────────────
 export const FISH = {
@@ -121,6 +122,7 @@ export const ORES = {
   철광석:   { price: 30,  color: '#808080', mineRange: [5000, 10000],  w: 50 },
   구리광석: { price: 50,  color: '#b87333', mineRange: [7000, 14000],  w: 30 },
   수정:     { price: 100, color: '#a8d8ea', mineRange: [12000, 22000], w: 20 },
+  금광석:   { price: 350, color: '#ffd700', mineRange: [18000, 35000], w: 8  },
 };
 
 // ── Boots ────────────────────────────────────────────────────────────────────
@@ -148,6 +150,13 @@ export const COOKWARE = {
     desc: '물고기 요리 → 가격 2배' },
   고급화로: { name: '고급 화로', price: 900, mult: 3.5, color: '#ff6633',
     desc: '물고기 요리 → 가격 3.5배', upgradeMats: { 철광석: 3 } },
+};
+
+// ── Herbs ─────────────────────────────────────────────────────────────────────
+export const HERBS = {
+  들풀:     { price: 25,  gatherRange: [3000,  6000],  color: '#88cc44' },
+  버섯:     { price: 60,  gatherRange: [5000,  10000], color: '#cc8844' },
+  희귀허브: { price: 180, gatherRange: [8000,  15000], color: '#cc44cc' },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

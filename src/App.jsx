@@ -1,26 +1,33 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 import GameCanvas from './GameCanvas';
+import { playFishCatch, playFishingStart, playOreMined, playCookComplete, playSellSound, playEnterRoom, playNpcInteract, playLevelUp } from './soundManager';
 import IndoorCanvas from './IndoorCanvas';
 import Chat from './Chat';
 import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
 import RankSidebar from './RankSidebar';
-import RoomLobby from './RoomLobby';
-import { saveFishRecord, savePlayerTitle } from './ranking';
+import ChannelLobby from './ChannelLobby';
+import { saveFishRecord, savePlayerTitle, broadcastAnnouncement, subscribeAnnouncements, incrementServerStat, subscribeServerStats } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
-import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, weightedPick, randInt, TILE_SIZE,
+import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
 import { getTitle, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
-import { nearestChair, nearShop, nearCooking, isInMineZone, CHAIR_RANGE, pickOre } from './mapData';
+import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, CHAIR_RANGE, pickOre, pickHerb } from './mapData';
+
+const SKIN_PRESETS = ['#f6cc88', '#e8a870', '#c8845a', '#a06040', '#7a4830', '#fddbb4'];
 
 function LoginScreen({ onLogin }) {
   const [name, setName] = useState('');
   const [err, setErr] = useState('');
+  const [gender, setGender] = useState('male');
+  const [hairColor, setHairColor] = useState('#5a3010');
+  const [bodyColor, setBodyColor] = useState('#5a7aaa');
+  const [skinColor, setSkinColor] = useState('#f6cc88');
 
   const submit = (e) => {
     e.preventDefault();
@@ -28,7 +35,7 @@ function LoginScreen({ onLogin }) {
     if (!trimmed) { setErr('닉네임을 입력해주세요.'); return; }
     if (trimmed.length < 2) { setErr('2글자 이상 입력해주세요.'); return; }
     if (trimmed.length > 12) { setErr('12글자 이하로 입력해주세요.'); return; }
-    onLogin(trimmed);
+    onLogin(trimmed, { hairColor, bodyColor, skinColor, gender });
   };
 
   return (
@@ -48,6 +55,46 @@ function LoginScreen({ onLogin }) {
             autoFocus
             maxLength={12}
           />
+
+          {/* Gender */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'center' }}>
+            {['male', 'female'].map(g => (
+              <button key={g} type="button" onClick={() => setGender(g)} style={{
+                padding: '6px 20px', borderRadius: 8, border: `2px solid ${gender === g ? '#88ccff' : 'rgba(255,255,255,0.2)'}`,
+                background: gender === g ? 'rgba(100,180,255,0.2)' : 'rgba(255,255,255,0.06)',
+                color: gender === g ? '#88ccff' : 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13,
+              }}>
+                {g === 'male' ? '♂ 남성' : '♀ 여성'}
+              </button>
+            ))}
+          </div>
+
+          {/* Skin color presets */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 6, textAlign: 'center' }}>피부색</div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              {SKIN_PRESETS.map(c => (
+                <button key={c} type="button" onClick={() => setSkinColor(c)} style={{
+                  width: 28, height: 28, borderRadius: '50%', background: c, cursor: 'pointer',
+                  border: `3px solid ${skinColor === c ? '#fff' : 'transparent'}`,
+                  outline: 'none', padding: 0,
+                }} />
+              ))}
+            </div>
+          </div>
+
+          {/* Hair & Body colors */}
+          <div style={{ display: 'flex', gap: 16, marginTop: 12, justifyContent: 'center' }}>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              머리색
+              <input type="color" value={hairColor} onChange={e => setHairColor(e.target.value)} style={{ width: 36, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer' }} />
+            </label>
+            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              옷 색
+              <input type="color" value={bodyColor} onChange={e => setBodyColor(e.target.value)} style={{ width: 36, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer' }} />
+            </label>
+          </div>
+
           {err && <div className="login-err">{err}</div>}
           <button className="login-btn" type="submit">입장하기</button>
         </form>
@@ -57,13 +104,37 @@ function LoginScreen({ onLogin }) {
   );
 }
 
+const QUEST_POOL = [
+  { id: 'fish10', label: '생선 10마리 잡기', goal: 10, type: 'fish', reward: 200 },
+  { id: 'fish25', label: '생선 25마리 잡기', goal: 25, type: 'fish', reward: 500 },
+  { id: 'ore5', label: '광석 5개 채굴', goal: 5, type: 'ore', reward: 300 },
+  { id: 'ore15', label: '광석 15개 채굴', goal: 15, type: 'ore', reward: 700 },
+  { id: 'cook5', label: '생선 5마리 요리', goal: 5, type: 'cook', reward: 250 },
+  { id: 'sell500', label: '500G 이상 판매', goal: 500, type: 'sell', reward: 400 },
+  { id: 'sell2000', label: '2000G 이상 판매', goal: 2000, type: 'sell', reward: 1000 },
+];
+
+function getDailyQuests() {
+  const dateStr = new Date().toDateString();
+  let hash = 0;
+  for (let i = 0; i < dateStr.length; i++) hash = (hash * 31 + dateStr.charCodeAt(i)) >>> 0;
+  const picked = [];
+  const pool = [...QUEST_POOL];
+  for (let i = 0; i < 3 && pool.length > 0; i++) {
+    const idx = hash % pool.length;
+    picked.push(pool.splice(idx, 1)[0]);
+    hash = (hash * 1664525 + 1013904223) >>> 0;
+  }
+  return picked;
+}
+
 const DEFAULT_STATE = {
   money: 100,
   rod: '초급낚시대',
   ownedRods: ['초급낚시대'],
   rodEnhance: { 초급낚시대: 0 }, // { rodKey: enhanceLevel }
   fishInventory: [],
-  oreInventory: { 철광석: 0, 구리광석: 0, 수정: 0 },
+  oreInventory: { 철광석: 0, 구리광석: 0, 수정: 0, 금광석: 0 },
   fishCaught: 0,
   boots: '기본신발',
   ownedBoots: ['기본신발'],
@@ -73,6 +144,16 @@ const DEFAULT_STATE = {
   baitInventory: {},
   cookware: null,
   ownedCookware: [],
+  dailyQuests: [],
+  questProgress: {},
+  questDate: '',
+  herbInventory: {},
+  lastSaveTime: Date.now(),
+  hairColor: '#5a3010',
+  bodyColor: '#5a7aaa',
+  skinColor: '#f6cc88',
+  gender: 'male',
+  caughtSpecies: [],
 };
 
 function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
@@ -110,6 +191,16 @@ function loadSave(nickname) {
       baitInventory: s.baitInventory ?? {},
       cookware: s.cookware ?? null,
       ownedCookware: s.ownedCookware ?? [],
+      dailyQuests: s.dailyQuests ?? [],
+      questProgress: s.questProgress ?? {},
+      questDate: s.questDate ?? '',
+      herbInventory: s.herbInventory ?? {},
+      lastSaveTime: s.lastSaveTime ?? Date.now(),
+      hairColor: s.hairColor ?? '#5a3010',
+      bodyColor: s.bodyColor ?? '#5a7aaa',
+      skinColor: s.skinColor ?? '#f6cc88',
+      gender: s.gender ?? 'male',
+      caughtSpecies: s.caughtSpecies ?? [],
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -117,12 +208,39 @@ function loadSave(nickname) {
 const DAILY_BONUS = 300; // G per day
 
 function checkDailyBonus(nickname) {
-  const key = `fishingGame_daily_${nickname}`;
-  const last = localStorage.getItem(key);
+  const dailyKey = `fishingGame_daily_${nickname}`;
+  const streakKey = `fishingGame_streak_${nickname}`;
   const today = new Date().toDateString();
-  if (last === today) return 0;
-  localStorage.setItem(key, today);
-  return DAILY_BONUS;
+  const last = localStorage.getItem(dailyKey);
+  if (last === today) return { bonus: 0, streak: (() => { try { return JSON.parse(localStorage.getItem(streakKey))?.streak ?? 1; } catch { return 1; } })() };
+
+  // Calculate streak
+  let streak = 1;
+  try {
+    const streakData = JSON.parse(localStorage.getItem(streakKey));
+    if (streakData) {
+      const lastDate = new Date(streakData.lastDate);
+      const todayDate = new Date(today);
+      const diffDays = Math.round((todayDate - lastDate) / 86400000);
+      if (diffDays === 1) {
+        streak = (streakData.streak ?? 1) + 1;
+      } else if (diffDays === 0) {
+        streak = streakData.streak ?? 1;
+      } else {
+        streak = 1;
+      }
+    }
+  } catch { streak = 1; }
+
+  localStorage.setItem(dailyKey, today);
+  localStorage.setItem(streakKey, JSON.stringify({ streak, lastDate: today }));
+
+  let bonus = DAILY_BONUS;
+  if (streak >= 14) bonus += 1000;
+  else if (streak >= 7) bonus += 500;
+  else if (streak >= 3) bonus += 200;
+
+  return { bonus, streak };
 }
 
 function rarityColor(r) {
@@ -139,6 +257,7 @@ export default function App() {
   const otherPlayersRef = useRef([]);
   const prevOtherPlayersRef = useRef([]);
   const lastPosRef = useRef({});
+  const cmdTimestampsRef = useRef([]); // spam prevention
 
   const [nickname, setNickname] = useState('');
   const [roomId, setRoomId] = useState(null);
@@ -156,12 +275,17 @@ export default function App() {
   const [showShop, setShowShop] = useState(false);
   const [showRank, setShowRank] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showQuest, setShowQuest] = useState(false);
   const [statsTab, setStatsTab] = useState('장비');
   const [inspectPlayer, setInspectPlayer] = useState(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [indoorRoom, setIndoorRoom] = useState(null);
   const [nearDoor, setNearDoor] = useState(null);
+  const [nearIndoorNpc, setNearIndoorNpc] = useState(null);
   const prevTitleRef = useRef(null);
+  const [serverAnnouncements, setServerAnnouncements] = useState([]);
+  const [serverStats, setServerStats] = useState({});
+  const [showDex, setShowDex] = useState(false);
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -271,6 +395,18 @@ export default function App() {
     };
   }, []);
 
+  // Subscribe to server announcements when logged in
+  useEffect(() => {
+    if (!nickname || !roomId) return;
+    return subscribeAnnouncements(setServerAnnouncements);
+  }, [nickname, roomId]);
+
+  // Subscribe to server-wide stats when logged in
+  useEffect(() => {
+    if (!nickname || !roomId) return;
+    return subscribeServerStats(setServerStats);
+  }, [nickname, roomId]);
+
   // Sync speed bonus to game loop
   useEffect(() => {
     if (!gameRef.current) return;
@@ -281,6 +417,7 @@ export default function App() {
   // Weather: deterministic per room+time, update when period changes
   const [weather, setWeather] = useState(() => getWeather(null, Date.now()));
   useEffect(() => { weatherRef.current = weather; }, [weather]);
+  useEffect(() => { if (gameRef.current) gameRef.current.weather = weather; }, [weather]);
   useEffect(() => {
     if (!roomId) return;
     setWeather(getWeather(roomId, Date.now()));
@@ -298,20 +435,41 @@ export default function App() {
   useEffect(() => {
     if (!nickname) return;
     const saved = loadSave(nickname);
-    const bonus = checkDailyBonus(nickname);
+    const { bonus, streak } = checkDailyBonus(nickname);
+    const today = new Date().toDateString();
+    const quests = getDailyQuests();
+    const questProgress = saved.questDate === today ? (saved.questProgress ?? {}) : {};
+    const base = { ...saved, dailyQuests: quests, questProgress, questDate: today };
+    const now2 = Date.now();
+    const awayMs = Math.max(0, now2 - (saved.lastSaveTime ?? now2));
+    const awayMins = Math.floor(awayMs / 60000);
+    const maxMins = 120;
+    const effectiveMins = Math.min(awayMins, maxMins);
+    const offlineReward = Math.floor(effectiveMins * 8);
     if (bonus > 0) {
-      setGs({ ...saved, money: saved.money + bonus });
-      // Show bonus message after room join (delayed so addMsg is ready)
-      setTimeout(() => addMsg(`🎁 오늘의 출석 보너스 +${bonus}G!`, 'catch'), 1200);
+      setGs({ ...base, money: saved.money + bonus });
+      setTimeout(() => {
+        addMsg(`🎁 오늘의 출석 보너스 +${bonus}G! (${streak}일 연속 접속)`, 'catch');
+        if (streak >= 14) addMsg(`🏆 14일 연속 접속! +1000G 추가 보너스!`, 'catch');
+        else if (streak >= 7) addMsg(`🌟 7일 연속 접속! +500G 추가 보너스! 특별 보상 지급!`, 'catch');
+        else if (streak >= 3) addMsg(`⭐ 3일 연속 접속! +200G 추가 보너스!`, 'catch');
+      }, 1200);
     } else {
-      setGs(saved);
+      setGs(base);
+      if (streak > 1) {
+        setTimeout(() => addMsg(`🔥 ${streak}일 연속 접속 중!`, 'system'), 1200);
+      }
+    }
+    if (offlineReward > 0 && awayMins >= 5) {
+      setGs(prev => ({ ...prev, money: prev.money + offlineReward }));
+      setTimeout(() => addMsg(`💤 자리 비운 ${awayMins}분 동안 +${offlineReward}G 획득! (최대 2시간)`, 'catch'), 1800);
     }
   }, [nickname]);
 
   // Save to localStorage keyed by nickname
   useEffect(() => {
     if (!nickname) return;
-    localStorage.setItem(saveKey(nickname), JSON.stringify(gs));
+    localStorage.setItem(saveKey(nickname), JSON.stringify({ ...gs, lastSaveTime: Date.now() }));
   }, [gs, nickname]);
 
 
@@ -333,6 +491,30 @@ export default function App() {
       abilities: { ...(prev.abilities ?? DEFAULT_ABILITIES), [abilName]: { value: result.value, grade: result.grade } },
     }));
   }, []);
+
+  const advanceQuest = useCallback((type, amount = 1) => {
+    setGs(prev => {
+      const quests = prev.dailyQuests ?? [];
+      const progress = { ...(prev.questProgress ?? {}) };
+      let moneyBonus = 0;
+      const messages = [];
+      for (const q of quests) {
+        if (q.type !== type) continue;
+        const prev_val = progress[q.id] ?? 0;
+        if (prev_val >= q.goal) continue;
+        const next_val = Math.min(q.goal, prev_val + amount);
+        progress[q.id] = next_val;
+        if (next_val >= q.goal && prev_val < q.goal) {
+          moneyBonus += q.reward;
+          messages.push(`🎉 퀘스트 완료: ${q.label} → +${q.reward}G!`);
+        }
+      }
+      if (messages.length > 0) {
+        setTimeout(() => messages.forEach(m => addMsg(m, 'catch')), 0);
+      }
+      return { ...prev, questProgress: progress, money: prev.money + moneyBonus };
+    });
+  }, [addMsg]);
 
   // ── Callbacks from game loop ──────────────────────────────────────────────
 
@@ -380,6 +562,27 @@ export default function App() {
       * (1 + speechAbil * 0.005 + fishAbil * 0.002 + enhEffect.priceBonus)
     );
 
+    const seaBonus = gameRef.current?.player?.seaFishing ? 1.5 : 1.0;
+    const finalPrice = Math.round(price * seaBonus);
+    const seaMsg = seaBonus > 1 ? ' 🌊 바다낚시 보너스!' : '';
+
+    // 3% line snap — lose the fish
+    if (Math.random() < 0.03) {
+      addMsg(`💔 낚싯줄이 끊어졌습니다! ${name} 놓쳤어요...`, 'error');
+      if (gameRef.current?.player)
+        gameRef.current.player.floatText = { text: '줄 끊김 💔', age: 0, color: '#ff4444' };
+      return;
+    }
+
+    // 2% treasure chest
+    if (Math.random() < 0.02) {
+      const treasure = randInt(200, 800);
+      setGs(prev => ({ ...prev, money: prev.money + treasure }));
+      addMsg(`💰 낚시 중 보물상자 발견! +${treasure}G`, 'catch');
+      if (gameRef.current?.player)
+        gameRef.current.player.floatText = { text: `보물상자 +${treasure}G`, age: 0, color: '#ffdd00' };
+    }
+
     if (baitData?.type === 'once') {
       setGs(prev => {
         const bi = { ...(prev.baitInventory ?? {}), [baitKey]: Math.max(0, (prev.baitInventory?.[baitKey] ?? 1) - 1) };
@@ -387,15 +590,43 @@ export default function App() {
       });
     }
     const id = Date.now() + Math.random();
-    setGs(prev => ({ ...prev, fishInventory: [...prev.fishInventory, { name, size, price, id }], fishCaught: (prev.fishCaught ?? 0) + 1 }));
-    addMsg(`🐟 ${name} ${size}cm 낚음! (${price}G)`, 'catch');
+    setGs(prev => ({ ...prev, fishInventory: [...prev.fishInventory, { name, size, price: finalPrice, id }], fishCaught: (prev.fishCaught ?? 0) + 1 }));
+    addMsg(`🐟 ${name} ${size}cm 낚음! (${finalPrice}G)${seaMsg}`, 'catch');
+    playFishCatch(fd.rarity);
     if (nicknameRef.current) saveFishRecord(nicknameRef.current, name, size);
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `${name} ${size}cm`, age: 0, color: rarityColor(fd.rarity) };
 
+    // Legendary/Mythic broadcast + rare visual effect
+    if (fd.rarity === '전설' || fd.rarity === '신화') {
+      broadcastAnnouncement(`${nicknameRef.current}님이 ${size}cm ${name}을(를) 낚았습니다! ${fd.rarity === '신화' ? '🌟 신화어 출현!' : '⭐ 전설어!'}`);
+      if (gameRef.current) gameRef.current.rareEffect = { age: 0, color: rarityColor(fd.rarity) };
+    }
+
+    // Fish encyclopedia (caughtSpecies)
+    setGs(prev => {
+      if (!prev.caughtSpecies?.includes(name)) {
+        const newSpecies = [...(prev.caughtSpecies ?? []), name];
+        const totalSpecies = Object.keys(FISH).length;
+        setTimeout(() => {
+          addMsg(`📖 새 물고기 발견! ${name} 도감 등록 (${newSpecies.length}/${totalSpecies})`, 'catch');
+          if (newSpecies.length === totalSpecies) {
+            addMsg('🏆 도감 완성! 특별 칭호 "박물학자"를 획득했습니다!', 'catch');
+            broadcastAnnouncement(`${nicknameRef.current}님이 물고기 도감을 완성했습니다! 🎉`);
+          }
+        }, 0);
+        return { ...prev, caughtSpecies: newSpecies };
+      }
+      return prev;
+    });
+
+    // Server-wide stat
+    incrementServerStat('totalFishCaught');
+
     grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
     grantAbility('체력', STAMINA_GAIN);
-  }, [addMsg, grantAbility]);
+    advanceQuest('fish');
+  }, [addMsg, grantAbility, advanceQuest]);
 
   const onOreMined = useCallback((oreName) => {
     setGs(prev => ({
@@ -403,10 +634,35 @@ export default function App() {
       oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + 1 },
     }));
     addMsg(`⛏ ${oreName} 1개 채굴!`, 'mine');
+    playOreMined();
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `+${oreName}`, age: 0, color: ORES[oreName]?.color ?? '#fa4' };
+    // 3% windfall: extra 5–10 ores
+    const windfall = Math.random() < 0.03;
+    if (windfall) {
+      const extra = randInt(4, 9);
+      setGs(prev => ({
+        ...prev,
+        oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + extra },
+      }));
+      addMsg(`💥 대박! ${oreName} ${extra}개 추가 획득!`, 'catch');
+      if (gameRef.current?.player)
+        gameRef.current.player.floatText = { text: `💥 ${oreName} ×${extra+1}!`, age: 0, color: '#ffdd00' };
+    }
     grantAbility('채굴', ORE_ABILITY_GAIN[oreName] ?? 0.40);
     grantAbility('체력', STAMINA_GAIN);
+    advanceQuest('ore');
+  }, [addMsg, grantAbility, advanceQuest]);
+
+  const onHerbGathered = useCallback((herbName) => {
+    setGs(prev => ({
+      ...prev,
+      herbInventory: { ...(prev.herbInventory ?? {}), [herbName]: ((prev.herbInventory ?? {})[herbName] || 0) + 1 },
+    }));
+    addMsg(`🌿 ${herbName} 1개 채집!`, 'catch');
+    if (gameRef.current?.player)
+      gameRef.current.player.floatText = { text: `+${herbName}`, age: 0, color: HERBS[herbName]?.color ?? '#8c4' };
+    grantAbility('체력', 0.1);
   }, [addMsg, grantAbility]);
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
@@ -414,6 +670,16 @@ export default function App() {
   // ── Command handler ───────────────────────────────────────────────────────
 
   const handleCommand = useCallback((input) => {
+    const now0 = Date.now();
+    const stamps = cmdTimestampsRef.current;
+    // Keep only timestamps in last 4 seconds
+    cmdTimestampsRef.current = stamps.filter(t => now0 - t < 4000);
+    if (cmdTimestampsRef.current.length >= 5) {
+      addMsg('⚠️ 너무 빠르게 명령어를 입력하고 있습니다.', 'error');
+      return;
+    }
+    cmdTimestampsRef.current.push(now0);
+
     const cmd = input.trim().toLowerCase();
     addMsg(`> ${input}`, 'user');
 
@@ -425,6 +691,7 @@ export default function App() {
     if (cmd === '!도움말') {
       ['!낚시  – 낚시 시작 (낚시 의자 근처)',
        '!광질  – 채굴 시작 (광산 지역, 동쪽)',
+       '!채집  – 허브 채집 (숲 지역)',
        '!그만  – 현재 활동 중지',
        '!요리  – 물고기 요리 (요리소 근처)',
        '!상점  – 상점 열기 (상점 건물 근처)',
@@ -432,6 +699,7 @@ export default function App() {
        '!인벤  – 인벤토리 열기/닫기',
        '!랭킹  – 랭킹 보기',
        '!스탯  – 캐릭터 스탯 보기',
+       '!퀘스트 – 오늘의 퀘스트 확인',
       ].forEach(t => addMsg(t));
       return;
     }
@@ -448,6 +716,19 @@ export default function App() {
 
     if (cmd === '!스탯' || cmd === '!캐릭터') {
       setShowStats(v => !v);
+      return;
+    }
+
+    if (cmd === '!퀘스트') {
+      const quests = stateRef.current?.dailyQuests ?? [];
+      const progress = stateRef.current?.questProgress ?? {};
+      addMsg('📋 오늘의 퀘스트:');
+      quests.forEach(q => {
+        const cur = Math.min(q.goal, progress[q.id] ?? 0);
+        const done = cur >= q.goal ? ' ✅' : '';
+        addMsg(`  ${q.label} (${cur}/${q.goal}) → 보상 ${q.reward}G${done}`);
+      });
+      setShowQuest(true);
       return;
     }
 
@@ -473,7 +754,9 @@ export default function App() {
         ),
       }));
       addMsg(`🍳 생선 ${raw.length}마리 요리 완료! (x${totalMult.toFixed(2)})`, 'catch');
+      playCookComplete();
       grantAbility('요리', COOK_ABILITY_GAIN * raw.length);
+      advanceQuest('cook', raw.length);
       return;
     }
 
@@ -482,6 +765,7 @@ export default function App() {
       player.state = 'idle';
       player.activityStart = null;
       player.activityProgress = 0;
+      player.seaFishing = false;
       setActivity(null);
       addMsg('활동을 중지했습니다.');
       return;
@@ -514,6 +798,7 @@ export default function App() {
       }
       player.state = 'fishing';
       player.currentRod = s.rod;
+      player.seaFishing = nearest.seaFishing ?? false;
       const fishAbil = s.abilities?.낚시?.value ?? 0;
       const stamAbil = s.abilities?.체력?.value ?? 0;
       const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
@@ -527,6 +812,7 @@ export default function App() {
       player.activityProgress = 0;
       setActivity('fishing');
       addMsg(`🎣 ${RODS[s.rod].name}으로 낚시 시작! (방향키로 취소)`);
+      playFishingStart();
       return;
     }
 
@@ -551,6 +837,26 @@ export default function App() {
       return;
     }
 
+    if (cmd === '!채집') {
+      if (player.state !== 'idle') { addMsg('먼저 !그만 으로 중지하세요.'); return; }
+      if (!isInForestZone(player.x, player.y)) {
+        addMsg('🌿 숲 지역(동쪽 초록 지대)으로 이동하세요!', 'error');
+        return;
+      }
+      const herb = pickHerb();
+      player.state = 'gathering';
+      player.currentHerb = herb;
+      const gatherAbil = s.abilities?.체력?.value ?? 0;
+      const gatherMult = Math.max(0.4, 1 - gatherAbil * 0.003);
+      const [mn, mx2] = HERBS[herb].gatherRange.map(t2 => Math.max(1000, Math.round(t2 * gatherMult)));
+      player.activityStart = performance.now();
+      player.activityDuration = randInt(mn, mx2);
+      player.activityProgress = 0;
+      setActivity('gathering');
+      addMsg('🌿 채집 시작! (방향키로 취소)');
+      return;
+    }
+
     if (cmd === '!상점') {
       if (!nearShop(player.x, player.y)) {
         addMsg('🏪 상점 건물 근처(북쪽)로 이동하세요!', 'error');
@@ -570,12 +876,14 @@ export default function App() {
       const total = inv.reduce((sum, f) => sum + f.price, 0);
       setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: [] }));
       addMsg(`💰 물고기 ${inv.length}마리 → ${total}G!`, 'catch');
+      playSellSound(total);
       grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
+      advanceQuest('sell', total);
       return;
     }
 
     addMsg(`알 수 없는 명령어. !도움말 확인`, 'error');
-  }, [addMsg]);
+  }, [addMsg, advanceQuest]);
 
   // ── Shop actions ─────────────────────────────────────────────────────────
 
@@ -669,7 +977,9 @@ export default function App() {
     const total = gs.fishInventory.reduce((s, f) => s + f.price, 0);
     setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: [] }));
     addMsg(`💰 전체 판매 +${total}G`, 'catch');
+    playSellSound(total);
     grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
+    advanceQuest('sell', total);
   };
 
   const sellOne = (id) => {
@@ -679,17 +989,25 @@ export default function App() {
     grantAbility('화술', Math.max(0.01, Math.floor(fish.price / 100) * SELL_ABILITY_PER_100G));
   };
 
-  const handleLogin = (name) => {
+  const handleLogin = (name, appearance) => {
     channelRef.current?.postMessage({ type: 'gameStart', tabId: tabId.current });
     setBlocked(false);
     setNickname(name);
+    if (appearance) {
+      setGs(prev => ({ ...prev,
+        hairColor: appearance.hairColor,
+        bodyColor: appearance.bodyColor,
+        skinColor: appearance.skinColor ?? prev.skinColor,
+        gender: appearance.gender ?? prev.gender,
+      }));
+    }
   };
 
   const handleJoinRoom = (id, title) => {
     setRoomId(id);
     setRoomTitle(title);
     setMessages([
-      { type: 'system', text: `🏠 [${title}] 방에 입장했습니다!` },
+      { type: 'system', text: `🌊 [${title}]에 입장했습니다!` },
       { type: 'system', text: `👤 ${nickname} · 방향키로 이동 · !도움말` },
     ]);
   };
@@ -702,7 +1020,7 @@ export default function App() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (!nickname) return <LoginScreen onLogin={handleLogin} />;
-  if (!roomId) return <RoomLobby nickname={nickname} onJoin={handleJoinRoom} />;
+  if (!roomId) return <ChannelLobby nickname={nickname} onJoin={handleJoinRoom} />;
 
   if (blocked) return (
     <div className="login-bg">
@@ -721,8 +1039,47 @@ export default function App() {
   const totalFishVal = gs.fishInventory.reduce((s, f) => s + f.price, 0);
   const myTitle = getTitle(gs);
 
-  const handleEnterRoom = (id) => setIndoorRoom(id);
+  const handleEnterRoom = (id) => { playEnterRoom(); setIndoorRoom(id); };
   const handleExitRoom = () => setIndoorRoom(null);
+
+  const handleNpcInteract = useCallback((npcName) => {
+    playNpcInteract();
+    if (npcName === '민준') {
+      setShowShop(true);
+    } else if (npcName === '수연') {
+      const cw = stateRef.current?.cookware;
+      if (!cw) { addMsg('🍳 요리 도구가 없습니다. 상점에서 구매하세요!', 'error'); return; }
+      const baseMult = COOKWARE[cw]?.mult ?? 1;
+      const cookAbil = stateRef.current?.abilities?.요리?.value ?? 0;
+      const totalMult = baseMult + cookAbil * 0.01;
+      const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
+      if (raw.length === 0) { addMsg('🍳 수연: "요리할 생선이 없네요!"'); return; }
+      setGs(prev => ({
+        ...prev,
+        fishInventory: prev.fishInventory.map(f =>
+          f.cooked ? f : { ...f, price: Math.round(f.price * totalMult), cooked: true }
+        ),
+      }));
+      addMsg(`🍳 수연이 생선 ${raw.length}마리를 요리해줬어요! (x${totalMult.toFixed(2)})`, 'catch');
+      playCookComplete();
+      grantAbility('요리', COOK_ABILITY_GAIN * raw.length);
+      advanceQuest('cook', raw.length);
+    } else if (npcName === '미나') {
+      addMsg('🏨 미나: "편히 쉬고 가세요! 내일 퀘스트도 화이팅~"', 'info');
+      addMsg('💤 여관에서 휴식했습니다. 체력 어빌리티 +0.5!', 'catch');
+      grantAbility('체력', 0.5);
+    } else if (npcName === '철수') {
+      const inv = stateRef.current?.oreInventory ?? {};
+      const lines = Object.entries(inv)
+        .filter(([, n]) => n > 0)
+        .map(([k, n]) => `${k} ${n}개`);
+      if (lines.length > 0) {
+        addMsg(`⛏ 철수: "현재 광석: ${lines.join(', ')}. 상점에서 팔 수 있어요!"`, 'info');
+      } else {
+        addMsg('⛏ 철수: "광산에서 광석을 캐보세요! 희귀할수록 값이 비싸답니다."', 'info');
+      }
+    }
+  }, [addMsg, grantAbility, advanceQuest, stateRef]);
 
   return (
     <div className="root">
@@ -732,6 +1089,7 @@ export default function App() {
           gameRef={gameRef}
           onFishCaught={onFishCaught}
           onOreMined={onOreMined}
+          onHerbGathered={onHerbGathered}
           onActivityChange={onActivityChange}
           nickname={nickname}
           title={myTitle.label}
@@ -740,6 +1098,10 @@ export default function App() {
           onPlayerInspect={setInspectPlayer}
           onEnterRoom={handleEnterRoom}
           onNearDoorChange={setNearDoor}
+          hairColor={gs.hairColor}
+          bodyColor={gs.bodyColor}
+          skinColor={gs.skinColor}
+          gender={gs.gender}
         />
         {/* IndoorCanvas overlays when inside a room */}
         {indoorRoom && (
@@ -748,6 +1110,12 @@ export default function App() {
             nickname={nickname}
             gameRef={gameRef}
             onExit={handleExitRoom}
+            onNpcInteract={handleNpcInteract}
+            onNearNpcChange={setNearIndoorNpc}
+            hairColor={gs.hairColor}
+            bodyColor={gs.bodyColor}
+            skinColor={gs.skinColor}
+            gender={gs.gender}
           />
         )}
 
@@ -765,10 +1133,29 @@ export default function App() {
           )}
           {activity && (
             <div className={`hud-chip hud-active ${activity}`}>
-              {activity === 'fishing' ? '🐟 낚시 중…' : '⛏ 채굴 중…'}
+              {activity === 'fishing' ? '🐟 낚시 중…' : activity === 'gathering' ? '🌿 채집 중…' : '⛏ 채굴 중…'}
+            </div>
+          )}
+          {serverStats.totalFishCaught > 0 && (
+            <div className="hud-chip" style={{ color: 'rgba(255,220,100,0.7)', fontSize: 10 }}>
+              🌐 서버 {serverStats.totalFishCaught?.toLocaleString()}마리
             </div>
           )}
         </div>}
+        {!indoorRoom && weather?.canFish === false && (
+          <div className="weather-warning" style={{ position: 'absolute', top: 48, left: '50%', transform: 'translateX(-50%)', background: 'rgba(30,20,0,0.85)', color: '#ffcc44', border: '1px solid #ffaa00', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 700, zIndex: 50, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+            ⛈ 폭풍 중에는 낚시할 수 없습니다!
+          </div>
+        )}
+        {serverAnnouncements.length > 0 && (
+          <div className="server-announce-bar">
+            {serverAnnouncements.slice(0, 1).map(a => (
+              <div key={a.id} className="server-announce-msg">
+                📢 {a.message}
+              </div>
+            ))}
+          </div>
+        )}
 
 
         {/* Rank sidebar (desktop only) */}
@@ -780,6 +1167,8 @@ export default function App() {
           <button tabIndex={-1} onClick={() => setShowShop(v => !v)}>🏪 상점</button>
           <button tabIndex={-1} onClick={() => setShowStats(v => !v)}>📊 상태</button>
           <button tabIndex={-1} onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
+          <button tabIndex={-1} onClick={() => setShowQuest(v => !v)}>📋 퀘스트</button>
+          <button tabIndex={-1} onClick={() => setShowDex(v => !v)}>📖 도감</button>
         </div>}
 
         {/* Mobile controls: joystick + action buttons */}
@@ -795,6 +1184,9 @@ export default function App() {
             <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!광질')}>
               <span>⛏</span><span className="action-btn-label">광질</span>
             </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!채집')}>
+              <span>🌿</span><span className="action-btn-label">채집</span>
+            </button>
             <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
               <span>🛑</span><span className="action-btn-label">그만</span>
             </button>
@@ -804,9 +1196,20 @@ export default function App() {
             <button className="action-btn" tabIndex={-1} onClick={() => setShowRank(true)}>
               <span>🏆</span><span className="action-btn-label">랭킹</span>
             </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => setShowQuest(v => !v)}>
+              <span>📋</span><span className="action-btn-label">퀘스트</span>
+            </button>
+            <button className="action-btn" tabIndex={-1} onClick={() => setShowDex(v => !v)}>
+              <span>📖</span><span className="action-btn-label">도감</span>
+            </button>
             {nearDoor && !indoorRoom && (
               <button className="action-btn action-btn-enter" tabIndex={-1} onClick={() => gameRef.current?.enterRoom?.()}>
                 <span>🚪</span><span className="action-btn-label">입장</span>
+              </button>
+            )}
+            {nearIndoorNpc && indoorRoom && (
+              <button className="action-btn action-btn-enter" tabIndex={-1} onClick={() => handleNpcInteract(nearIndoorNpc.name)}>
+                <span>💬</span><span className="action-btn-label">대화</span>
               </button>
             )}
           </div>
@@ -921,6 +1324,20 @@ export default function App() {
                     <span className="gold">{(ORES[ore]?.price ?? 0) * cnt}G 상당</span>
                   </div>
                 ))}
+              </div>
+
+              <div className="section">
+                <div className="section-title">허브</div>
+                {Object.keys(gs.herbInventory ?? {}).filter(k => (gs.herbInventory[k] ?? 0) > 0).length === 0
+                  ? <div className="empty">허브 없음 (숲에서 채집)</div>
+                  : Object.entries(gs.herbInventory ?? {}).filter(([, n]) => n > 0).map(([herb, cnt]) => (
+                    <div key={herb} className="ore-row">
+                      <span className="grow" style={{ color: HERBS[herb]?.color ?? '#8c4' }}>🌿 {herb}</span>
+                      <span className="dim">{cnt}개</span>
+                      <span className="gold">{(HERBS[herb]?.price ?? 0) * cnt}G 상당</span>
+                    </div>
+                  ))
+                }
               </div>
 
               <div className="section">
@@ -1072,6 +1489,8 @@ export default function App() {
                                   [name]: doGradeUp(prev.abilities?.[name] ?? { value: 100, grade: 0 }) },
                               }));
                               addMsg(`🌟 ${def.icon} ${name} 그레이드 ${ab.grade + 1} 달성! 희귀 보너스 +${((ab.grade + 1) * 10)}%`, 'catch');
+                              playLevelUp();
+                              if (gameRef.current) gameRef.current.levelUpEffect = { age: 0 };
                             }}>
                               ⬆️ 그레이드업 → G{ab.grade + 1}
                             </button>
@@ -1178,6 +1597,78 @@ export default function App() {
                           style={{ width: `${Math.min(100, val)}%`, background: def.color }} />
                       </div>
                       <span className="inspect-skill-lv">{val.toFixed(1)}{grade > 0 ? ` G${grade}` : ''}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quest modal */}
+      {showQuest && (
+        <div className="overlay" onClick={() => setShowQuest(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>📋 오늘의 퀘스트</span>
+              <button tabIndex={-1} onClick={() => setShowQuest(false)}>✕</button>
+            </div>
+            <div className="section">
+              {(gs.dailyQuests ?? []).map(q => {
+                const cur = Math.min(q.goal, (gs.questProgress ?? {})[q.id] ?? 0);
+                const done = cur >= q.goal;
+                const pct = Math.round((cur / q.goal) * 100);
+                return (
+                  <div key={q.id} className="quest-card" style={{ opacity: done ? 0.6 : 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, color: done ? '#88ff88' : '#ffe0a0' }}>{done ? '✅ ' : ''}{q.label}</span>
+                      <span style={{ color: '#ffcc44', fontSize: 12 }}>+{q.reward}G</span>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 8, overflow: 'hidden', marginBottom: 3 }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: done ? '#44ff88' : '#4488ff', borderRadius: 4, transition: 'width 0.3s' }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: '#aaa' }}>{cur} / {q.goal} {done ? '완료!' : ''}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ padding: '8px 16px', fontSize: 11, color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>
+              퀘스트는 매일 자정에 초기화됩니다
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fish encyclopedia modal */}
+      {showDex && (
+        <div className="overlay" onClick={() => setShowDex(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>📖 물고기 도감</span>
+              <button tabIndex={-1} onClick={() => setShowDex(false)}>✕</button>
+            </div>
+            <div style={{ padding: '0 16px 8px' }}>
+              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 6 }}>
+                수집: {(gs.caughtSpecies ?? []).length} / {Object.keys(FISH).length}
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 6, marginBottom: 12 }}>
+                <div style={{ width: `${((gs.caughtSpecies?.length ?? 0) / Object.keys(FISH).length) * 100}%`, height: '100%', background: '#44ffaa', borderRadius: 4 }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {Object.entries(FISH).map(([fishName, fd]) => {
+                  const caught = (gs.caughtSpecies ?? []).includes(fishName);
+                  return (
+                    <div key={fishName} style={{
+                      background: caught ? 'rgba(68,255,170,0.1)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${caught ? 'rgba(68,255,170,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                      borderRadius: 6, padding: '6px 10px',
+                      opacity: caught ? 1 : 0.5,
+                    }}>
+                      <div style={{ fontWeight: 700, fontSize: 12, color: caught ? '#44ffaa' : '#888' }}>
+                        {caught ? '✓ ' : '? '}{fishName}
+                      </div>
+                      {caught && <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~</div>}
                     </div>
                   );
                 })}
@@ -1339,6 +1830,60 @@ export default function App() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* ── Sell ore ── */}
+            <div className="section">
+              <div className="section-title">광석 판매</div>
+              {Object.entries(gs.oreInventory ?? {}).every(([, n]) => n === 0)
+                ? <div className="empty">판매할 광석 없음</div>
+                : <div>
+                    {Object.entries(gs.oreInventory ?? {}).filter(([, n]) => n > 0).map(([ore, count]) => {
+                      const price = { 철광석: 80, 구리광석: 150, 수정: 400 }[ore] ?? 100;
+                      return (
+                        <div key={ore} className="rod-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ color: { 철광석: '#cc8844', 구리광석: '#44ccaa', 수정: '#aa66ff' }[ore] ?? '#fff', fontWeight: 700 }}>
+                            ⛏ {ore} ×{count}
+                          </span>
+                          <span style={{ color: '#ffcc44', fontSize: 12 }}>{(price * count).toLocaleString()}G</span>
+                          <button tabIndex={-1} className="btn-buy" onClick={() => {
+                            const total = price * count;
+                            setGs(prev => ({ ...prev, money: prev.money + total, oreInventory: { ...prev.oreInventory, [ore]: 0 } }));
+                            addMsg(`💰 ${ore} ${count}개 → ${total}G!`, 'catch');
+                            advanceQuest('sell', total);
+                          }}>판매</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+              }
+            </div>
+
+            {/* ── Sell herbs ── */}
+            <div className="section">
+              <div className="section-title">허브 판매</div>
+              {Object.keys(gs.herbInventory ?? {}).filter(k => (gs.herbInventory[k] ?? 0) > 0).length === 0
+                ? <div className="empty">판매할 허브 없음</div>
+                : <div>
+                    {Object.entries(gs.herbInventory ?? {}).filter(([, n]) => n > 0).map(([herb, count]) => {
+                      const price = HERBS[herb]?.price ?? 0;
+                      return (
+                        <div key={herb} className="rod-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ color: HERBS[herb]?.color ?? '#8c4', fontWeight: 700 }}>
+                            🌿 {herb} ×{count}
+                          </span>
+                          <span style={{ color: '#ffcc44', fontSize: 12 }}>{(price * count).toLocaleString()}G</span>
+                          <button tabIndex={-1} className="btn-buy" onClick={() => {
+                            const total = price * count;
+                            setGs(prev => ({ ...prev, money: prev.money + total, herbInventory: { ...(prev.herbInventory ?? {}), [herb]: 0 } }));
+                            addMsg(`💰 ${herb} ${count}개 → ${total}G!`, 'catch');
+                            advanceQuest('sell', total);
+                          }}>판매</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+              }
             </div>
 
             {/* ── Sell fish ── */}
