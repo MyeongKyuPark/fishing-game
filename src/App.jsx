@@ -410,20 +410,6 @@ export default function App() {
     return subscribeServerStats(setServerStats);
   }, [nickname, roomId]);
 
-  // Server collective quest milestone announcements
-  useEffect(() => {
-    const prev = prevServerStatsRef.current;
-    const curr = serverStats;
-    const milestones = [1000, 5000, 10000, 50000, 100000];
-    for (const m of milestones) {
-      if ((prev.totalFishCaught ?? 0) < m && (curr.totalFishCaught ?? 0) >= m) {
-        addMsg(`🌍 서버 전체 물고기 ${m.toLocaleString()}마리 달성! 모든 플레이어 +500G 보상!`, 'catch');
-        setGs(prev2 => ({ ...prev2, money: prev2.money + 500 }));
-      }
-    }
-    prevServerStatsRef.current = curr;
-  }, [serverStats, addMsg]);
-
   // Sync speed bonus to game loop
   useEffect(() => {
     if (!gameRef.current) return;
@@ -503,6 +489,20 @@ export default function App() {
   const addMsg = useCallback((text, type = 'system') => {
     setMessages(prev => [...prev.slice(-120), { text, type }]);
   }, []);
+
+  // Server collective quest milestone announcements
+  useEffect(() => {
+    const prev = prevServerStatsRef.current;
+    const curr = serverStats;
+    const milestones = [1000, 5000, 10000, 50000, 100000];
+    for (const m of milestones) {
+      if ((prev.totalFishCaught ?? 0) < m && (curr.totalFishCaught ?? 0) >= m) {
+        addMsg(`🌍 서버 전체 물고기 ${m.toLocaleString()}마리 달성! 모든 플레이어 +500G 보상!`, 'catch');
+        setGs(prev2 => ({ ...prev2, money: prev2.money + 500 }));
+      }
+    }
+    prevServerStatsRef.current = curr;
+  }, [serverStats, addMsg]);
 
   // Grant ability EXP; shows grade-available message if reached 100
   const grantAbility = useCallback((abilName, amount) => {
