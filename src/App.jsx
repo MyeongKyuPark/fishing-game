@@ -17,7 +17,7 @@ import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
 import { getTitle, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
-import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb } from './mapData';
+import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS } from './mapData';
 
 const SKIN_PRESETS = ['#f6cc88', '#e8a870', '#c8845a', '#a06040', '#7a4830', '#fddbb4'];
 
@@ -105,13 +105,23 @@ function LoginScreen({ onLogin }) {
 }
 
 const QUEST_POOL = [
-  { id: 'fish10', label: '생선 10마리 잡기', goal: 10, type: 'fish', reward: 200 },
-  { id: 'fish25', label: '생선 25마리 잡기', goal: 25, type: 'fish', reward: 500 },
-  { id: 'ore5', label: '광석 5개 채굴', goal: 5, type: 'ore', reward: 300 },
-  { id: 'ore15', label: '광석 15개 채굴', goal: 15, type: 'ore', reward: 700 },
-  { id: 'cook5', label: '생선 5마리 요리', goal: 5, type: 'cook', reward: 250 },
-  { id: 'sell500', label: '500G 이상 판매', goal: 500, type: 'sell', reward: 400 },
-  { id: 'sell2000', label: '2000G 이상 판매', goal: 2000, type: 'sell', reward: 1000 },
+  { id: 'fish5',   label: '생선 5마리 잡기',      goal: 5,    type: 'fish', reward: 100 },
+  { id: 'fish10',  label: '생선 10마리 잡기',     goal: 10,   type: 'fish', reward: 200 },
+  { id: 'fish25',  label: '생선 25마리 잡기',     goal: 25,   type: 'fish', reward: 500 },
+  { id: 'fish50',  label: '생선 50마리 잡기',     goal: 50,   type: 'fish', reward: 1200 },
+  { id: 'ore3',    label: '광석 3개 채굴',         goal: 3,    type: 'ore',  reward: 150 },
+  { id: 'ore5',    label: '광석 5개 채굴',         goal: 5,    type: 'ore',  reward: 300 },
+  { id: 'ore15',   label: '광석 15개 채굴',        goal: 15,   type: 'ore',  reward: 700 },
+  { id: 'ore30',   label: '광석 30개 채굴',        goal: 30,   type: 'ore',  reward: 1500 },
+  { id: 'cook3',   label: '생선 3마리 요리',       goal: 3,    type: 'cook', reward: 150 },
+  { id: 'cook5',   label: '생선 5마리 요리',       goal: 5,    type: 'cook', reward: 250 },
+  { id: 'cook15',  label: '생선 15마리 요리',      goal: 15,   type: 'cook', reward: 600 },
+  { id: 'sell200', label: '200G 이상 판매',        goal: 200,  type: 'sell', reward: 200 },
+  { id: 'sell500', label: '500G 이상 판매',        goal: 500,  type: 'sell', reward: 400 },
+  { id: 'sell2000',label: '2000G 이상 판매',       goal: 2000, type: 'sell', reward: 1000 },
+  { id: 'sell8000',label: '8000G 이상 판매',       goal: 8000, type: 'sell', reward: 3000 },
+  { id: 'herb3',   label: '허브 3개 채집',         goal: 3,    type: 'herb', reward: 120 },
+  { id: 'herb10',  label: '허브 10개 채집',        goal: 10,   type: 'herb', reward: 350 },
 ];
 
 function getDailyQuests() {
@@ -120,7 +130,7 @@ function getDailyQuests() {
   for (let i = 0; i < dateStr.length; i++) hash = (hash * 31 + dateStr.charCodeAt(i)) >>> 0;
   const picked = [];
   const pool = [...QUEST_POOL];
-  for (let i = 0; i < 3 && pool.length > 0; i++) {
+  for (let i = 0; i < 4 && pool.length > 0; i++) {
     const idx = hash % pool.length;
     picked.push(pool.splice(idx, 1)[0]);
     hash = (hash * 1664525 + 1013904223) >>> 0;
@@ -146,6 +156,7 @@ const DEFAULT_STATE = {
   ownedCookware: [],
   dailyQuests: [],
   questProgress: {},
+  questClaimed: {},
   questDate: '',
   herbInventory: {},
   lastSaveTime: Date.now(),
@@ -196,6 +207,7 @@ function loadSave(nickname) {
       ownedCookware: s.ownedCookware ?? [],
       dailyQuests: s.dailyQuests ?? [],
       questProgress: s.questProgress ?? {},
+      questClaimed: s.questClaimed ?? {},
       questDate: s.questDate ?? '',
       herbInventory: s.herbInventory ?? {},
       lastSaveTime: s.lastSaveTime ?? Date.now(),
@@ -392,6 +404,8 @@ export default function App() {
   // Multiplayer: cleanup on page close
   const roomIdRef = useRef(null);
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
+  const indoorRoomRef = useRef(null);
+  useEffect(() => { indoorRoomRef.current = indoorRoom; }, [indoorRoom]);
   useEffect(() => {
     const onUnload = () => {
       if (nicknameRef.current && roomIdRef.current)
@@ -487,8 +501,10 @@ export default function App() {
     const { bonus, streak } = checkDailyBonus(nickname);
     const today = new Date().toDateString();
     const quests = getDailyQuests();
-    const questProgress = saved.questDate === today ? (saved.questProgress ?? {}) : {};
-    const base = { ...saved, dailyQuests: quests, questProgress, questDate: today };
+    const isNewDay = saved.questDate !== today;
+    const questProgress = isNewDay ? {} : (saved.questProgress ?? {});
+    const questClaimed = isNewDay ? {} : (saved.questClaimed ?? {});
+    const base = { ...saved, dailyQuests: quests, questProgress, questClaimed, questDate: today };
     if (!saved.firstLoginDate) {
       base.firstLoginDate = new Date().toISOString();
     }
@@ -583,7 +599,6 @@ export default function App() {
     setGs(prev => {
       const quests = prev.dailyQuests ?? [];
       const progress = { ...(prev.questProgress ?? {}) };
-      let moneyBonus = 0;
       const messages = [];
       for (const q of quests) {
         if (q.type !== type) continue;
@@ -592,17 +607,13 @@ export default function App() {
         const next_val = Math.min(q.goal, prev_val + amount);
         progress[q.id] = next_val;
         if (next_val >= q.goal && prev_val < q.goal) {
-          moneyBonus += q.reward;
-          messages.push(`🎉 퀘스트 완료: ${q.label} → +${q.reward}G!`);
+          messages.push(`🎉 퀘스트 달성: ${q.label}! 퀘스트창에서 수령하세요.`);
         }
       }
       if (messages.length > 0) {
-        setTimeout(() => {
-          messages.forEach(m => addMsg(m, 'catch'));
-          if (gameRef.current) gameRef.current.questCompleteEffect = { age: 0 };
-        }, 0);
+        setTimeout(() => { messages.forEach(m => addMsg(m, 'catch')); }, 0);
       }
-      return { ...prev, questProgress: progress, money: prev.money + moneyBonus };
+      return { ...prev, questProgress: progress };
     });
   }, [addMsg]);
 
@@ -798,7 +809,8 @@ export default function App() {
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `+${herbName}`, age: 0, color: HERBS[herbName]?.color ?? '#8c4' };
     grantAbility('체력', 0.1);
-  }, [addMsg, grantAbility]);
+    advanceQuest('herb');
+  }, [addMsg, grantAbility, advanceQuest]);
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
 
@@ -868,7 +880,7 @@ export default function App() {
     }
 
     if (cmd === '!요리') {
-      if (!nearCooking(player.x, player.y)) {
+      if (!nearCooking(player.x, player.y) && indoorRoomRef.current !== 'cooking') {
         addMsg('🍳 요리소 근처로 이동하세요! (지도 북쪽 요리소)', 'error');
         return;
       }
@@ -1263,7 +1275,15 @@ export default function App() {
   const myTitle = getTitle(gs);
 
   const handleEnterRoom = (id) => { playEnterRoom(); setIndoorRoom(id); };
-  const handleExitRoom = () => setIndoorRoom(null);
+  const handleExitRoom = () => {
+    // Teleport player to the door exit position
+    const door = DOOR_TRIGGERS.find(d => d.id === indoorRoom);
+    if (door && gameRef.current?.player) {
+      gameRef.current.player.x = door.exitWx;
+      gameRef.current.player.y = door.exitWy;
+    }
+    setIndoorRoom(null);
+  };
 
   return (
     <div className="root">
@@ -1816,17 +1836,39 @@ export default function App() {
               {(gs.dailyQuests ?? []).map(q => {
                 const cur = Math.min(q.goal, (gs.questProgress ?? {})[q.id] ?? 0);
                 const done = cur >= q.goal;
+                const claimed = !!(gs.questClaimed ?? {})[q.id];
                 const pct = Math.round((cur / q.goal) * 100);
                 return (
-                  <div key={q.id} className="quest-card" style={{ opacity: done ? 0.6 : 1 }}>
+                  <div key={q.id} className="quest-card" style={{ opacity: claimed ? 0.45 : 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <span style={{ fontWeight: 700, color: done ? '#88ff88' : '#ffe0a0' }}>{done ? '✅ ' : ''}{q.label}</span>
+                      <span style={{ fontWeight: 700, color: claimed ? '#aaa' : done ? '#88ff88' : '#ffe0a0' }}>
+                        {claimed ? '☑ ' : done ? '✅ ' : ''}{q.label}
+                      </span>
                       <span style={{ color: '#ffcc44', fontSize: 12 }}>+{q.reward}G</span>
                     </div>
-                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 8, overflow: 'hidden', marginBottom: 3 }}>
-                      <div style={{ width: `${pct}%`, height: '100%', background: done ? '#44ff88' : '#4488ff', borderRadius: 4, transition: 'width 0.3s' }} />
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 8, overflow: 'hidden', marginBottom: 4 }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: claimed ? '#666' : done ? '#44ff88' : '#4488ff', borderRadius: 4, transition: 'width 0.3s' }} />
                     </div>
-                    <div style={{ fontSize: 11, color: '#aaa' }}>{cur} / {q.goal} {done ? '완료!' : ''}</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#aaa' }}>{cur} / {q.goal}</span>
+                      {done && !claimed && (
+                        <button
+                          style={{ background: 'rgba(255,220,50,0.25)', color: '#ffdd44', border: '1px solid rgba(255,220,50,0.5)', borderRadius: 6, padding: '3px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}
+                          onClick={() => {
+                            setGs(prev => ({
+                              ...prev,
+                              money: prev.money + q.reward,
+                              questClaimed: { ...(prev.questClaimed ?? {}), [q.id]: true },
+                            }));
+                            addMsg(`🎁 퀘스트 보상 수령: +${q.reward}G!`, 'catch');
+                            if (gameRef.current) gameRef.current.questCompleteEffect = { age: 0 };
+                          }}
+                        >
+                          🎁 수령
+                        </button>
+                      )}
+                      {claimed && <span style={{ fontSize: 11, color: '#888' }}>수령 완료</span>}
+                    </div>
                   </div>
                 );
               })}

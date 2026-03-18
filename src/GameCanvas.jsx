@@ -1417,9 +1417,9 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
 
         const hasMarine = !!(gameRef.current?.marineGear);
         const nx = player.x + player.vx;
-        if (canWalk(nx, player.y, hasMarine)) player.x = nx; else player.vx = 0;
+        if (canWalk(nx, player.y, hasMarine)) player.x = Math.max(PW / 2, Math.min((MAP_W - 1) * TILE_SIZE - PW / 2, nx)); else player.vx = 0;
         const ny = player.y + player.vy;
-        if (canWalk(player.x, ny, hasMarine)) player.y = ny; else player.vy = 0;
+        if (canWalk(player.x, ny, hasMarine)) player.y = Math.max(PH / 2, Math.min((MAP_H - 1) * TILE_SIZE - PH / 2, ny)); else player.vy = 0;
 
         player.vx *= FRICTION;
         player.vy *= FRICTION;

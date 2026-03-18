@@ -269,8 +269,8 @@ html, body {
 
 /* Fish list */
 .fish-list {
-  display: flex; flex-direction: column; gap: 3px;
-  max-height: 220px; overflow-y: auto; margin-top: 8px;
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 380px; overflow-y: auto; margin-top: 8px;
 }
 .fish-row {
   display: flex; align-items: center; gap: 8px;
@@ -357,9 +357,10 @@ html, body {
 }
 .species-header {
   display: flex; align-items: center; gap: 6px;
-  padding: 5px 8px;
-  background: rgba(255,255,255,0.06);
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.10);
   font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 .species-rarity { font-size: 10px; min-width: 30px; }
 .species-name { font-weight: 700; flex: 1; }
