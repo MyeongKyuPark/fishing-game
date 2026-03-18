@@ -22,6 +22,8 @@ import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus
 import { getTitle, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS } from './mapData';
+import { ACHIEVEMENTS, checkAchievements } from './achievementData';
+import { PETS, PET_RARITY_COLOR } from './petData';
 
 const SKIN_PRESETS = ['#f6cc88', '#e8a870', '#c8845a', '#a06040', '#7a4830', '#fddbb4'];
 
@@ -182,6 +184,12 @@ const DEFAULT_STATE = {
   equippedJewelry: {},        // { ring: '수정반지', necklace: '황금목걸이' }
   potionInventory: {},        // { 이동속도포션: 2, ... }
   activePotion: null,         // { type, effectKey, value, expiresAt }
+  // Achievements
+  achievements: [],           // array of completed achievement ids
+  achStats: {},               // { fishCaught, oreMined, legendaryCount, mythicCount, speciesCount, herbGathered, maxMoney, totalSold, enhanceCount, smeltCount, cookCount, loginStreak }
+  // Pets
+  petEggs: {},                // { petKey: { boughtAt: timestamp, hatchAt: timestamp } }
+  activePet: null,            // petKey string
 };
 
 function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
@@ -233,6 +241,20 @@ function loadSave(nickname) {
       firstLoginDate: s.firstLoginDate ?? null,
       marineGear: s.marineGear ?? null,
       ownedMarineGear: s.ownedMarineGear ?? [],
+      pickaxe: s.pickaxe ?? '나무곡괭이',
+      ownedPickaxes: s.ownedPickaxes ?? ['나무곡괭이'],
+      pickaxeEnhance: s.pickaxeEnhance ?? { 나무곡괭이: 0 },
+      gatherTool: s.gatherTool ?? '맨손',
+      ownedGatherTools: s.ownedGatherTools ?? ['맨손'],
+      processedOreInventory: s.processedOreInventory ?? {},
+      jewelryInventory: s.jewelryInventory ?? [],
+      equippedJewelry: s.equippedJewelry ?? {},
+      potionInventory: s.potionInventory ?? {},
+      activePotion: s.activePotion ?? null,
+      achievements: s.achievements ?? [],
+      achStats: s.achStats ?? {},
+      petEggs: s.petEggs ?? {},
+      activePet: s.activePet ?? null,
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -513,6 +535,13 @@ export default function App() {
     gameRef.current.marineGear = gs.marineGear ?? null;
   }, [gs.marineGear]);
 
+  // Sync pet bonus to game loop
+  useEffect(() => {
+    if (!gameRef.current) return;
+    const pet = gs.activePet ? PETS[gs.activePet] : null;
+    gameRef.current.petBonus = pet?.bonus ?? {};
+  }, [gs.activePet]);
+
   // Sync equipped items visuals to game loop
   useEffect(() => {
     if (!gameRef.current) return;
@@ -634,7 +663,8 @@ export default function App() {
     const firstLogin = stateRef.current?.firstLoginDate;
     const isNewPlayer = firstLogin && (Date.now() - new Date(firstLogin).getTime()) < 7 * 24 * 60 * 60 * 1000;
     const newPlayerMult = isNewPlayer ? 2 : 1;
-    const result = gainAbility(current, amount * newPlayerMult, partyBonus);
+    const petAbilMult = gameRef.current?.petBonus?.abilGainMult ?? 1;
+    const result = gainAbility(current, amount * newPlayerMult * petAbilMult, partyBonus);
     if (result.reachedMax && current.value < 100) {
       const def = ABILITY_DEFS[abilName];
       setTimeout(() => addMsg(`🌟 ${def?.icon ?? ''} ${abilName} 100.00 달성! 스킬창에서 그레이드업 가능!`, 'catch'), 0);
@@ -677,6 +707,25 @@ export default function App() {
       return { ...prev, questProgress: progress };
     });
   }, [addMsg]);
+
+  const checkAndGrantAchievements = useCallback((updatedStats) => {
+    setGs(prev => {
+      const stats = updatedStats ?? prev.achStats ?? {};
+      const already = prev.achievements ?? [];
+      const newIds = checkAchievements(stats, already);
+      if (newIds.length === 0) return prev;
+      let bonusMoney = 0;
+      const msgs = [];
+      for (const id of newIds) {
+        const ach = ACHIEVEMENTS.find(a => a.id === id);
+        if (!ach) continue;
+        bonusMoney += ach.reward?.money ?? 0;
+        msgs.push(`${ach.icon} 업적 달성: [${ach.label}]! +${ach.reward?.money ?? 0}G`);
+      }
+      setTimeout(() => { msgs.forEach(m => addMsgRef.current(m, 'catch')); }, 0);
+      return { ...prev, achievements: [...already, ...newIds], money: prev.money + bonusMoney };
+    });
+  }, []);
 
   // ── Callbacks from game loop ──────────────────────────────────────────────
 
@@ -753,7 +802,8 @@ export default function App() {
     );
 
     const seaBonus = gameRef.current?.player?.seaFishing ? 1.5 : 1.0;
-    const finalPrice = Math.round(price * seaBonus);
+    const petSellBonus = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus);
     const seaMsg = seaBonus > 1 ? ' 🌊 바다낚시 보너스!' : '';
 
     // 3% line snap — lose the fish
@@ -781,7 +831,32 @@ export default function App() {
       });
     }
     const id = Date.now() + Math.random();
-    setGs(prev => ({ ...prev, fishInventory: [...prev.fishInventory, { name, size, price: finalPrice, id }], fishCaught: (prev.fishCaught ?? 0) + 1 }));
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const newFishCaught = (prevStats.fishCaught ?? 0) + 1;
+      const newLegendary = (prevStats.legendaryCount ?? 0) + (fd.rarity === '전설' ? 1 : 0);
+      const newMythic = (prevStats.mythicCount ?? 0) + (fd.rarity === '신화' ? 1 : 0);
+      const newSpeciesCount = (prev.caughtSpecies ?? []).includes(name)
+        ? (prevStats.speciesCount ?? (prev.caughtSpecies ?? []).length)
+        : (prevStats.speciesCount ?? (prev.caughtSpecies ?? []).length) + 1;
+      const newMoney = prev.money;
+      const newMaxMoney = Math.max(prevStats.maxMoney ?? 0, newMoney);
+      const updatedStats = {
+        ...prevStats,
+        fishCaught: newFishCaught,
+        legendaryCount: newLegendary,
+        mythicCount: newMythic,
+        speciesCount: newSpeciesCount,
+        maxMoney: newMaxMoney,
+      };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      return {
+        ...prev,
+        fishInventory: [...prev.fishInventory, { name, size, price: finalPrice, id }],
+        fishCaught: (prev.fishCaught ?? 0) + 1,
+        achStats: updatedStats,
+      };
+    });
     addMsg(`🐟 ${name} ${size}cm 낚음! (${finalPrice}G)${seaMsg}`, 'catch');
     playFishCatch(fd.rarity);
     if (nicknameRef.current) saveFishRecord(nicknameRef.current, name, size);
@@ -839,13 +914,19 @@ export default function App() {
     grantAbility('체력', STAMINA_GAIN);
     advanceQuest('fish');
 
-  }, [addMsg, grantAbility, advanceQuest]);
+  }, [addMsg, grantAbility, advanceQuest, checkAndGrantAchievements]);
 
   const onOreMined = useCallback((oreName) => {
-    setGs(prev => ({
-      ...prev,
-      oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + 1 },
-    }));
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + 1 };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      return {
+        ...prev,
+        oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + 1 },
+        achStats: updatedStats,
+      };
+    });
     addMsg(`⛏ ${oreName} 1개 채굴!`, 'mine');
     playOreMined();
     if (gameRef.current?.player)
@@ -866,20 +947,26 @@ export default function App() {
     grantAbility('채굴', ORE_ABILITY_GAIN[oreName] ?? 0.40);
     grantAbility('체력', STAMINA_GAIN);
     advanceQuest('ore');
-  }, [addMsg, grantAbility, advanceQuest]);
+  }, [addMsg, grantAbility, advanceQuest, checkAndGrantAchievements]);
 
   const onHerbGathered = useCallback((herbName) => {
-    setGs(prev => ({
-      ...prev,
-      herbInventory: { ...(prev.herbInventory ?? {}), [herbName]: ((prev.herbInventory ?? {})[herbName] || 0) + 1 },
-    }));
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const updatedStats = { ...prevStats, herbGathered: (prevStats.herbGathered ?? 0) + 1 };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      return {
+        ...prev,
+        herbInventory: { ...(prev.herbInventory ?? {}), [herbName]: ((prev.herbInventory ?? {})[herbName] || 0) + 1 },
+        achStats: updatedStats,
+      };
+    });
     addMsg(`🌿 ${herbName} 1개 채집!`, 'catch');
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `+${herbName}`, age: 0, color: HERBS[herbName]?.color ?? '#8c4' };
     grantAbility('체력', 0.1);
     grantAbility('채집', 0.5);
     advanceQuest('herb');
-  }, [addMsg, grantAbility, advanceQuest]);
+  }, [addMsg, grantAbility, advanceQuest, checkAndGrantAchievements]);
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
 
@@ -1007,8 +1094,9 @@ export default function App() {
         const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
         const enhEffect = rodEnhanceEffect(enhLevel);
         const potionFishBonus = (s.activePotion?.effect?.fishSpeedBonus ?? 0);
+        const petFishMult = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus)
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * petFishMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1048,8 +1136,9 @@ export default function App() {
       const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
       const enhEffect = rodEnhanceEffect(enhLevel);
       const potionFishBonus2 = (s.activePotion?.effect?.fishSpeedBonus ?? 0);
+      const petFishMult2 = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2)
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * petFishMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1078,7 +1167,8 @@ export default function App() {
       const { timeReduction: paxTimeRed } = pickaxeEnhanceEffect(pickaxeEnhLv);
       const paxMult = PICKAXES[pickaxeKey]?.timeMult ?? 1.0;
       const potionMineBonus = (s.activePotion?.effect?.mineSpeedBonus ?? 0);
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus));
+      const petMineMult = gameRef.current?.petBonus?.mineTimeMult ?? 1.0;
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * petMineMult);
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();
@@ -1729,7 +1819,7 @@ export default function App() {
 
             {/* Tabs */}
             <div className="stats-tabs">
-              {['장비', '어빌리티', '제련/제작'].map(tab => (
+              {['장비', '어빌리티', '제련/제작', '업적', '펫'].map(tab => (
                 <button key={tab} tabIndex={-1}
                   className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''}`}
                   onClick={() => setStatsTab(tab)}>{tab}</button>
@@ -2112,6 +2202,97 @@ export default function App() {
                         </div>
                       );
                     })}
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* ── 업적 tab ── */}
+            {statsTab === '업적' && (
+              <div className="section">
+                <div className="section-title">업적 ({(gs.achievements ?? []).length} / {ACHIEVEMENTS.length})</div>
+                {ACHIEVEMENTS.map(ach => {
+                  const val = gs.achStats?.[ach.type] ?? 0;
+                  const done = (gs.achievements ?? []).includes(ach.id);
+                  const pct = Math.min(100, Math.round((val / ach.goal) * 100));
+                  return (
+                    <div key={ach.id} className="rod-card" style={{ opacity: done ? 0.6 : 1, borderColor: done ? 'rgba(255,215,0,0.3)' : undefined }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontSize: 18 }}>{ach.icon}</span>
+                        <span style={{ fontWeight: 700, color: done ? '#ffdd44' : '#ffe0a0' }}>{ach.label}</span>
+                        {done && <span className="badge" style={{ background: '#886600' }}>완료</span>}
+                      </div>
+                      <div className="rod-meta">{ach.desc}</div>
+                      <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 6, overflow: 'hidden', margin: '4px 0' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: done ? '#886600' : '#4488ff', borderRadius: 4, transition: 'width 0.3s' }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: '#aaa' }}>{Math.min(val, ach.goal)} / {ach.goal} · 보상 {ach.reward.money}G</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── 펫 tab ── */}
+            {statsTab === '펫' && (() => {
+              const now = Date.now();
+              return (
+                <>
+                  {gs.activePet && (
+                    <div className="section">
+                      <div className="section-title">활성 펫</div>
+                      <div className="rod-card" style={{ borderColor: 'rgba(255,170,0,0.4)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 24 }}>{PETS[gs.activePet]?.icon}</span>
+                          <div>
+                            <div style={{ fontWeight: 700, color: PET_RARITY_COLOR[PETS[gs.activePet]?.rarity] ?? '#fff' }}>
+                              {PETS[gs.activePet]?.name}
+                            </div>
+                            <div className="rod-meta">{PETS[gs.activePet]?.desc}</div>
+                          </div>
+                          <button className="btn-dis" style={{ marginLeft: 'auto', fontSize: 11 }}
+                            onClick={() => { setGs(prev => ({ ...prev, activePet: null })); addMsg('펫 해제됨', 'system'); }}>
+                            해제
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="section">
+                    <div className="section-title">내 펫 / 알</div>
+                    {Object.keys(PETS).every(k => !(gs.petEggs ?? {})[k]) && !gs.activePet
+                      ? <div className="empty">보유한 펫 또는 알이 없습니다. 상점에서 구매하세요.</div>
+                      : Object.entries(PETS).map(([key, pet]) => {
+                          const egg = (gs.petEggs ?? {})[key];
+                          if (!egg) return null;
+                          const hatched = now >= egg.hatchAt;
+                          const isActive = gs.activePet === key;
+                          const remainMs = Math.max(0, egg.hatchAt - now);
+                          const remainMin = Math.ceil(remainMs / 60000);
+                          return (
+                            <div key={key} className="rod-card">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 22 }}>{hatched ? pet.icon : '🥚'}</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: 700, color: PET_RARITY_COLOR[pet.rarity] ?? '#fff' }}>
+                                    {hatched ? pet.name : `${pet.name} 알`}
+                                  </div>
+                                  <div className="rod-meta">
+                                    {hatched ? pet.desc : `부화까지 ${remainMin}분 남음`}
+                                  </div>
+                                </div>
+                                {hatched && !isActive && (
+                                  <button className="btn-eq" onClick={() => {
+                                    setGs(prev => ({ ...prev, activePet: key }));
+                                    addMsg(`${pet.icon} ${pet.name} 장착!`, 'catch');
+                                  }}>장착</button>
+                                )}
+                                {isActive && <span className="badge">장착됨</span>}
+                              </div>
+                            </div>
+                          );
+                        })
+                    }
                   </div>
                 </>
               );
@@ -2548,6 +2729,51 @@ export default function App() {
                             {canBuy ? (gt.price > 0 ? `${gt.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
                           </button>
                       }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Pet eggs ── */}
+            <div className="section">
+              <div className="section-title">🥚 펫 에그</div>
+              {Object.entries(PETS).map(([key, pet]) => {
+                const egg = (gs.petEggs ?? {})[key];
+                const canAfford = gs.money >= pet.eggPrice;
+                const hatchMs = pet.hatchMs;
+                const hatchMin = Math.round(hatchMs / 60000);
+                return (
+                  <div key={key} className="rod-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontSize: 20 }}>{pet.icon}</span>
+                      <span style={{ fontWeight: 700, color: PET_RARITY_COLOR[pet.rarity] ?? '#fff' }}>{pet.name}</span>
+                      <span style={{ fontSize: 11, color: PET_RARITY_COLOR[pet.rarity] ?? '#aaa' }}>[{pet.rarity}]</span>
+                      {egg && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">{pet.desc}</div>
+                    <div className="rod-meta">{pet.eggPrice}G · 부화 {hatchMin}분</div>
+                    <div style={{ marginTop: 5 }}>
+                      {egg ? (
+                        <span style={{ fontSize: 11, color: '#aaa' }}>
+                          {Date.now() >= egg.hatchAt ? '부화 완료! 스탯창 펫 탭에서 확인' : `부화까지 ${Math.ceil((egg.hatchAt - Date.now()) / 60000)}분`}
+                        </span>
+                      ) : (
+                        <button tabIndex={-1} className={canAfford ? 'btn-buy' : 'btn-dis'} disabled={!canAfford}
+                          onClick={() => {
+                            if (gs.money < pet.eggPrice) { addMsg('💰 골드 부족', 'error'); return; }
+                            const boughtAt = Date.now();
+                            const hatchAt = boughtAt + pet.hatchMs;
+                            setGs(prev => ({
+                              ...prev,
+                              money: prev.money - pet.eggPrice,
+                              petEggs: { ...(prev.petEggs ?? {}), [key]: { boughtAt, hatchAt } },
+                            }));
+                            addMsg(`🥚 ${pet.name} 알 구매! ${hatchMin}분 후 부화됩니다.`, 'catch');
+                          }}>
+                          {canAfford ? `${pet.eggPrice}G 구매` : '💰 골드 부족'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
