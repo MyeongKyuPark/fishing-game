@@ -291,6 +291,7 @@ export default function App() {
   const prevOtherPlayersRef = useRef([]);
   const lastPosRef = useRef({});
   const cmdTimestampsRef = useRef([]); // spam prevention
+  const addMsgRef = useRef((text, type) => setMessages(prev => [...prev.slice(-120), { text, type }]));
 
   const [nickname, setNickname] = useState('');
   const [roomId, setRoomId] = useState(null);
@@ -365,11 +366,11 @@ export default function App() {
         const currNicks = new Set(players.map(p => p.nickname));
         for (const p of players) {
           if (!prevNicks.has(p.nickname))
-            addMsg(`👤 ${p.nickname}님이 입장했습니다.`, 'system');
+            addMsgRef.current(`👤 ${p.nickname}님이 입장했습니다.`, 'system');
         }
         for (const p of prev) {
           if (!currNicks.has(p.nickname))
-            addMsg(`👤 ${p.nickname}님이 퇴장했습니다.`, 'system');
+            addMsgRef.current(`👤 ${p.nickname}님이 퇴장했습니다.`, 'system');
         }
       }
       firstCall = false;
@@ -479,10 +480,10 @@ export default function App() {
         setFishSurgeEvent({ fish, until });
         const fd = FISH[fish];
         const rarityLabel = fd?.rarity === '신화' ? '🌟 신화' : '⭐ 전설';
-        addMsg(`📣 [이벤트] ${rarityLabel} ${fish} 출몰! 30분간 출현 확률 상승!`, 'catch');
+        addMsgRef.current(`📣 [이벤트] ${rarityLabel} ${fish} 출몰! 30분간 출현 확률 상승!`, 'catch');
         const clearTimer = setTimeout(() => {
           setFishSurgeEvent(null);
-          addMsg(`📣 [이벤트] ${fish} 출몰 이벤트가 종료되었습니다.`, 'system');
+          addMsgRef.current(`📣 [이벤트] ${fish} 출몰 이벤트가 종료되었습니다.`, 'system');
         }, 30 * 60 * 1000);
         const nextTimer = scheduleNext();
         return () => { clearTimeout(clearTimer); clearTimeout(nextTimer); };
@@ -571,20 +572,20 @@ export default function App() {
         setGs({ ...base, money: saved.money + bonus });
       }
       setTimeout(() => {
-        addMsg(`🎁 오늘의 출석 보너스 +${bonus}G! (${streak}일 연속 접속)`, 'catch');
-        if (streak >= 14) addMsg(`🏆 14일 연속 접속! +1000G 추가 보너스!`, 'catch');
-        else if (streak >= 7) addMsg(`🌟 7일 연속 접속! +500G + 전설 미끼 1개 지급!`, 'catch');
-        else if (streak >= 3) addMsg(`⭐ 3일 연속 접속! +200G 추가 보너스!`, 'catch');
+        addMsgRef.current(`🎁 오늘의 출석 보너스 +${bonus}G! (${streak}일 연속 접속)`, 'catch');
+        if (streak >= 14) addMsgRef.current(`🏆 14일 연속 접속! +1000G 추가 보너스!`, 'catch');
+        else if (streak >= 7) addMsgRef.current(`🌟 7일 연속 접속! +500G + 전설 미끼 1개 지급!`, 'catch');
+        else if (streak >= 3) addMsgRef.current(`⭐ 3일 연속 접속! +200G 추가 보너스!`, 'catch');
       }, 1200);
     } else {
       setGs(base);
       if (streak > 1) {
-        setTimeout(() => addMsg(`🔥 ${streak}일 연속 접속 중!`, 'system'), 1200);
+        setTimeout(() => addMsgRef.current(`🔥 ${streak}일 연속 접속 중!`, 'system'), 1200);
       }
     }
     if (offlineReward > 0 && awayMins >= 5) {
       setGs(prev => ({ ...prev, money: prev.money + offlineReward }));
-      setTimeout(() => addMsg(`💤 자리 비운 ${awayMins}분 동안 +${offlineReward}G 획득! (최대 2시간)`, 'catch'), 1800);
+      setTimeout(() => addMsgRef.current(`💤 자리 비운 ${awayMins}분 동안 +${offlineReward}G 획득! (최대 2시간)`, 'catch'), 1800);
     }
   }, [nickname]);
 
@@ -598,6 +599,7 @@ export default function App() {
   const addMsg = useCallback((text, type = 'system') => {
     setMessages(prev => [...prev.slice(-120), { text, type }]);
   }, []);
+  useEffect(() => { addMsgRef.current = addMsg; }, [addMsg]);
 
   // Expire active potion (after addMsg to avoid TDZ)
   useEffect(() => {
