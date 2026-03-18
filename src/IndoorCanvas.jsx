@@ -309,21 +309,46 @@ function drawIndoorNPC(ctx, sx, sy, npc, speaking, now) {
 }
 
 // ── Player drawing (indoor) ───────────────────────────────────────────────────
-function drawIndoorPlayer(ctx, sx, sy, facing, nickname, hairColor, bodyColor, skinColor, gender) {
+function drawIndoorPlayer(ctx, sx, sy, facing, nickname, hairColor, bodyColor, skinColor, gender, marineGear = null) {
+  const isScuba = marineGear === '스쿠버다이빙세트';
+  const isBoat  = marineGear === '보트';
+
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
   ctx.beginPath(); ctx.ellipse(sx, sy + 5, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
 
-  // Body
-  ctx.fillStyle = bodyColor ?? '#5a7aaa';
-  ctx.beginPath(); ctx.roundRect(sx - 7, sy - 18, 14, 13, 3); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
-  ctx.beginPath(); ctx.roundRect(sx - 5, sy - 16, 6, 6, 2); ctx.fill();
+  // Scuba O2 tank (behind body)
+  if (isScuba) {
+    ctx.fillStyle = '#778899';
+    ctx.beginPath(); ctx.roundRect(sx - 12, sy - 19, 5, 11, 3); ctx.fill();
+    ctx.fillStyle = '#555566';
+    ctx.beginPath(); ctx.roundRect(sx - 11, sy - 22, 3, 3, 1); ctx.fill();
+  }
 
-  // Legs
-  ctx.fillStyle = '#4a5070';
+  // Body
+  const bodyCol = isScuba ? '#1a3a6a' : (bodyColor ?? '#5a7aaa');
+  ctx.fillStyle = bodyCol;
+  ctx.beginPath(); ctx.roundRect(sx - 7, sy - 18, 14, 13, 3); ctx.fill();
+  ctx.fillStyle = isScuba ? 'rgba(100,180,255,0.18)' : 'rgba(255,255,255,0.15)';
+  ctx.beginPath(); ctx.roundRect(sx - 5, sy - 16, 6, 6, 2); ctx.fill();
+  if (isScuba) { // wetsuit stripe
+    ctx.fillStyle = '#0066cc';
+    ctx.beginPath(); ctx.roundRect(sx - 7, sy - 12, 14, 3, 0); ctx.fill();
+  }
+
+  // Legs + shoes/flippers
+  ctx.fillStyle = isScuba ? '#0a1a4a' : '#4a5070';
   ctx.beginPath(); ctx.roundRect(sx - 7, sy - 6, 5, 12, 2); ctx.fill();
   ctx.beginPath(); ctx.roundRect(sx + 2, sy - 6, 5, 12, 2); ctx.fill();
+  if (isScuba) {
+    ctx.fillStyle = '#000077';
+    ctx.beginPath(); ctx.ellipse(sx - 4, sy + 7, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx + 4, sy + 7, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = '#3a2810';
+    ctx.beginPath(); ctx.ellipse(sx - 4, sy + 7, 5, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx + 4, sy + 7, 5, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+  }
 
   // Head
   const skin = skinColor ?? '#f6cc88';
@@ -331,13 +356,20 @@ function drawIndoorPlayer(ctx, sx, sy, facing, nickname, hairColor, bodyColor, s
   ctx.fillStyle = skin;
   ctx.beginPath(); ctx.arc(sx, sy - 24, 10, 0, Math.PI * 2); ctx.fill();
 
+  // Blush (hidden under scuba mask)
+  if (!isScuba) {
+    ctx.fillStyle = 'rgba(255,120,120,0.35)';
+    ctx.beginPath(); ctx.ellipse(sx - 7, sy - 21, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx + 7, sy - 21, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
   // Hair
   const hc = hairColor ?? '#5a3010';
   ctx.fillStyle = hc;
   ctx.beginPath(); ctx.arc(sx, sy - 28, 10, Math.PI, 0); ctx.fill();
   ctx.beginPath(); ctx.arc(sx - 9, sy - 23, 5, Math.PI * 1.1, Math.PI * 0.4); ctx.fill();
   ctx.beginPath(); ctx.arc(sx + 9, sy - 23, 5, Math.PI * 0.6, Math.PI * 1.9); ctx.fill();
-  if (isFemale) {
+  if (isFemale && !isScuba && !isBoat) {
     ctx.beginPath(); ctx.arc(sx - 12, sy - 22, 4, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
     ctx.beginPath(); ctx.arc(sx + 12, sy - 22, 4, Math.PI * 1.5, Math.PI * 0.5); ctx.fill();
     ctx.fillStyle = '#ff88aa';
@@ -347,30 +379,55 @@ function drawIndoorPlayer(ctx, sx, sy, facing, nickname, hairColor, bodyColor, s
     ctx.beginPath(); ctx.arc(sx + 9, sy - 33, 2, 0, Math.PI * 2); ctx.fill();
   }
 
-  // Eyes
-  ctx.fillStyle = '#333';
-  if (facing === 'up') {
-    ctx.beginPath(); ctx.arc(sx - 3, sy - 25, 1.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(sx + 3, sy - 25, 1.5, 0, Math.PI * 2); ctx.fill();
-  } else {
-    ctx.beginPath(); ctx.arc(sx - 3, sy - 24, 1.5, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(sx + 3, sy - 24, 1.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.beginPath(); ctx.arc(sx - 2.5, sy - 24.5, 0.7, 0, Math.PI * 2); ctx.fill();
+  // Eyes (hidden behind scuba mask)
+  if (!isScuba) {
+    ctx.fillStyle = '#333';
+    if (facing === 'up') {
+      ctx.beginPath(); ctx.arc(sx - 3, sy - 25, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx + 3, sy - 25, 1.5, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(sx - 3, sy - 24, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(sx + 3, sy - 24, 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(sx - 2.5, sy - 24.5, 0.7, 0, Math.PI * 2); ctx.fill();
+    }
   }
-  // Blush
-  ctx.fillStyle = 'rgba(255,120,120,0.35)';
-  ctx.beginPath(); ctx.ellipse(sx - 7, sy - 21, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(sx + 7, sy - 21, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Scuba mask
+  if (isScuba) {
+    ctx.fillStyle = 'rgba(60,140,255,0.55)';
+    ctx.beginPath(); ctx.roundRect(sx - 9, sy - 28, 18, 9, 5); ctx.fill();
+    ctx.strokeStyle = '#1a2255'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(sx - 9, sy - 28, 18, 9, 5); ctx.stroke();
+    ctx.fillStyle = 'rgba(200,235,255,0.45)';
+    ctx.beginPath(); ctx.roundRect(sx - 7, sy - 26, 5, 3, 2); ctx.fill();
+    ctx.strokeStyle = '#1a2255'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(sx - 9, sy - 24); ctx.lineTo(sx - 12, sy - 24); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sx + 9, sy - 24); ctx.lineTo(sx + 12, sy - 24); ctx.stroke();
+    ctx.fillStyle = '#99aabb';
+    ctx.beginPath(); ctx.roundRect(sx - 3, sy - 20, 6, 3, 1); ctx.fill();
+  }
+
+  // Captain hat
+  if (isBoat) {
+    ctx.fillStyle = '#1a2a50';
+    ctx.beginPath(); ctx.roundRect(sx - 9, sy - 38, 18, 8, [3, 3, 0, 0]); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(sx - 12, sy - 31, 24, 3, 2); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.roundRect(sx - 9, sy - 32, 18, 1.5, 0); ctx.fill();
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 6px serif'; ctx.textAlign = 'center';
+    ctx.fillText('⚓', sx, sy - 34);
+  }
 
   // Nickname
   ctx.font = 'bold 10px "Noto Sans KR", sans-serif';
   ctx.textAlign = 'center';
   ctx.strokeStyle = 'rgba(0,0,0,0.8)';
   ctx.lineWidth = 3;
-  ctx.strokeText(nickname, sx, sy - 38);
+  ctx.strokeText(nickname, sx, sy - 44);
   ctx.fillStyle = '#e8e8ff';
-  ctx.fillText(nickname, sx, sy - 38);
+  ctx.fillText(nickname, sx, sy - 44);
 }
 
 // ── Lantern glow for mine ─────────────────────────────────────────────────────
@@ -546,7 +603,7 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
       }
 
       // Player
-      drawIndoorPlayer(ctx, offX + player.x, offY + player.y, player.facing, nickname, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current);
+      drawIndoorPlayer(ctx, offX + player.x, offY + player.y, player.facing, nickname, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current, gameRef.current?.marineGear ?? null);
 
       // Header bar
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
