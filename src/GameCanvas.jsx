@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import {
   TILE_SIZE, MAP_W, MAP_H, TILE, TILE_COLOR, WALKABLE, RODS, ORES, HERBS, randInt,
 } from './gameData';
+import { playSwimSplash } from './soundManager';
 import {
   MAP_TILES, FISHING_CHAIRS, MINE_ENTRANCE,
   PLAYER_START_X, PLAYER_START_Y, pickOre, pickHerb,
@@ -1244,6 +1245,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
   const onEnterRoomRef = useRef(onEnterRoom);
   const onNearDoorChangeRef = useRef(onNearDoorChange);
   const nearDoorRef = useRef(null);
+  const lastSplashRef = useRef(0);
   const hairColorRef = useRef(hairColor ?? '#5a3010');
   const bodyColorRef = useRef(bodyColor ?? '#5a7aaa');
   const skinColorRef = useRef(skinColor ?? '#f6cc88');
@@ -1425,6 +1427,18 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
         player.vy *= FRICTION;
         if (Math.abs(player.vx) < 0.05) player.vx = 0;
         if (Math.abs(player.vy) < 0.05) player.vy = 0;
+
+        // Splash sound when moving on water
+        const isMoving = Math.abs(player.vx) > 0.5 || Math.abs(player.vy) > 0.5;
+        const onWaterTile = getTile(Math.floor(player.x / TILE_SIZE), Math.floor(player.y / TILE_SIZE)) === TILE.WATER;
+        if (isMoving && onWaterTile && hasMarine) {
+          const now2 = performance.now();
+          const interval = gameRef.current?.marineGear === '보트' ? 520 : 380;
+          if (now2 - lastSplashRef.current > interval) {
+            lastSplashRef.current = now2;
+            playSwimSplash();
+          }
+        }
 
       } else {
         // Cancel on movement key

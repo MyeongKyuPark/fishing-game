@@ -172,3 +172,41 @@ export function playLevelUp() {
     });
   } catch {}
 }
+
+export function playSwimSplash() {
+  try {
+    const ctx = getCtx(); if (!ctx) return;
+    resumeCtx(ctx);
+    const now = ctx.currentTime;
+
+    // Low-pitched white-noise burst (water splash body)
+    const bufSize = Math.floor(ctx.sampleRate * 0.18);
+    const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.25));
+    }
+    const src = ctx.createBufferSource();
+    const filter = ctx.createBiquadFilter();
+    const gain = ctx.createGain();
+    src.buffer = buf;
+    filter.type = 'bandpass';
+    filter.frequency.value = 600;
+    filter.Q.value = 0.4;
+    src.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    gain.gain.setValueAtTime(0.18, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    src.start(now);
+
+    // Short droplet high-freq ping
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.connect(oscGain); oscGain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1400 + Math.random() * 400, now);
+    osc.frequency.exponentialRampToValueAtTime(700, now + 0.09);
+    oscGain.gain.setValueAtTime(0.07, now);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    osc.start(now); osc.stop(now + 0.09);
+  } catch {}
+}
