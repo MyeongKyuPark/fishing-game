@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 import GameCanvas from './GameCanvas';
 import { playFishCatch, playFishingStart, playOreMined, playCookComplete, playSellSound, playEnterRoom, playNpcInteract, playLevelUp } from './soundManager';
+import { playBgm, stopBgm, setBgmVolume, getBgmVolume } from './bgm';
 import IndoorCanvas from './IndoorCanvas';
 import Chat from './Chat';
 import Joystick from './Joystick';
@@ -406,6 +407,25 @@ export default function App() {
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
   const indoorRoomRef = useRef(null);
   useEffect(() => { indoorRoomRef.current = indoorRoom; }, [indoorRoom]);
+
+  // BGM: switch track on room change (only when in a channel)
+  useEffect(() => {
+    if (!roomId) return;
+    const track = indoorRoom ?? 'outdoor';
+    playBgm(track);
+    return () => {};
+  }, [indoorRoom, roomId]);
+
+  // Stop BGM on unmount / tab hide
+  useEffect(() => {
+    const onHide = () => stopBgm();
+    const onShow = () => playBgm(indoorRoomRef.current ?? 'outdoor');
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) onHide(); else onShow();
+    });
+    return () => stopBgm();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     const onUnload = () => {
       if (nicknameRef.current && roomIdRef.current)

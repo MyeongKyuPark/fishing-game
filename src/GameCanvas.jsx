@@ -1462,7 +1462,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
       }
 
       // ── Door proximity ──
-      if (player.state === 'idle') {
+      {
         let closestDoor = null;
         for (const dt of DOOR_TRIGGERS) {
           if (Math.hypot(player.x - dt.wx, player.y - dt.wy) <= dt.range) {
@@ -1473,6 +1473,10 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
         if (closestDoor?.id !== nearDoorRef.current?.id) {
           nearDoorRef.current = closestDoor;
           onNearDoorChangeRef.current?.(closestDoor ? closestDoor.id : null);
+          // Auto-enter when player walks into door range
+          if (closestDoor && player.state === 'idle') {
+            onEnterRoomRef.current?.(closestDoor.id);
+          }
         }
         // Expose to gameRef for mobile button
         g.nearDoor = closestDoor?.id ?? null;
