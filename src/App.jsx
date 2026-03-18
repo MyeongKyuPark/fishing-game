@@ -273,6 +273,7 @@ export default function App() {
   const [roomTitle, setRoomTitle] = useState('');
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
   const [blocked, setBlocked] = useState(false);
+  const [fishSurgeEvent, setFishSurgeEvent] = useState(null);
 
   const [gs, setGs] = useState(DEFAULT_STATE);
   const [messages, setMessages] = useState([
@@ -412,7 +413,6 @@ export default function App() {
   }, [nickname, roomId]);
 
   // 전설어 출몰 이벤트: 20~40분마다 랜덤 희귀 물고기 30분 출몰 부스트
-  const [fishSurgeEvent, setFishSurgeEvent] = useState(null); // { fish, until }
   useEffect(() => { fishSurgeRef.current = fishSurgeEvent; }, [fishSurgeEvent]);
   useEffect(() => {
     if (!nickname) return;
