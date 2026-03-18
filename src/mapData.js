@@ -192,6 +192,12 @@ export function nearInn(px, py) {
   return Math.hypot(px - ix, py - iy) <= INN_RANGE;
 }
 
+export function isOnWater(px, py) {
+  const tx = Math.floor(px / TILE_SIZE);
+  const ty = Math.floor(py / TILE_SIZE);
+  return MAP_TILES[ty]?.[tx] === TILE.WATER;
+}
+
 export function nearestChair(px, py) {
   let nearest = null, minDist = Infinity;
   for (const chair of FISHING_CHAIRS) {

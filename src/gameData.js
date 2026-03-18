@@ -152,6 +152,27 @@ export const COOKWARE = {
     desc: '물고기 요리 → 가격 3.5배', upgradeMats: { 철광석: 3 } },
 };
 
+// ── Marine Gear (해양 장비) ───────────────────────────────────────────────────
+export const MARINE_GEAR = {
+  스쿠버다이빙세트: {
+    name: '스쿠버다이빙 세트',
+    price: 3000,
+    color: '#00aaff',
+    desc: '바다에서 자유롭게 이동 및 낚시 가능 (전설+ 확률 +30%)',
+    rareBoostRarities: ['희귀', '전설', '신화'],
+    rareMult: 1.3,
+  },
+  보트: {
+    name: '보트',
+    price: 5000,
+    color: '#cc6633',
+    desc: '바다에서 빠르게 이동, 낚시 가능 (전설+ 확률 +50%)',
+    upgradeMats: { 철광석: 5, 구리광석: 3 },
+    rareBoostRarities: ['희귀', '전설', '신화'],
+    rareMult: 1.5,
+  },
+};
+
 // ── Herbs ─────────────────────────────────────────────────────────────────────
 export const HERBS = {
   들풀:     { price: 25,  gatherRange: [3000,  6000],  color: '#88cc44' },

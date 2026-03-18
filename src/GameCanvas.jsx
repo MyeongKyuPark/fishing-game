@@ -21,10 +21,11 @@ function getTile(tx, ty) {
   return MAP_TILES[ty][tx];
 }
 
-function canWalk(x, y) {
+function canWalk(x, y, hasMarine = false) {
   const hw = PW / 2 - 1, hh = PH / 2 - 1;
   const ok = (cx, cy) => {
     const tile = getTile(Math.floor(cx / TILE_SIZE), Math.floor(cy / TILE_SIZE));
+    if (hasMarine && tile === TILE.WATER) return true; // marine gear allows water
     return WALKABLE[tile] ?? false;
   };
   return ok(x - hw, y - hh) && ok(x + hw, y - hh) && ok(x - hw, y + hh) && ok(x + hw, y + hh);
@@ -1303,10 +1304,11 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
         player.vx = Math.max(-maxSpd, Math.min(maxSpd, player.vx));
         player.vy = Math.max(-maxSpd, Math.min(maxSpd, player.vy));
 
+        const hasMarine = !!(gameRef.current?.marineGear);
         const nx = player.x + player.vx;
-        if (canWalk(nx, player.y)) player.x = nx; else player.vx = 0;
+        if (canWalk(nx, player.y, hasMarine)) player.x = nx; else player.vx = 0;
         const ny = player.y + player.vy;
-        if (canWalk(player.x, ny)) player.y = ny; else player.vy = 0;
+        if (canWalk(player.x, ny, hasMarine)) player.y = ny; else player.vy = 0;
 
         player.vx *= FRICTION;
         player.vy *= FRICTION;
@@ -1514,7 +1516,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
       if (ml[0] > 0 && ml[0] < W && ml[1] > 0 && ml[1] < H)
         ctx.fillText('광산 지역', ml[0], ml[1]);
 
-      // Level-up screen flash effect
+      // Level-up screen flash effect (milestones 25/50/75)
       const lvEffect = gameRef.current?.levelUpEffect;
       if (lvEffect) {
         lvEffect.age = (lvEffect.age ?? 0) + 1;
@@ -1528,28 +1530,285 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
           burst.addColorStop(1, `rgba(255,200,0,0)`);
           ctx.fillStyle = burst;
           ctx.fillRect(0, 0, W, H);
+          // Show "MAX!" text when ability reaches 100
+          if (lvEffect.type === 'max' && alpha > 0.15) {
+            const textA = Math.min(1, alpha * 4);
+            ctx.save();
+            ctx.globalAlpha = textA;
+            ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.shadowBlur = 12;
+            ctx.font = 'bold 36px "Noto Sans KR", sans-serif';
+            ctx.fillStyle = '#fff';
+            ctx.fillText(`${lvEffect.icon ?? '🌟'} ${lvEffect.abilName ?? ''} MAX!`, W / 2, H / 2 - 10);
+            ctx.font = '18px "Noto Sans KR", sans-serif';
+            ctx.fillStyle = '#ffee88';
+            ctx.fillText('스킬창에서 그레이드업 가능!', W / 2, H / 2 + 22);
+            ctx.restore();
+          }
         } else {
           gameRef.current.levelUpEffect = null;
         }
       }
 
-      // Rare fish screen flash effect
+      // Grade-up full-screen celebration effect
+      const gradeUpEff = gameRef.current?.gradeUpEffect;
+      if (gradeUpEff) {
+        gradeUpEff.age = (gradeUpEff.age ?? 0) + 1;
+
+        // Initialize particles on first frame
+        if (gradeUpEff.age === 1) {
+          const cx0 = W / 2, cy0 = H / 2;
+          gradeUpEff.particles = Array.from({ length: 90 }, (_, i) => {
+            const angle = (Math.PI * 2 * i) / 90 + (Math.random() - 0.5) * 0.25;
+            const speed = 4 + Math.random() * 11;
+            return {
+              x: cx0, y: cy0,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed - 3,
+              size: 6 + Math.random() * 10,
+              color: Math.random() < 0.55 ? (gradeUpEff.color ?? '#66aaff') : '#ffffff',
+              isStar: Math.random() < 0.5,
+              rot: Math.random() * Math.PI * 2,
+              rotSpeed: (Math.random() - 0.5) * 0.18,
+              lifespan: 90 + Math.floor(Math.random() * 70),
+              age: 0,
+            };
+          });
+        }
+
+        const DURATION = 180;
+        const t = gradeUpEff.age / DURATION;
+
+        if (t >= 1) {
+          gameRef.current.gradeUpEffect = null;
+        } else {
+          // Colored overlay flash
+          const overlayA = t < 0.08 ? (t / 0.08) * 0.45 : Math.max(0, 0.45 * (1 - (t - 0.08) / 0.45));
+          if (overlayA > 0) {
+            ctx.save();
+            ctx.globalAlpha = overlayA;
+            ctx.fillStyle = gradeUpEff.color ?? '#66aaff';
+            ctx.fillRect(0, 0, W, H);
+            const burstG = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.min(W, H) * 0.55);
+            burstG.addColorStop(0, `rgba(255,255,255,${overlayA * 1.8})`);
+            burstG.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = burstG;
+            ctx.fillRect(0, 0, W, H);
+            ctx.restore();
+          }
+
+          // Particles
+          for (const p of gradeUpEff.particles ?? []) {
+            p.age++;
+            p.vx *= 0.97;
+            p.vy = p.vy * 0.97 + 0.13;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.rot += p.rotSpeed;
+            const pA = Math.max(0, 1 - p.age / p.lifespan);
+            if (pA <= 0) continue;
+            ctx.save();
+            ctx.globalAlpha = pA;
+            ctx.fillStyle = p.color;
+            if (p.isStar) {
+              ctx.translate(p.x, p.y);
+              ctx.rotate(p.rot);
+              ctx.beginPath();
+              const s = p.size, inner = s * 0.42;
+              for (let j = 0; j < 10; j++) {
+                const r = j % 2 === 0 ? s : inner;
+                const a = (j * Math.PI) / 5 - Math.PI / 2;
+                if (j === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+                else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+              }
+              ctx.closePath();
+              ctx.fill();
+            } else {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+
+          // Text animation
+          const textA = t < 0.12 ? t / 0.12 : t > 0.72 ? Math.max(0, 1 - (t - 0.72) / 0.28) : 1;
+          if (textA > 0) {
+            const scale = t < 0.18 ? 0.25 + (t / 0.18) * 0.9 : t < 0.24 ? 1.15 - ((t - 0.18) / 0.06) * 0.15 : 1.0;
+            ctx.save();
+            ctx.globalAlpha = textA;
+            ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(0,0,0,0.95)';
+            ctx.shadowBlur = 18;
+            ctx.translate(W / 2, H / 2);
+            ctx.scale(scale, scale);
+
+            // "GRADE UP!" title
+            ctx.font = 'bold 58px "Noto Sans KR", sans-serif';
+            ctx.strokeStyle = gradeUpEff.color ?? '#66aaff';
+            ctx.lineWidth = 4;
+            ctx.strokeText('GRADE UP!', 0, -28);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('GRADE UP!', 0, -28);
+
+            // Ability + grade
+            ctx.font = 'bold 30px "Noto Sans KR", sans-serif';
+            ctx.fillStyle = gradeUpEff.color ?? '#66aaff';
+            ctx.shadowBlur = 10;
+            ctx.fillText(`${gradeUpEff.icon ?? ''} ${gradeUpEff.abilName ?? ''} → G${gradeUpEff.grade ?? '?'}`, 0, 20);
+
+            // Bonus text
+            ctx.font = '20px "Noto Sans KR", sans-serif';
+            ctx.fillStyle = '#ffdd88';
+            ctx.fillText(`✨ 희귀 보너스 +${(gradeUpEff.grade ?? 1) * 10}%`, 0, 60);
+
+            ctx.restore();
+          }
+        }
+      }
+
+      // Rare fish screen effect (전설/신화)
       const rareEff = gameRef.current?.rareEffect;
       if (rareEff) {
         rareEff.age = (rareEff.age ?? 0) + 1;
-        const rAlpha = Math.max(0, 0.6 - rareEff.age * 0.02);
-        if (rAlpha > 0) {
-          const rc2 = rareEff.color ?? '#ffaaff';
-          ctx.fillStyle = `rgba(${rc2 === '#ffaa00' ? '255,170,0' : '255,68,255'},${rAlpha * 0.35})`;
-          ctx.fillRect(0, 0, W, H);
-          const cx3 = W / 2, cy3 = H / 2;
-          const burst2 = ctx.createRadialGradient(cx3, cy3, 0, cx3, cy3, Math.min(W, H) * 0.5);
-          burst2.addColorStop(0, `rgba(${rc2 === '#ffaa00' ? '255,170,0' : '255,68,255'},${rAlpha * 0.7})`);
-          burst2.addColorStop(1, `rgba(${rc2 === '#ffaa00' ? '255,170,0' : '255,68,255'},0)`);
-          ctx.fillStyle = burst2;
-          ctx.fillRect(0, 0, W, H);
-        } else {
+
+        // Initialize on first frame
+        if (rareEff.age === 1) {
+          const px0 = player.x - camX;
+          const py0 = player.y - camY - 30;
+          const isMythic = rareEff.rarity === '신화';
+          const count = isMythic ? 80 : 55;
+          const palettes = {
+            신화: ['#ff44ff', '#ff88ff', '#ffaaff', '#ffffff', '#ff00aa', '#cc44ff'],
+            전설: ['#ffaa00', '#ffcc44', '#ffee88', '#ffffff', '#ff8800', '#ffe066'],
+          };
+          const pal = palettes[rareEff.rarity] ?? palettes['전설'];
+          rareEff.particles = Array.from({ length: count }, (_, i) => {
+            const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.3;
+            const speed = 3 + Math.random() * (isMythic ? 14 : 10);
+            return {
+              x: px0, y: py0,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed - 2,
+              size: 4 + Math.random() * 9,
+              color: pal[Math.floor(Math.random() * pal.length)],
+              isStar: Math.random() < 0.4,
+              rot: Math.random() * Math.PI * 2,
+              rotSpeed: (Math.random() - 0.5) * 0.15,
+              lifespan: 60 + Math.floor(Math.random() * 60),
+              age: 0,
+            };
+          });
+          rareEff.rings = Array.from({ length: isMythic ? 4 : 3 }, (_, i) => ({
+            x: px0, y: py0, r: 0,
+            maxR: 80 + i * 55,
+            delay: i * 7,
+          }));
+        }
+
+        const DURATION = rareEff.rarity === '신화' ? 210 : 160;
+        const t = rareEff.age / DURATION;
+
+        if (t >= 1) {
           gameRef.current.rareEffect = null;
+        } else {
+          // Overlay flash
+          const rAlpha = t < 0.06 ? (t / 0.06) * 0.35 : Math.max(0, 0.35 * (1 - (t - 0.06) / 0.38));
+          if (rAlpha > 0) {
+            ctx.save();
+            ctx.globalAlpha = rAlpha;
+            ctx.fillStyle = rareEff.color;
+            ctx.fillRect(0, 0, W, H);
+            const px1 = player.x - camX, py1 = player.y - camY - 30;
+            const burstR = ctx.createRadialGradient(px1, py1, 0, px1, py1, Math.min(W, H) * 0.55);
+            burstR.addColorStop(0, `rgba(255,255,255,${rAlpha * 1.6})`);
+            burstR.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.globalAlpha = 1;
+            ctx.fillStyle = burstR;
+            ctx.fillRect(0, 0, W, H);
+            ctx.restore();
+          }
+
+          // Expanding pulse rings
+          for (const ring of rareEff.rings ?? []) {
+            if (rareEff.age < ring.delay) continue;
+            const rAge = rareEff.age - ring.delay;
+            ring.r = Math.min(ring.maxR, rAge * 5.5);
+            const ringA = Math.max(0, 1 - ring.r / ring.maxR) * 0.65;
+            if (ringA <= 0) continue;
+            ctx.save();
+            ctx.globalAlpha = ringA;
+            ctx.strokeStyle = rareEff.color;
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(ring.x, ring.y, ring.r, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // Particles
+          for (const p of rareEff.particles ?? []) {
+            p.age++;
+            p.vx *= 0.96;
+            p.vy = p.vy * 0.96 + 0.14;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.rot += p.rotSpeed;
+            const pA = Math.max(0, 1 - p.age / p.lifespan);
+            if (pA <= 0) continue;
+            ctx.save();
+            ctx.globalAlpha = pA;
+            ctx.fillStyle = p.color;
+            if (p.isStar) {
+              ctx.translate(p.x, p.y);
+              ctx.rotate(p.rot);
+              ctx.beginPath();
+              const s = p.size, inner = s * 0.42;
+              for (let j = 0; j < 10; j++) {
+                const r2 = j % 2 === 0 ? s : inner;
+                const a2 = (j * Math.PI) / 5 - Math.PI / 2;
+                if (j === 0) ctx.moveTo(Math.cos(a2) * r2, Math.sin(a2) * r2);
+                else ctx.lineTo(Math.cos(a2) * r2, Math.sin(a2) * r2);
+              }
+              ctx.closePath();
+              ctx.fill();
+            } else {
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.restore();
+          }
+
+          // Fish name + rarity text
+          const textA = t < 0.1 ? t / 0.1 : t > 0.65 ? Math.max(0, 1 - (t - 0.65) / 0.35) : 1;
+          if (textA > 0) {
+            const scale = t < 0.15 ? 0.2 + (t / 0.15) * 0.9 : t < 0.22 ? 1.1 - ((t - 0.15) / 0.07) * 0.1 : 1.0;
+            const label = rareEff.rarity === '신화' ? '🌟 신화어 출현!' : '⭐ 전설어!';
+            ctx.save();
+            ctx.globalAlpha = textA;
+            ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(0,0,0,0.95)';
+            ctx.shadowBlur = 16;
+            ctx.translate(W / 2, H * 0.3);
+            ctx.scale(scale, scale);
+
+            ctx.font = 'bold 44px "Noto Sans KR", sans-serif';
+            ctx.strokeStyle = rareEff.rarity === '신화' ? '#aa00aa' : '#aa6600';
+            ctx.lineWidth = 3;
+            ctx.strokeText(label, 0, -22);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(label, 0, -22);
+
+            ctx.font = 'bold 28px "Noto Sans KR", sans-serif';
+            ctx.fillStyle = rareEff.color;
+            ctx.shadowBlur = 10;
+            ctx.fillText(`${rareEff.fishName ?? ''} ${rareEff.size ?? ''}cm`, 0, 18);
+
+            ctx.restore();
+          }
         }
       }
 
@@ -1570,6 +1829,93 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
         ctx.textAlign = 'center';
         ctx.fillText(fp.emoji, fp.x - camX, fp.y - camY);
         ctx.restore();
+      }
+
+      // Treasure chest discovery effect
+      const treasureEff = gameRef.current?.treasureEffect;
+      if (treasureEff) {
+        treasureEff.age = (treasureEff.age ?? 0) + 1;
+        const TDUR = 120;
+        const tt = treasureEff.age / TDUR;
+        if (tt >= 1) {
+          gameRef.current.treasureEffect = null;
+        } else {
+          const tA = tt < 0.1 ? tt / 0.1 : tt > 0.6 ? Math.max(0, 1 - (tt - 0.6) / 0.4) : 1;
+          if (tA > 0) {
+            const tScale = tt < 0.15 ? 0.3 + (tt / 0.15) * 0.8 : tt < 0.2 ? 1.1 - ((tt - 0.15) / 0.05) * 0.1 : 1.0;
+            ctx.save();
+            ctx.globalAlpha = tA * 0.28;
+            ctx.fillStyle = '#ffdd00';
+            ctx.fillRect(0, 0, W, H);
+            ctx.globalAlpha = tA;
+            ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(0,0,0,0.9)';
+            ctx.shadowBlur = 14;
+            ctx.translate(W / 2, H * 0.35);
+            ctx.scale(tScale, tScale);
+            ctx.font = 'bold 40px serif';
+            ctx.fillText('💰 보물상자 발견!', 0, -10);
+            ctx.font = 'bold 26px "Noto Sans KR", sans-serif';
+            ctx.fillStyle = '#ffee88';
+            ctx.fillText(`+${(treasureEff.amount ?? 0).toLocaleString()}G`, 0, 30);
+            ctx.restore();
+          }
+        }
+      }
+
+      // Quest complete effect
+      const questEff = gameRef.current?.questCompleteEffect;
+      if (questEff) {
+        questEff.age = (questEff.age ?? 0) + 1;
+        const QDUR = 100;
+        const qt = questEff.age / QDUR;
+        if (qt >= 1) {
+          gameRef.current.questCompleteEffect = null;
+        } else {
+          const qA = qt < 0.12 ? qt / 0.12 : qt > 0.65 ? Math.max(0, 1 - (qt - 0.65) / 0.35) : 1;
+          if (qA > 0) {
+            const qScale = qt < 0.18 ? 0.3 + (qt / 0.18) * 0.8 : 1.0;
+            ctx.save();
+            ctx.globalAlpha = qA * 0.22;
+            ctx.fillStyle = '#44ff88';
+            ctx.fillRect(0, 0, W, H);
+            ctx.globalAlpha = qA;
+            ctx.textAlign = 'center';
+            ctx.shadowColor = 'rgba(0,0,0,0.9)';
+            ctx.shadowBlur = 12;
+            ctx.translate(W / 2, H * 0.35);
+            ctx.scale(qScale, qScale);
+            ctx.font = 'bold 36px "Noto Sans KR", sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('🎉 퀘스트 완료!', 0, 0);
+            ctx.restore();
+          }
+        }
+      }
+
+      // Marine gear visual (boat icon when on water)
+      if (gameRef.current?.marineGear) {
+        const psx = player.x - camX, psy = player.y - camY;
+        const tile = getTile(Math.floor(player.x / TILE_SIZE), Math.floor(player.y / TILE_SIZE));
+        if (tile === TILE.WATER) {
+          const isBoat = gameRef.current.marineGear === '보트';
+          ctx.save();
+          ctx.font = `${isBoat ? 22 : 18}px serif`;
+          ctx.textAlign = 'center';
+          ctx.globalAlpha = 0.9;
+          ctx.fillText(isBoat ? '🚤' : '🤿', psx, psy + 18);
+          // Water ripple rings under player
+          const rAge = (performance.now() / 400) % (Math.PI * 2);
+          ctx.strokeStyle = 'rgba(100,200,255,0.4)';
+          ctx.lineWidth = 1.5;
+          for (let ri = 0; ri < 2; ri++) {
+            const rr = 14 + ri * 10 + Math.sin(rAge + ri) * 3;
+            ctx.beginPath();
+            ctx.ellipse(psx, psy + 14, rr, rr * 0.35, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
       }
 
       // Other players

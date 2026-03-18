@@ -10,14 +10,14 @@ import RankSidebar from './RankSidebar';
 import ChannelLobby from './ChannelLobby';
 import { saveFishRecord, savePlayerTitle, broadcastAnnouncement, subscribeAnnouncements, incrementServerStat, subscribeServerStats } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
-import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, weightedPick, randInt, TILE_SIZE,
+import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
 import { getTitle, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
-import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, CHAIR_RANGE, pickOre, pickHerb } from './mapData';
+import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb } from './mapData';
 
 const SKIN_PRESETS = ['#f6cc88', '#e8a870', '#c8845a', '#a06040', '#7a4830', '#fddbb4'];
 
@@ -155,6 +155,9 @@ const DEFAULT_STATE = {
   gender: 'male',
   caughtSpecies: [],
   firstLoginDate: null,
+  marineGear: null,
+  ownedMarineGear: [],
+  autoFish: false,
 };
 
 function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
@@ -203,6 +206,9 @@ function loadSave(nickname) {
       gender: s.gender ?? 'male',
       caughtSpecies: s.caughtSpecies ?? [],
       firstLoginDate: s.firstLoginDate ?? null,
+      marineGear: s.marineGear ?? null,
+      ownedMarineGear: s.ownedMarineGear ?? [],
+      autoFish: s.autoFish ?? false,
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -253,6 +259,7 @@ export default function App() {
   const gameRef = useRef({});
   const stateRef = useRef(null);
   const weatherRef = useRef(null);
+  const fishSurgeRef = useRef(null);
   const tabId = useRef(Date.now() + '-' + Math.random());
   const channelRef = useRef(null);
   const nicknameRef = useRef('');
@@ -404,6 +411,33 @@ export default function App() {
     return subscribeAnnouncements(setServerAnnouncements);
   }, [nickname, roomId]);
 
+  // 전설어 출몰 이벤트: 20~40분마다 랜덤 희귀 물고기 30분 출몰 부스트
+  const [fishSurgeEvent, setFishSurgeEvent] = useState(null); // { fish, until }
+  useEffect(() => { fishSurgeRef.current = fishSurgeEvent; }, [fishSurgeEvent]);
+  useEffect(() => {
+    if (!nickname) return;
+    const RARE_FISH = ['감성돔', '우럭', '뱀장어', '황새치', '용고기', '고대어'];
+    const scheduleNext = () => {
+      const delay = (20 + Math.floor(Math.random() * 20)) * 60 * 1000; // 20~40분
+      return setTimeout(() => {
+        const fish = RARE_FISH[Math.floor(Math.random() * RARE_FISH.length)];
+        const until = Date.now() + 30 * 60 * 1000; // 30분
+        setFishSurgeEvent({ fish, until });
+        const fd = FISH[fish];
+        const rarityLabel = fd?.rarity === '신화' ? '🌟 신화' : '⭐ 전설';
+        addMsg(`📣 [이벤트] ${rarityLabel} ${fish} 출몰! 30분간 출현 확률 상승!`, 'catch');
+        const clearTimer = setTimeout(() => {
+          setFishSurgeEvent(null);
+          addMsg(`📣 [이벤트] ${fish} 출몰 이벤트가 종료되었습니다.`, 'system');
+        }, 30 * 60 * 1000);
+        const nextTimer = scheduleNext();
+        return () => { clearTimeout(clearTimer); clearTimeout(nextTimer); };
+      }, delay);
+    };
+    const t = scheduleNext();
+    return () => clearTimeout(t);
+  }, [nickname]);
+
   // Subscribe to server-wide stats when logged in
   useEffect(() => {
     if (!nickname || !roomId) return;
@@ -416,6 +450,12 @@ export default function App() {
     const bootsBonus = BOOTS[gs.boots]?.speedBonus ?? 0;
     gameRef.current.speedBonus = bootsBonus;
   }, [gs.boots]);
+
+  // Sync marine gear to game loop
+  useEffect(() => {
+    if (!gameRef.current) return;
+    gameRef.current.marineGear = gs.marineGear ?? null;
+  }, [gs.marineGear]);
 
   // Weather: deterministic per room+time, update when period changes
   const [weather, setWeather] = useState(() => getWeather(null, Date.now()));
@@ -464,7 +504,7 @@ export default function App() {
       setTimeout(() => {
         addMsg(`🎁 오늘의 출석 보너스 +${bonus}G! (${streak}일 연속 접속)`, 'catch');
         if (streak >= 14) addMsg(`🏆 14일 연속 접속! +1000G 추가 보너스!`, 'catch');
-        else if (streak >= 7) addMsg(`🌟 7일 연속 접속! +500G 추가 보너스! 특별 보상 지급!`, 'catch');
+        else if (streak >= 7) addMsg(`🌟 7일 연속 접속! +500G + 전설 미끼 1개 지급!`, 'catch');
         else if (streak >= 3) addMsg(`⭐ 3일 연속 접속! +200G 추가 보너스!`, 'catch');
       }, 1200);
     } else {
@@ -515,12 +555,17 @@ export default function App() {
     if (result.reachedMax && current.value < 100) {
       const def = ABILITY_DEFS[abilName];
       setTimeout(() => addMsg(`🌟 ${def?.icon ?? ''} ${abilName} 100.00 달성! 스킬창에서 그레이드업 가능!`, 'catch'), 0);
+      if (gameRef.current) {
+        gameRef.current.levelUpEffect = { age: 0, type: 'max', abilName, icon: def?.icon, color: def?.color };
+      }
     }
-    // Level-up flash at 25/50/75 milestones
-    const milestones = [25, 50, 75];
-    const crossedMilestone = milestones.some(m => current.value < m && result.value >= m);
-    if (crossedMilestone && gameRef.current) {
-      gameRef.current.levelUpEffect = { age: 0 };
+    // Level-up flash at 25/50/75 milestones (only if not already at max)
+    if (!result.reachedMax || current.value >= 100) {
+      const milestones = [25, 50, 75];
+      const crossedMilestone = milestones.some(m => current.value < m && result.value >= m);
+      if (crossedMilestone && gameRef.current) {
+        gameRef.current.levelUpEffect = { age: 0 };
+      }
     }
     setGs(prev => ({
       ...prev,
@@ -546,7 +591,10 @@ export default function App() {
         }
       }
       if (messages.length > 0) {
-        setTimeout(() => messages.forEach(m => addMsg(m, 'catch')), 0);
+        setTimeout(() => {
+          messages.forEach(m => addMsg(m, 'catch'));
+          if (gameRef.current) gameRef.current.questCompleteEffect = { age: 0 };
+        }, 0);
       }
       return { ...prev, questProgress: progress, money: prev.money + moneyBonus };
     });
@@ -580,6 +628,21 @@ export default function App() {
     if (partySize >= 1) {
       const partyBoost = Math.min(0.3, partySize * 0.08); // up to 30% boost for 4 players
       table = applyBoosts(table, { 희귀: 1 + partyBoost, 전설: 1 + partyBoost * 1.5, 신화: 1 + partyBoost * 2 });
+    }
+
+    // Marine gear rare boost (스쿠버다이빙세트 / 보트)
+    const marineKey = s?.marineGear;
+    const marineData = marineKey ? MARINE_GEAR[marineKey] : null;
+    if (marineData && gameRef.current?.player?.seaFishing) {
+      const boost = {};
+      for (const r of (marineData.rareBoostRarities ?? [])) boost[r] = marineData.rareMult;
+      table = applyBoosts(table, boost);
+    }
+
+    // 전설어 출몰 이벤트 부스트
+    const surge = fishSurgeRef.current;
+    if (surge && Date.now() < surge.until) {
+      table = table.map(e => e.f === surge.fish ? { ...e, w: e.w * 4.0 } : e);
     }
 
     // Bait boost
@@ -624,6 +687,7 @@ export default function App() {
       addMsg(`💰 낚시 중 보물상자 발견! +${treasure}G`, 'catch');
       if (gameRef.current?.player)
         gameRef.current.player.floatText = { text: `보물상자 +${treasure}G`, age: 0, color: '#ffdd00' };
+      if (gameRef.current) gameRef.current.treasureEffect = { age: 0, amount: treasure };
     }
 
     if (baitData?.type === 'once') {
@@ -643,7 +707,7 @@ export default function App() {
     // Legendary/Mythic broadcast + rare visual effect
     if (fd.rarity === '전설' || fd.rarity === '신화') {
       broadcastAnnouncement(`${nicknameRef.current}님이 ${size}cm ${name}을(를) 낚았습니다! ${fd.rarity === '신화' ? '🌟 신화어 출현!' : '⭐ 전설어!'}`);
-      if (gameRef.current) gameRef.current.rareEffect = { age: 0, color: rarityColor(fd.rarity) };
+      if (gameRef.current) gameRef.current.rareEffect = { age: 0, color: rarityColor(fd.rarity), rarity: fd.rarity, fishName: name, size };
     }
 
     // Spawn fish jump particles for rare+
@@ -689,6 +753,16 @@ export default function App() {
     grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
     grantAbility('체력', STAMINA_GAIN);
     advanceQuest('fish');
+
+    // Auto-fish: restart fishing after a 1s delay
+    if (stateRef.current?.autoFish) {
+      setTimeout(() => {
+        const p = gameRef.current?.player;
+        if (p?.state === 'fishing' || p?.state === 'idle') {
+          // Already restarted by the game loop (loop restarts on completion), no action needed
+        }
+      }, 500);
+    }
   }, [addMsg, grantAbility, advanceQuest]);
 
   const onOreMined = useCallback((oreName) => {
@@ -837,12 +911,43 @@ export default function App() {
 
     if (cmd === '!낚시') {
       if (player.state !== 'idle') { addMsg('먼저 !그만 으로 중지하세요.'); return; }
-      const nearest = nearestChair(player.x, player.y);
-      if (!nearest || nearest.dist > CHAIR_RANGE) {
-        addMsg('🪑 낚시 의자 근처로 이동하세요! (지도 아래쪽 낚시터)', 'error');
+      if (weatherRef.current?.canFish === false) {
+        addMsg(`${weatherRef.current.icon} 폭풍 중에는 낚시할 수 없습니다!`, 'error');
         return;
       }
-      // Check if another player is already fishing at this chair
+
+      // Marine gear: can fish on water without a chair
+      const hasMarine = s.marineGear != null;
+      if (hasMarine && isOnWater(player.x, player.y)) {
+        const gear = MARINE_GEAR[s.marineGear];
+        player.state = 'fishing';
+        player.currentRod = s.rod;
+        player.seaFishing = true;
+        player.vx = 0; player.vy = 0;
+        const fishAbil = s.abilities?.낚시?.value ?? 0;
+        const stamAbil = s.abilities?.체력?.value ?? 0;
+        const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
+        const enhEffect = rodEnhanceEffect(enhLevel);
+        const timeMult = Math.max(0.3,
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction)
+        );
+        const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
+        player.activityStart = performance.now();
+        player.activityDuration = randInt(mn, mx);
+        player.activityProgress = 0;
+        setActivity('fishing');
+        addMsg(`🌊 ${gear.name}으로 해상 낚시 시작! (희귀도 보너스 ×${gear.rareMult})`);
+        playFishingStart();
+        return;
+      }
+
+      // Chair fishing
+      const nearest = nearestChair(player.x, player.y);
+      if (!nearest || nearest.dist > CHAIR_RANGE) {
+        if (hasMarine) addMsg('🌊 바다 위에서 해상 낚시가 가능합니다! 현재는 낚시 의자 근처로 이동하세요.', 'error');
+        else addMsg('🪑 낚시 의자 근처로 이동하세요! (지도 아래쪽 낚시터)', 'error');
+        return;
+      }
       const chairOccupied = otherPlayersRef.current.some(op =>
         op.state === 'fishing' &&
         Math.hypot(op.x - nearest.cx, op.y - nearest.cy) < 2 * TILE_SIZE
@@ -855,11 +960,6 @@ export default function App() {
       player.y = nearest.cy - TILE_SIZE / 2;
       player.vx = 0; player.vy = 0;
       player.facing = 'down';
-      // Check weather — storm blocks fishing
-      if (weatherRef.current?.canFish === false) {
-        addMsg(`${weatherRef.current.icon} 폭풍 중에는 낚시할 수 없습니다!`, 'error');
-        return;
-      }
       player.state = 'fishing';
       player.currentRod = s.rod;
       player.seaFishing = nearest.seaFishing ?? false;
@@ -1015,6 +1115,29 @@ export default function App() {
   const equipBait = (key) => {
     setGs(prev => ({ ...prev, equippedBait: prev.equippedBait === key ? null : key }));
     addMsg(`🪝 ${BAIT[key]?.name} ${gs.equippedBait === key ? '해제' : '장착'}`);
+  };
+
+  const buyMarineGear = (key) => {
+    const gear = MARINE_GEAR[key];
+    if ((gs.ownedMarineGear ?? []).includes(key)) { addMsg('이미 보유 중'); return; }
+    const canAfford = gs.money >= gear.price;
+    const hasMats = gear.upgradeMats
+      ? Object.entries(gear.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+      : true;
+    if (!canAfford) { addMsg(`💰 골드 부족 (${gear.price}G 필요)`, 'error'); return; }
+    if (!hasMats) { addMsg('재료 부족', 'error'); return; }
+    setGs(prev => {
+      const ores = { ...prev.oreInventory };
+      if (gear.upgradeMats) for (const [ore, n] of Object.entries(gear.upgradeMats)) ores[ore] -= n;
+      return { ...prev, money: prev.money - gear.price, oreInventory: ores,
+        ownedMarineGear: [...(prev.ownedMarineGear ?? []), key], marineGear: key };
+    });
+    addMsg(`🌊 ${gear.name} 구매 및 장착!`, 'catch');
+  };
+
+  const equipMarineGear = (key) => {
+    setGs(prev => ({ ...prev, marineGear: prev.marineGear === key ? null : key }));
+    addMsg(`🌊 ${MARINE_GEAR[key]?.name} ${gs.marineGear === key ? '해제' : '장착'}`);
   };
 
   const buyCookware = (key) => {
@@ -1554,7 +1677,13 @@ export default function App() {
                               }));
                               addMsg(`🌟 ${def.icon} ${name} 그레이드 ${ab.grade + 1} 달성! 희귀 보너스 +${((ab.grade + 1) * 10)}%`, 'catch');
                               playLevelUp();
-                              if (gameRef.current) gameRef.current.levelUpEffect = { age: 0 };
+                              if (gameRef.current) gameRef.current.gradeUpEffect = {
+                                age: 0,
+                                abilName: name,
+                                grade: ab.grade + 1,
+                                color: def.color,
+                                icon: def.icon,
+                              };
                             }}>
                               ⬆️ 그레이드업 → G{ab.grade + 1}
                             </button>
@@ -1888,6 +2017,43 @@ export default function App() {
                         ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipCookware(key)}>장착</button>)
                         : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyCookware(key)} disabled={!canBuy}>
                             {canBuy ? `${cw.price}G 구매` : (!canAfford ? '💰 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Marine Gear ── */}
+            <div className="section">
+              <div className="section-title">🌊 해양 장비 (바다 낚시)</div>
+              {Object.entries(MARINE_GEAR).map(([key, gear]) => {
+                const owned = (gs.ownedMarineGear ?? []).includes(key);
+                const equipped = gs.marineGear === key;
+                const canAfford = gs.money >= gear.price;
+                const hasMats = gear.upgradeMats
+                  ? Object.entries(gear.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = gear.upgradeMats ? Object.entries(gear.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: gear.color, fontWeight: 700 }}>🌊 {gear.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {gear.price}G{matsStr ? ` + 재료: ${matsStr}` : ''} · {gear.desc}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? <button tabIndex={-1} className={equipped ? 'btn-dis' : 'btn-eq'} onClick={() => equipMarineGear(key)}>
+                            {equipped ? '해제' : '장착'}
+                          </button>
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyMarineGear(key)} disabled={!canBuy}>
+                            {canBuy ? `${gear.price}G 구매` : (!canAfford ? '💰 골드 부족' : '재료 부족')}
                           </button>
                       }
                     </div>
