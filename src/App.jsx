@@ -295,6 +295,7 @@ export default function App() {
   const [serverAnnouncements, setServerAnnouncements] = useState([]);
   const [serverStats, setServerStats] = useState({});
   const [showDex, setShowDex] = useState(false);
+  const [showAnnounce, setShowAnnounce] = useState(false);
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -409,6 +410,13 @@ export default function App() {
     if (!nickname || !roomId) return;
     return subscribeAnnouncements(setServerAnnouncements);
   }, [nickname, roomId]);
+  // Auto-hide announcement banner after 5 seconds
+  useEffect(() => {
+    if (serverAnnouncements.length === 0) return;
+    setShowAnnounce(true);
+    const t = setTimeout(() => setShowAnnounce(false), 5000);
+    return () => clearTimeout(t);
+  }, [serverAnnouncements]);
 
   // 전설어 출몰 이벤트: 20~40분마다 랜덤 희귀 물고기 30분 출몰 부스트
   useEffect(() => { fishSurgeRef.current = fishSurgeEvent; }, [fishSurgeEvent]);
@@ -1323,7 +1331,7 @@ export default function App() {
             ⛈ 폭풍 중에는 낚시할 수 없습니다!
           </div>
         )}
-        {serverAnnouncements.length > 0 && (
+        {showAnnounce && serverAnnouncements.length > 0 && (
           <div className="server-announce-bar">
             {serverAnnouncements.slice(0, 1).map(a => (
               <div key={a.id} className="server-announce-msg">
@@ -1705,6 +1713,14 @@ export default function App() {
                         </div>
                         <div className="rod-meta">효과: 낚시 -{(eff.timeReduction*100).toFixed(0)}% · 판매 +{(eff.priceBonus*100).toFixed(0)}%</div>
                         <div className="rod-meta">강화비: {cost}G{matsStr ? ` + ${matsStr}` : ''} · 성공률 {(rate*100).toFixed(0)}%</div>
+                        <div className="rod-meta" style={{ color: canAfford && hasMats ? '#88ff88' : '#ff8888' }}>
+                          보유: {gs.money.toLocaleString()}G
+                          {Object.entries(mats).map(([ore, n]) => (
+                            <span key={ore} style={{ marginLeft: 6, color: (gs.oreInventory[ore] || 0) >= n ? '#88ff88' : '#ff8888' }}>
+                              · {ore} {gs.oreInventory[ore] || 0}/{n}
+                            </span>
+                          ))}
+                        </div>
                         <button
                           className={canAfford && hasMats ? 'btn-buy' : 'btn-dis'}
                           disabled={!canAfford || !hasMats || enhLv >= 100}
@@ -1838,22 +1854,42 @@ export default function App() {
                 <div style={{ width: `${((gs.caughtSpecies?.length ?? 0) / Object.keys(FISH).length) * 100}%`, height: '100%', background: '#44ffaa', borderRadius: 4 }} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                {Object.entries(FISH).map(([fishName, fd]) => {
-                  const caught = (gs.caughtSpecies ?? []).includes(fishName);
-                  return (
-                    <div key={fishName} style={{
-                      background: caught ? 'rgba(68,255,170,0.1)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${caught ? 'rgba(68,255,170,0.3)' : 'rgba(255,255,255,0.08)'}`,
-                      borderRadius: 6, padding: '6px 10px',
-                      opacity: caught ? 1 : 0.5,
-                    }}>
-                      <div style={{ fontWeight: 700, fontSize: 12, color: caught ? '#44ffaa' : '#888' }}>
-                        {caught ? '✓ ' : '? '}{fishName}
+                {(() => {
+                  const FISH_HINT = {
+                    붕어: '낚시 0+ · 부두에서 낚시', 잉어: '낚시 0+ · 부두에서 낚시',
+                    미꾸라지: '낚시 0+ · 부두에서 낚시', 메기: '낚시 0+ · 부두에서 낚시',
+                    멸치: '낚시 10+ · 부두 낚시', 배스: '낚시 10+ · 부두 낚시',
+                    송어: '낚시 10+ · 부두 낚시',
+                    꽁치: '낚시 20+ · 미끼 추천', 강꼬치고기: '낚시 20+ · 미끼 추천',
+                    황다랑어: '낚시 20+ · 미끼 추천', 금눈돔: '낚시 20+ · 미끼 추천',
+                    연어: '낚시 30+ · 심해 부두 추천', 황금붕어: '낚시 30+ · 황금 미끼',
+                    오징어: '낚시 30+ · 심해 부두', 낙지: '낚시 30+ · 심해 부두',
+                    참치: '낚시 40+ · 바다 낚시', 광어: '낚시 40+ · 바다 낚시',
+                    감성돔: '낚시 40+ · 전설 미끼',
+                    우럭: '낚시 50+ · 바다·전설 미끼', 뱀장어: '낚시 50+ · 바다 낚시',
+                    황새치: '낚시 50+ · 신화 미끼 추천',
+                    용고기: '낚시 70+ · 바다·신화 미끼', 고대어: '낚시 70+ · 신화 미끼 필수',
+                  };
+                  return Object.entries(FISH).map(([fishName, fd]) => {
+                    const caught = (gs.caughtSpecies ?? []).includes(fishName);
+                    return (
+                      <div key={fishName} style={{
+                        background: caught ? 'rgba(68,255,170,0.1)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${caught ? 'rgba(68,255,170,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: 6, padding: '6px 10px',
+                        opacity: caught ? 1 : 0.65,
+                      }}>
+                        <div style={{ fontWeight: 700, fontSize: 12, color: caught ? '#44ffaa' : '#aaa' }}>
+                          {caught ? '✓ ' : '🔍 '}{fishName}
+                        </div>
+                        {caught
+                          ? <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~</div>
+                          : <div style={{ fontSize: 10, color: '#7ab' }}>{FISH_HINT[fishName] ?? '낚시 중 발견 가능'}</div>
+                        }
                       </div>
-                      {caught && <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~</div>}
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>
