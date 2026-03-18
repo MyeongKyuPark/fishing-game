@@ -797,8 +797,11 @@ function drawFlowerPatch(ctx, wx, wy, seed) {
   }
 }
 
-function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor, bodyColor, skinColor, gender) {
+function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor, bodyColor, skinColor, gender, marineGear = null) {
   const { facing, state, activityProgress } = player;
+  const isScuba = marineGear === '스쿠버다이빙세트';
+  const isBoat = marineGear === '보트';
+  const isSea = !!(player.seaFishing && marineGear);
   const now = Date.now();
 
   // Shadow
@@ -809,18 +812,44 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
 
   // ── Chibi body ──
   const defaultBodyColor = bodyColor ?? '#5a7aaa';
-  const bodyCol = state === 'fishing' ? '#4a9a60' : state === 'mining' ? '#c47840' : defaultBodyColor;
-  const bodyColDark = state === 'fishing' ? '#2e7040' : state === 'mining' ? '#8a4e20' : '#3a5280';
+  let bodyCol, bodyColDark;
+  if (isScuba) {
+    bodyCol = '#1a3a6a';      // wetsuit dark blue
+    bodyColDark = '#08152a';
+  } else {
+    bodyCol = state === 'fishing' ? '#4a9a60' : state === 'mining' ? '#c47840' : defaultBodyColor;
+    bodyColDark = state === 'fishing' ? '#2e7040' : state === 'mining' ? '#8a4e20' : '#3a5280';
+  }
+
+  // Scuba O2 tank (draw before body so it appears behind)
+  if (isScuba) {
+    ctx.fillStyle = '#778899';
+    ctx.beginPath(); ctx.roundRect(px - 15, py - 7, 6, 13, 3); ctx.fill();
+    ctx.fillStyle = '#99aabb';
+    ctx.beginPath(); ctx.roundRect(px - 14, py - 6, 4, 5, 2); ctx.fill();
+    ctx.fillStyle = '#555566';
+    ctx.beginPath(); ctx.roundRect(px - 13, py - 9, 3, 3, 1); ctx.fill(); // valve
+  }
 
   // Walking legs
   const isMoving = (player.vx !== undefined) ? (Math.abs(player.vx) + Math.abs(player.vy) > 0.2) : false;
   const legSwing = isMoving ? Math.sin(now / 130) * 4 : 0;
-  // Shoes
-  ctx.fillStyle = '#3a2810';
-  ctx.beginPath(); ctx.ellipse(px - 5, py + 14 + legSwing, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(px + 5, py + 14 - legSwing, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+  // Shoes / Flippers
+  if (isScuba) {
+    // Dark blue flippers (wider)
+    ctx.fillStyle = '#000077';
+    ctx.beginPath(); ctx.ellipse(px - 5, py + 14 + legSwing, 9, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + 5, py + 14 - legSwing, 9, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0000aa';
+    ctx.beginPath(); ctx.ellipse(px - 10, py + 14 + legSwing, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + 10, py + 14 - legSwing, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = '#3a2810';
+    ctx.beginPath(); ctx.ellipse(px - 5, py + 14 + legSwing, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + 5, py + 14 - legSwing, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+  }
   // Legs
-  ctx.fillStyle = '#4a5070';
+  ctx.fillStyle = isScuba ? '#0a1a4a' : '#4a5070';
   ctx.beginPath(); ctx.roundRect(px - 8, py + 4, 6, 11 + legSwing * 0.5, 3); ctx.fill();
   ctx.beginPath(); ctx.roundRect(px + 2, py + 4, 6, 11 - legSwing * 0.5, 3); ctx.fill();
 
@@ -828,19 +857,23 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
   ctx.fillStyle = bodyCol;
   ctx.beginPath(); ctx.roundRect(px - 9, py - 6, 18, 12, 4); ctx.fill();
   // Body highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.fillStyle = isScuba ? 'rgba(100,180,255,0.18)' : 'rgba(255,255,255,0.15)';
   ctx.beginPath(); ctx.roundRect(px - 7, py - 4, 7, 6, 3); ctx.fill();
   // Body shadow
   ctx.fillStyle = bodyColDark;
   ctx.beginPath(); ctx.roundRect(px - 9, py + 2, 18, 4, [0, 0, 4, 4]); ctx.fill();
+  // Wetsuit accent stripe
+  if (isScuba) {
+    ctx.fillStyle = '#0066cc';
+    ctx.beginPath(); ctx.roundRect(px - 9, py - 1, 18, 3, 0); ctx.fill();
+  }
 
   // Arms (base, overdrawn by fishing/mining)
   if (state !== 'fishing' && state !== 'mining') {
-    ctx.fillStyle = bodyCol;
+    ctx.fillStyle = isScuba ? '#1a3a6a' : bodyCol;
     ctx.beginPath(); ctx.roundRect(px - 14, py - 4, 5, 10, 3); ctx.fill();
     ctx.beginPath(); ctx.roundRect(px + 9, py - 4, 5, 10, 3); ctx.fill();
-    // Hands
-    ctx.fillStyle = '#f6cc88';
+    ctx.fillStyle = isScuba ? '#000077' : '#f6cc88'; // gloves vs hands
     ctx.beginPath(); ctx.arc(px - 12, py + 7, 3.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(px + 12, py + 7, 3.5, 0, Math.PI * 2); ctx.fill();
   }
@@ -852,21 +885,21 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
   // Head
   ctx.fillStyle = skin;
   ctx.beginPath(); ctx.arc(px, headY, 12, 0, Math.PI * 2); ctx.fill();
-  // Cheek blush
-  ctx.fillStyle = 'rgba(255,120,120,0.38)';
-  ctx.beginPath(); ctx.ellipse(px - 8, headY + 3, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(px + 8, headY + 3, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+  // Cheek blush (hidden under mask)
+  if (!isScuba) {
+    ctx.fillStyle = 'rgba(255,120,120,0.38)';
+    ctx.beginPath(); ctx.ellipse(px - 8, headY + 3, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(px + 8, headY + 3, 4.5, 3, 0, 0, Math.PI * 2); ctx.fill();
+  }
   // Hair
   const hc = hairColor ?? '#5a3010';
   ctx.fillStyle = hc;
   ctx.beginPath(); ctx.arc(px, headY, 12, Math.PI, 0); ctx.fill();
   ctx.beginPath(); ctx.arc(px - 5, headY - 4, 7, Math.PI, Math.PI * 1.8); ctx.fill();
   ctx.beginPath(); ctx.arc(px + 5, headY - 4, 7, Math.PI * 1.2, 0); ctx.fill();
-  if (isFemale) {
-    // Longer side hair for female
+  if (isFemale && !isScuba && !isBoat) {
     ctx.beginPath(); ctx.arc(px - 14, headY + 2, 5, Math.PI * 0.5, Math.PI * 1.5); ctx.fill();
     ctx.beginPath(); ctx.arc(px + 14, headY + 2, 5, Math.PI * 1.5, Math.PI * 0.5); ctx.fill();
-    // Small bow
     ctx.fillStyle = '#ff88aa';
     ctx.beginPath(); ctx.ellipse(px + 10, headY - 12, 5, 3, 0.6, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(px + 10, headY - 12, 5, 3, -0.6, 0, Math.PI * 2); ctx.fill();
@@ -877,111 +910,189 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
   ctx.fillStyle = 'rgba(255,200,120,0.18)';
   ctx.beginPath(); ctx.arc(px - 3, headY - 8, 5, 0, Math.PI * 2); ctx.fill();
 
-  // Eyes
-  const ey = headY + 1;
-  ctx.fillStyle = '#1a1a1a';
-  if (facing === 'up') {
-    ctx.beginPath(); ctx.arc(px - 4, ey - 2, 2, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(px + 4, ey - 2, 2, 0, Math.PI * 2); ctx.fill();
-  } else if (facing === 'down') {
-    // Cute curved happy eyes
-    ctx.lineWidth = 2; ctx.strokeStyle = '#1a1a1a';
-    ctx.beginPath(); ctx.arc(px - 4, ey + 1, 2.5, Math.PI, 0); ctx.stroke();
-    ctx.beginPath(); ctx.arc(px + 4, ey + 1, 2.5, Math.PI, 0); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.beginPath(); ctx.arc(px - 3, ey - 0.5, 1, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(px + 5, ey - 0.5, 1, 0, Math.PI * 2); ctx.fill();
-  } else if (facing === 'right') {
-    ctx.beginPath(); ctx.arc(px + 4, ey, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.beginPath(); ctx.arc(px + 5.2, ey - 1, 1, 0, Math.PI * 2); ctx.fill();
-  } else {
-    ctx.beginPath(); ctx.arc(px - 4, ey, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.beginPath(); ctx.arc(px - 2.8, ey - 1, 1, 0, Math.PI * 2); ctx.fill();
+  // Eyes (hidden behind scuba mask)
+  if (!isScuba) {
+    const ey = headY + 1;
+    ctx.fillStyle = '#1a1a1a';
+    if (facing === 'up') {
+      ctx.beginPath(); ctx.arc(px - 4, ey - 2, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + 4, ey - 2, 2, 0, Math.PI * 2); ctx.fill();
+    } else if (facing === 'down') {
+      ctx.lineWidth = 2; ctx.strokeStyle = '#1a1a1a';
+      ctx.beginPath(); ctx.arc(px - 4, ey + 1, 2.5, Math.PI, 0); ctx.stroke();
+      ctx.beginPath(); ctx.arc(px + 4, ey + 1, 2.5, Math.PI, 0); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.beginPath(); ctx.arc(px - 3, ey - 0.5, 1, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + 5, ey - 0.5, 1, 0, Math.PI * 2); ctx.fill();
+    } else if (facing === 'right') {
+      ctx.beginPath(); ctx.arc(px + 4, ey, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.beginPath(); ctx.arc(px + 5.2, ey - 1, 1, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(px - 4, ey, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      ctx.beginPath(); ctx.arc(px - 2.8, ey - 1, 1, 0, Math.PI * 2); ctx.fill();
+    }
+    if (facing !== 'up') {
+      ctx.strokeStyle = '#9a4820'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(px, headY + 5, 3.5, 0.1, Math.PI - 0.1); ctx.stroke();
+    }
   }
-  // Small smile (only for down/side)
-  if (facing !== 'up') {
-    ctx.strokeStyle = '#9a4820'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.arc(px, headY + 5, 3.5, 0.1, Math.PI - 0.1); ctx.stroke();
+
+  // Scuba diving mask
+  if (isScuba) {
+    ctx.fillStyle = 'rgba(60,140,255,0.55)';
+    ctx.beginPath(); ctx.roundRect(px - 11, headY - 5, 22, 11, 6); ctx.fill();
+    ctx.strokeStyle = '#1a2255';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.roundRect(px - 11, headY - 5, 22, 11, 6); ctx.stroke();
+    // Lens reflection
+    ctx.fillStyle = 'rgba(200,235,255,0.45)';
+    ctx.beginPath(); ctx.roundRect(px - 9, headY - 3, 6, 4, 3); ctx.fill();
+    // Mask strap
+    ctx.strokeStyle = '#1a2255'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px - 11, headY + 1); ctx.lineTo(px - 14, headY + 1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px + 11, headY + 1); ctx.lineTo(px + 14, headY + 1); ctx.stroke();
+    // Regulator mouthpiece
+    ctx.fillStyle = '#99aabb';
+    ctx.beginPath(); ctx.roundRect(px - 4, headY + 5, 8, 4, 2); ctx.fill();
+  }
+
+  // Captain hat for boat
+  if (isBoat) {
+    ctx.fillStyle = '#1a2a50';
+    ctx.beginPath(); ctx.roundRect(px - 11, headY - 22, 22, 10, [4, 4, 0, 0]); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(px - 14, headY - 13, 28, 4, 2); ctx.fill(); // brim
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.roundRect(px - 11, headY - 14, 22, 2, 0); ctx.fill(); // white band
+    ctx.font = 'bold 7px serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd700';
+    ctx.fillText('⚓', px, headY - 16); // anchor emblem
   }
 
   // ── Fishing animation ──
   if (state === 'fishing') {
     const t = now / 1000;
-    // Arm lean — body tilts forward slightly
-    const leanX = 5 + Math.sin(t * 0.5) * 1.5;
 
-    // Rod base at shoulder
-    const rodBaseX = px + leanX, rodBaseY = py - PH / 2 + 12;
-    // Rod tip oscillates gently (casting tension)
-    const tipBob = Math.sin(t * 1.1) * 3;
-    const rodTipX = rodBaseX + 28 + tipBob * 0.4;
-    const rodTipY = rodBaseY - 18 + tipBob;
+    if (isSea && isScuba) {
+      // Scuba: rod points downward, line sinks into sea
+      const armX = px + 10, armY = py;
+      const rodEndX = armX + 3;
+      const rodEndY = py + 26 + Math.sin(t * 1.2) * 2;
 
-    // Draw rod with slight curve (quadratic)
-    ctx.strokeStyle = '#7a5020';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(rodBaseX, rodBaseY);
-    ctx.quadraticCurveTo(rodBaseX + 16, rodBaseY - 10, rodTipX, rodTipY);
-    ctx.stroke();
+      // Arm reaching down
+      ctx.fillStyle = '#1a3a6a';
+      ctx.beginPath(); ctx.roundRect(px + 9, py - 2, 5, 14, 3); ctx.fill();
+      ctx.fillStyle = '#000077';
+      ctx.beginPath(); ctx.arc(px + 12, py + 13, 3.5, 0, Math.PI * 2); ctx.fill();
 
-    // Tip glow
-    ctx.fillStyle = '#c89040';
-    ctx.beginPath();
-    ctx.arc(rodTipX, rodTipY, 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Fishing line — hangs from tip to float
-    const floatBob = Math.sin(t * 1.6) * 3 + Math.sin(t * 2.9) * 1.2;
-    const floatX = rodTipX + 8;
-    const floatY = py + 26 + floatBob;
-
-    ctx.strokeStyle = 'rgba(220,220,220,0.65)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(rodTipX, rodTipY);
-    // Slight sag in line
-    ctx.quadraticCurveTo(rodTipX + 12, rodTipY + 18, floatX, floatY);
-    ctx.stroke();
-
-    // Ripple rings at float
-    const rippleT = (now % 2200) / 2200;
-    if (rippleT > 0.1) {
-      const rAlpha = Math.max(0, 0.5 - rippleT * 0.5);
-      const rRadius = rippleT * 14;
-      ctx.strokeStyle = `rgba(100,180,255,${rAlpha})`;
-      ctx.lineWidth = 1;
+      // Rod angled down
+      ctx.strokeStyle = '#7a5020'; ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.ellipse(floatX, floatY + 1, rRadius, rRadius * 0.35, 0, 0, Math.PI * 2);
+      ctx.moveTo(armX, armY);
+      ctx.quadraticCurveTo(armX + 5, py + 14, rodEndX, rodEndY);
       ctx.stroke();
-    }
-    const rippleT2 = ((now + 1100) % 2200) / 2200;
-    if (rippleT2 > 0.1) {
-      const rAlpha2 = Math.max(0, 0.5 - rippleT2 * 0.5);
-      const rRadius2 = rippleT2 * 14;
-      ctx.strokeStyle = `rgba(100,180,255,${rAlpha2})`;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(floatX, floatY + 1, rRadius2, rRadius2 * 0.35, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+      ctx.fillStyle = '#c89040';
+      ctx.beginPath(); ctx.arc(rodEndX, rodEndY, 2, 0, Math.PI * 2); ctx.fill();
 
-    // Float body
-    ctx.fillStyle = '#ff3333';
-    ctx.beginPath();
-    ctx.ellipse(floatX, floatY, 4, 2.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.ellipse(floatX, floatY - 2.5, 4, 2.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.ellipse(floatX, floatY, 4, 5, 0, 0, Math.PI * 2);
-    ctx.stroke();
+      // Line going straight down
+      const hookY = rodEndY + 20 + Math.sin(t * 0.8) * 3;
+      ctx.strokeStyle = 'rgba(200,220,255,0.7)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(rodEndX, rodEndY); ctx.lineTo(rodEndX + 1, hookY); ctx.stroke();
+      // Hook
+      ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(rodEndX + 1, hookY + 3, 3, -Math.PI * 0.5, Math.PI * 0.5); ctx.stroke();
+      // Rising bubbles
+      for (let b = 0; b < 3; b++) {
+        const bAge = ((now / 700 + b * 0.33) % 1);
+        const bx = rodEndX - 3 + b * 3 + Math.sin(bAge * Math.PI * 2) * 2;
+        const by = hookY - bAge * 28;
+        ctx.fillStyle = `rgba(150,220,255,${0.6 - bAge * 0.5})`;
+        ctx.beginPath(); ctx.arc(bx, by, 1.8 * (1 - bAge * 0.4), 0, Math.PI * 2); ctx.fill();
+      }
+
+    } else if (isSea && isBoat) {
+      // Boat: longer side cast rod, float farther out
+      const leanX = 5 + Math.sin(t * 0.5) * 1.5;
+      const rodBaseX = px + leanX, rodBaseY = py - PH / 2 + 12;
+      const tipBob = Math.sin(t * 1.1) * 3;
+      const rodTipX = rodBaseX + 34 + tipBob * 0.4; // longer reach
+      const rodTipY = rodBaseY - 20 + tipBob;
+
+      ctx.strokeStyle = '#5a3810'; ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(rodBaseX, rodBaseY);
+      ctx.quadraticCurveTo(rodBaseX + 18, rodBaseY - 12, rodTipX, rodTipY);
+      ctx.stroke();
+      ctx.fillStyle = '#c89040';
+      ctx.beginPath(); ctx.arc(rodTipX, rodTipY, 2.5, 0, Math.PI * 2); ctx.fill();
+
+      const floatBob = Math.sin(t * 1.6) * 3 + Math.sin(t * 2.9) * 1.2;
+      const floatX = rodTipX + 10;
+      const floatY = py + 24 + floatBob;
+
+      ctx.strokeStyle = 'rgba(220,220,220,0.65)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(rodTipX, rodTipY);
+      ctx.quadraticCurveTo(rodTipX + 14, rodTipY + 18, floatX, floatY);
+      ctx.stroke();
+
+      for (const off of [0, 1100]) {
+        const rT = ((now + off) % 2200) / 2200;
+        if (rT > 0.1) {
+          ctx.strokeStyle = `rgba(100,180,255,${Math.max(0, 0.5 - rT * 0.5)})`;
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.ellipse(floatX, floatY + 1, rT * 14, rT * 5, 0, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+      ctx.fillStyle = '#ff3333';
+      ctx.beginPath(); ctx.ellipse(floatX, floatY, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.ellipse(floatX, floatY - 2.5, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+
+    } else {
+      // Normal fishing animation
+      const leanX = 5 + Math.sin(t * 0.5) * 1.5;
+      const rodBaseX = px + leanX, rodBaseY = py - PH / 2 + 12;
+      const tipBob = Math.sin(t * 1.1) * 3;
+      const rodTipX = rodBaseX + 28 + tipBob * 0.4;
+      const rodTipY = rodBaseY - 18 + tipBob;
+
+      ctx.strokeStyle = '#7a5020'; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(rodBaseX, rodBaseY);
+      ctx.quadraticCurveTo(rodBaseX + 16, rodBaseY - 10, rodTipX, rodTipY);
+      ctx.stroke();
+      ctx.fillStyle = '#c89040';
+      ctx.beginPath(); ctx.arc(rodTipX, rodTipY, 2, 0, Math.PI * 2); ctx.fill();
+
+      const floatBob = Math.sin(t * 1.6) * 3 + Math.sin(t * 2.9) * 1.2;
+      const floatX = rodTipX + 8;
+      const floatY = py + 26 + floatBob;
+
+      ctx.strokeStyle = 'rgba(220,220,220,0.65)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(rodTipX, rodTipY);
+      ctx.quadraticCurveTo(rodTipX + 12, rodTipY + 18, floatX, floatY);
+      ctx.stroke();
+
+      for (const off of [0, 1100]) {
+        const rT = ((now + off) % 2200) / 2200;
+        if (rT > 0.1) {
+          const rAlpha = Math.max(0, 0.5 - rT * 0.5);
+          const rRadius = rT * 14;
+          ctx.strokeStyle = `rgba(100,180,255,${rAlpha})`; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.ellipse(floatX, floatY + 1, rRadius, rRadius * 0.35, 0, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+      ctx.fillStyle = '#ff3333';
+      ctx.beginPath(); ctx.ellipse(floatX, floatY, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.ellipse(floatX, floatY - 2.5, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 0.5;
+      ctx.beginPath(); ctx.ellipse(floatX, floatY, 4, 5, 0, 0, Math.PI * 2); ctx.stroke();
+    }
   }
 
   // ── Mining animation ──
@@ -1893,25 +2004,31 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
         }
       }
 
-      // Marine gear visual (boat icon when on water)
-      if (gameRef.current?.marineGear) {
+      // Marine gear: water ripples + boat hull (drawn BEFORE player)
+      const marineGearKey = gameRef.current?.marineGear ?? null;
+      if (marineGearKey) {
         const psx = player.x - camX, psy = player.y - camY;
         const tile = getTile(Math.floor(player.x / TILE_SIZE), Math.floor(player.y / TILE_SIZE));
         if (tile === TILE.WATER) {
-          const isBoat = gameRef.current.marineGear === '보트';
           ctx.save();
-          ctx.font = `${isBoat ? 22 : 18}px serif`;
-          ctx.textAlign = 'center';
-          ctx.globalAlpha = 0.9;
-          ctx.fillText(isBoat ? '🚤' : '🤿', psx, psy + 18);
-          // Water ripple rings under player
+          // Boat hull drawn beneath player
+          if (marineGearKey === '보트') {
+            ctx.fillStyle = '#7a4010';
+            ctx.beginPath(); ctx.moveTo(psx - 18, psy + 12); ctx.lineTo(psx + 18, psy + 12);
+            ctx.lineTo(psx + 22, psy + 20); ctx.lineTo(psx - 22, psy + 20); ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#cc6633';
+            ctx.beginPath(); ctx.roundRect(psx - 18, psy + 8, 36, 6, 2); ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath(); ctx.roundRect(psx - 16, psy + 9, 32, 2, 1); ctx.fill();
+          }
+          // Water ripple rings
           const rAge = (performance.now() / 400) % (Math.PI * 2);
           ctx.strokeStyle = 'rgba(100,200,255,0.4)';
           ctx.lineWidth = 1.5;
           for (let ri = 0; ri < 2; ri++) {
             const rr = 14 + ri * 10 + Math.sin(rAge + ri) * 3;
             ctx.beginPath();
-            ctx.ellipse(psx, psy + 14, rr, rr * 0.35, 0, 0, Math.PI * 2);
+            ctx.ellipse(psx, psy + 16, rr, rr * 0.35, 0, 0, Math.PI * 2);
             ctx.stroke();
           }
           ctx.restore();
@@ -1934,7 +2051,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
       otherPlayerScreenPosRef.current = screenPositions;
 
       // My player (on top)
-      drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname, title, titleColor, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current);
+      drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname, title, titleColor, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current, marineGearKey);
 
       // Door entry prompt
       if (nearDoorRef.current) {
