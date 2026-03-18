@@ -1193,31 +1193,6 @@ export default function App() {
     setBlocked(false);
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
-  if (!nickname) return <LoginScreen onLogin={handleLogin} />;
-  if (!roomId) return <ChannelLobby nickname={nickname} onJoin={handleJoinRoom} />;
-
-  if (blocked) return (
-    <div className="login-bg">
-      <div className="login-box">
-        <div className="login-icon">⚠️</div>
-        <h1 className="login-title" style={{ fontSize: 20 }}>다른 탭에서 접속됨</h1>
-        <p className="login-sub" style={{ marginBottom: 24 }}>
-          다른 탭에서 게임이 실행 중입니다.<br />이 탭에서 계속하려면 아래 버튼을 누르세요.
-        </p>
-        <button className="login-btn" onClick={takeOver}>이 탭에서 계속하기</button>
-        <p className="login-hint" style={{ marginTop: 16 }}>다른 탭은 자동으로 중단됩니다.</p>
-      </div>
-    </div>
-  );
-
-  const totalFishVal = gs.fishInventory.reduce((s, f) => s + f.price, 0);
-  const myTitle = getTitle(gs);
-
-  const handleEnterRoom = (id) => { playEnterRoom(); setIndoorRoom(id); };
-  const handleExitRoom = () => setIndoorRoom(null);
-
   const handleNpcInteract = useCallback((npcName) => {
     playNpcInteract();
     if (npcName === '민준') {
@@ -1256,6 +1231,31 @@ export default function App() {
       }
     }
   }, [addMsg, grantAbility, advanceQuest, stateRef]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  if (!nickname) return <LoginScreen onLogin={handleLogin} />;
+  if (!roomId) return <ChannelLobby nickname={nickname} onJoin={handleJoinRoom} />;
+
+  if (blocked) return (
+    <div className="login-bg">
+      <div className="login-box">
+        <div className="login-icon">⚠️</div>
+        <h1 className="login-title" style={{ fontSize: 20 }}>다른 탭에서 접속됨</h1>
+        <p className="login-sub" style={{ marginBottom: 24 }}>
+          다른 탭에서 게임이 실행 중입니다.<br />이 탭에서 계속하려면 아래 버튼을 누르세요.
+        </p>
+        <button className="login-btn" onClick={takeOver}>이 탭에서 계속하기</button>
+        <p className="login-hint" style={{ marginTop: 16 }}>다른 탭은 자동으로 중단됩니다.</p>
+      </div>
+    </div>
+  );
+
+  const totalFishVal = gs.fishInventory.reduce((s, f) => s + f.price, 0);
+  const myTitle = getTitle(gs);
+
+  const handleEnterRoom = (id) => { playEnterRoom(); setIndoorRoom(id); };
+  const handleExitRoom = () => setIndoorRoom(null);
 
   return (
     <div className="root">
