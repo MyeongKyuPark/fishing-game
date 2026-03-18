@@ -24,6 +24,8 @@ import { getWeather, msUntilNextWeather } from './weatherData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS } from './mapData';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
 import { PETS, PET_RARITY_COLOR } from './petData';
+import { NPCS, getAffinityLevel, getShopDiscount } from './npcData';
+import { EXPLORE_ZONES, checkZoneUnlock } from './explorationData';
 
 const SKIN_PRESETS = ['#f6cc88', '#e8a870', '#c8845a', '#a06040', '#7a4830', '#fddbb4'];
 
@@ -190,6 +192,10 @@ const DEFAULT_STATE = {
   // Pets
   petEggs: {},                // { petKey: { boughtAt: timestamp, hatchAt: timestamp } }
   activePet: null,            // petKey string
+  // NPC Affinity
+  npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0 },  // 0~100 affinity per NPC
+  // Exploration
+  exploredZones: [],          // ['비밀낚시터', '심층광맥', '신비의숲', '고대유적']
 };
 
 function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
@@ -255,6 +261,8 @@ function loadSave(nickname) {
       achStats: s.achStats ?? {},
       petEggs: s.petEggs ?? {},
       activePet: s.activePet ?? null,
+      npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, ...(s.npcAffinity ?? {}) },
+      exploredZones: s.exploredZones ?? [],
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -581,7 +589,8 @@ export default function App() {
     const isNewDay = saved.questDate !== today;
     const questProgress = isNewDay ? {} : (saved.questProgress ?? {});
     const questClaimed = isNewDay ? {} : (saved.questClaimed ?? {});
-    const base = { ...saved, dailyQuests: quests, questProgress, questClaimed, questDate: today };
+    const base = { ...saved, dailyQuests: quests, questProgress, questClaimed, questDate: today,
+      achStats: { ...(saved.achStats ?? {}), loginStreak: Math.max(saved.achStats?.loginStreak ?? 0, streak) } };
     if (!saved.firstLoginDate) {
       base.firstLoginDate = new Date().toISOString();
     }
@@ -727,6 +736,19 @@ export default function App() {
     });
   }, []);
 
+  const gainNpcAffinity = useCallback((npcKey, amount) => {
+    setGs(prev => {
+      const current = prev.npcAffinity?.[npcKey] ?? 0;
+      const newVal = Math.min(100, current + amount);
+      const npcThresholds = NPCS[npcKey]?.thresholds ?? [];
+      const crossed = npcThresholds.find(t => current < t.at && newVal >= t.at);
+      if (crossed) {
+        setTimeout(() => addMsg(`💖 ${NPCS[npcKey]?.name}와의 관계: [${crossed.label}] 달성! ${crossed.reward}`, 'catch'), 0);
+      }
+      return { ...prev, npcAffinity: { ...(prev.npcAffinity ?? {}), [npcKey]: newVal } };
+    });
+  }, [addMsg]);
+
   // ── Callbacks from game loop ──────────────────────────────────────────────
 
   const applyBoosts = useCallback((table, boostMap) => {
@@ -782,6 +804,15 @@ export default function App() {
     const baitKey = s?.equippedBait;
     const baitData = baitKey ? BAIT[baitKey] : null;
     if (baitData) table = applyBoosts(table, baitData.boost);
+
+    // Apply exploration zone fish boosts
+    const explored = s?.exploredZones ?? [];
+    for (const zoneId of ['비밀낚시터', '고대유적']) {
+      const zone = EXPLORE_ZONES.find(z => z.id === zoneId);
+      if (zone && explored.includes(zoneId) && zone.fishBoost) {
+        table = applyBoosts(table, zone.fishBoost);
+      }
+    }
 
     // Weather fish multiplier embedded in weight boost
     const wMult = weatherRef.current?.fishMult ?? 1.0;
@@ -1003,6 +1034,7 @@ export default function App() {
        '!랭킹  – 랭킹 보기',
        '!스탯  – 캐릭터 스탯 보기',
        '!퀘스트 – 오늘의 퀘스트 확인',
+       '!탐험  – 새 탐험 구역 발견 시도',
       ].forEach(t => addMsg(t));
       return;
     }
@@ -1060,6 +1092,13 @@ export default function App() {
       playCookComplete();
       grantAbility('요리', COOK_ABILITY_GAIN * raw.length);
       advanceQuest('cook', raw.length);
+      gainNpcAffinity('요리사', 3);
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, cookCount: (prevStats.cookCount ?? 0) + raw.length };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+        return { ...prev, achStats: updatedStats };
+      });
       return;
     }
 
@@ -1227,8 +1266,27 @@ export default function App() {
       return;
     }
 
+    if (cmd === '!탐험') {
+      const abilities = stateRef.current?.abilities;
+      const explored = stateRef.current?.exploredZones ?? [];
+      const unlockable = checkZoneUnlock(abilities, explored);
+      if (unlockable.length === 0) {
+        const allExplored = EXPLORE_ZONES.every(z => explored.includes(z.id));
+        if (allExplored) { addMsg('🗺 모든 탐험 구역을 이미 발견했습니다!'); }
+        else { addMsg('🗺 아직 조건을 만족하는 새 탐험 구역이 없습니다. 숙련도를 높여보세요!'); }
+        return;
+      }
+      const newZones = unlockable.map(z => z.id);
+      setGs(prev => ({ ...prev, exploredZones: [...(prev.exploredZones ?? []), ...newZones] }));
+      for (const z of unlockable) {
+        addMsg(`🗺 새 구역 발견: ${z.icon} ${z.name}! ${z.benefit}`, 'catch');
+        if (gameRef.current) gameRef.current.levelUpEffect = { age: 0 };
+      }
+      return;
+    }
+
     addMsg(`알 수 없는 명령어. !도움말 확인`, 'error');
-  }, [addMsg, advanceQuest, grantAbility]);
+  }, [addMsg, advanceQuest, grantAbility, gainNpcAffinity]);
 
   // ── Shop actions ─────────────────────────────────────────────────────────
 
@@ -1236,19 +1294,22 @@ export default function App() {
     const rod = RODS[rodKey];
     if (gs.ownedRods.includes(rodKey)) { addMsg('이미 보유 중'); return; }
     const needMoney = rod.price > 0;
-    const canAfford = !needMoney || gs.money >= rod.price;
+    const discount = getShopDiscount(gs.npcAffinity);
+    const discountedPrice = needMoney ? Math.round(rod.price * (1 - discount)) : 0;
+    const canAfford = !needMoney || gs.money >= discountedPrice;
     const hasMats = rod.upgradeMats
       ? Object.entries(rod.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
       : true;
-    if (!canAfford) { addMsg(`💰 골드 부족 (${rod.price}G 필요)`, 'error'); return; }
+    if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
       const ores = { ...prev.oreInventory };
       if (rod.upgradeMats) for (const [ore, n] of Object.entries(rod.upgradeMats)) ores[ore] -= n;
-      return { ...prev, money: needMoney ? prev.money - rod.price : prev.money, oreInventory: ores, ownedRods: [...prev.ownedRods, rodKey], rod: rodKey };
+      return { ...prev, money: needMoney ? prev.money - discountedPrice : prev.money, oreInventory: ores, ownedRods: [...prev.ownedRods, rodKey], rod: rodKey };
     });
     if (gameRef.current?.player) gameRef.current.player.currentRod = rodKey;
-    addMsg(`🎣 ${rod.name} ${needMoney ? '구매' : '획득'}!`, 'catch');
+    addMsg(`🎣 ${rod.name} ${needMoney ? '구매' : '획득'}!${discount > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
+    gainNpcAffinity('상인', 2);
     setShowShop(false);
   };
 
@@ -1261,18 +1322,21 @@ export default function App() {
   const buyBoots = (key) => {
     const boot = BOOTS[key];
     if ((gs.ownedBoots ?? []).includes(key)) { addMsg('이미 보유 중'); return; }
-    const canAfford = gs.money >= boot.price;
+    const discount = getShopDiscount(gs.npcAffinity);
+    const discountedPrice = Math.round(boot.price * (1 - discount));
+    const canAfford = gs.money >= discountedPrice;
     const hasMats = boot.upgradeMats
       ? Object.entries(boot.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
       : true;
-    if (!canAfford) { addMsg(`💰 골드 부족 (${boot.price}G 필요)`, 'error'); return; }
+    if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
       const ores = { ...prev.oreInventory };
       if (boot.upgradeMats) for (const [ore, n] of Object.entries(boot.upgradeMats)) ores[ore] -= n;
-      return { ...prev, money: prev.money - boot.price, oreInventory: ores, ownedBoots: [...(prev.ownedBoots ?? ['기본신발']), key], boots: key };
+      return { ...prev, money: prev.money - discountedPrice, oreInventory: ores, ownedBoots: [...(prev.ownedBoots ?? ['기본신발']), key], boots: key };
     });
-    addMsg(`👟 ${boot.name} 구매!`, 'catch');
+    addMsg(`👟 ${boot.name} 구매!${discount > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
+    gainNpcAffinity('상인', 2);
   };
 
   const equipBoots = (key) => {
@@ -1283,14 +1347,17 @@ export default function App() {
   const buyBait = (key) => {
     const bait = BAIT[key];
     if (bait.type === 'permanent' && (gs.ownedBait ?? []).includes(key)) { addMsg('이미 보유 중'); return; }
-    if (gs.money < bait.price) { addMsg(`💰 골드 부족 (${bait.price}G 필요)`, 'error'); return; }
+    const discount = getShopDiscount(gs.npcAffinity);
+    const discountedPrice = Math.round(bait.price * (1 - discount));
+    if (gs.money < discountedPrice) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (bait.type === 'permanent') {
-      setGs(prev => ({ ...prev, money: prev.money - bait.price, ownedBait: [...(prev.ownedBait ?? []), key], equippedBait: key }));
-      addMsg(`🪝 ${bait.name} 구매 및 장착!`, 'catch');
+      setGs(prev => ({ ...prev, money: prev.money - discountedPrice, ownedBait: [...(prev.ownedBait ?? []), key], equippedBait: key }));
+      addMsg(`🪝 ${bait.name} 구매 및 장착!${discount > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
     } else {
-      setGs(prev => ({ ...prev, money: prev.money - bait.price, baitInventory: { ...(prev.baitInventory ?? {}), [key]: ((prev.baitInventory ?? {})[key] ?? 0) + 1 } }));
-      addMsg(`🪝 ${bait.name} 구매!`, 'catch');
+      setGs(prev => ({ ...prev, money: prev.money - discountedPrice, baitInventory: { ...(prev.baitInventory ?? {}), [key]: ((prev.baitInventory ?? {})[key] ?? 0) + 1 } }));
+      addMsg(`🪝 ${bait.name} 구매!${discount > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
     }
+    gainNpcAffinity('상인', 2);
   };
 
   const equipBait = (key) => {
@@ -1301,19 +1368,22 @@ export default function App() {
   const buyMarineGear = (key) => {
     const gear = MARINE_GEAR[key];
     if ((gs.ownedMarineGear ?? []).includes(key)) { addMsg('이미 보유 중'); return; }
-    const canAfford = gs.money >= gear.price;
+    const discount = getShopDiscount(gs.npcAffinity);
+    const discountedPrice = Math.round(gear.price * (1 - discount));
+    const canAfford = gs.money >= discountedPrice;
     const hasMats = gear.upgradeMats
       ? Object.entries(gear.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
       : true;
-    if (!canAfford) { addMsg(`💰 골드 부족 (${gear.price}G 필요)`, 'error'); return; }
+    if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
       const ores = { ...prev.oreInventory };
       if (gear.upgradeMats) for (const [ore, n] of Object.entries(gear.upgradeMats)) ores[ore] -= n;
-      return { ...prev, money: prev.money - gear.price, oreInventory: ores,
+      return { ...prev, money: prev.money - discountedPrice, oreInventory: ores,
         ownedMarineGear: [...(prev.ownedMarineGear ?? []), key], marineGear: key };
     });
-    addMsg(`🌊 ${gear.name} 구매 및 장착!`, 'catch');
+    addMsg(`🌊 ${gear.name} 구매 및 장착!${discount > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
+    gainNpcAffinity('상인', 2);
   };
 
   const equipMarineGear = (key) => {
@@ -1324,16 +1394,19 @@ export default function App() {
   const buyCookware = (key) => {
     const cw = COOKWARE[key];
     if ((gs.ownedCookware ?? []).includes(key)) { addMsg('이미 보유 중'); return; }
-    const canAfford = gs.money >= cw.price;
+    const discount = getShopDiscount(gs.npcAffinity);
+    const discountedPrice = Math.round(cw.price * (1 - discount));
+    const canAfford = gs.money >= discountedPrice;
     const hasMats = cw.upgradeMats ? Object.entries(cw.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
-    if (!canAfford) { addMsg(`💰 골드 부족 (${cw.price}G 필요)`, 'error'); return; }
+    if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
       const ores = { ...prev.oreInventory };
       if (cw.upgradeMats) for (const [ore, n] of Object.entries(cw.upgradeMats)) ores[ore] -= n;
-      return { ...prev, money: prev.money - cw.price, oreInventory: ores, ownedCookware: [...(prev.ownedCookware ?? []), key], cookware: key };
+      return { ...prev, money: prev.money - discountedPrice, oreInventory: ores, ownedCookware: [...(prev.ownedCookware ?? []), key], cookware: key };
     });
-    addMsg(`🍳 ${cw.name} 구매!`, 'catch');
+    addMsg(`🍳 ${cw.name} 구매!${discount > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
+    gainNpcAffinity('상인', 2);
   };
 
   const equipCookware = (key) => {
@@ -1344,17 +1417,20 @@ export default function App() {
   const buyGatherTool = (key) => {
     const gt = GATHER_TOOLS[key];
     if ((gs.ownedGatherTools ?? ['맨손']).includes(key)) { addMsg('이미 보유 중'); return; }
-    const canAfford = gs.money >= gt.price;
+    const discount = getShopDiscount(gs.npcAffinity);
+    const discountedPrice = gt.price > 0 ? Math.round(gt.price * (1 - discount)) : 0;
+    const canAfford = gs.money >= discountedPrice;
     const hasMats = gt.upgradeMats ? Object.entries(gt.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
-    if (!canAfford) { addMsg(`💰 골드 부족 (${gt.price}G 필요)`, 'error'); return; }
+    if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
       const ores = { ...prev.oreInventory };
       if (gt.upgradeMats) for (const [ore, n] of Object.entries(gt.upgradeMats)) ores[ore] -= n;
-      return { ...prev, money: gt.price > 0 ? prev.money - gt.price : prev.money, oreInventory: ores,
+      return { ...prev, money: discountedPrice > 0 ? prev.money - discountedPrice : prev.money, oreInventory: ores,
         ownedGatherTools: [...(prev.ownedGatherTools ?? ['맨손']), key], gatherTool: key };
     });
-    addMsg(`🌿 ${gt.name} 구매!`, 'catch');
+    addMsg(`🌿 ${gt.name} 구매!${discount > 0 && gt.price > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
+    if (gt.price > 0) gainNpcAffinity('상인', 2);
   };
 
   const equipGatherTool = (key) => {
@@ -1365,18 +1441,21 @@ export default function App() {
   const buyPickaxe = (key) => {
     const px = PICKAXES[key];
     if ((gs.ownedPickaxes ?? ['나무곡괭이']).includes(key)) { addMsg('이미 보유 중'); return; }
-    const canAfford = gs.money >= px.price;
+    const discount = getShopDiscount(gs.npcAffinity);
+    const discountedPrice = px.price > 0 ? Math.round(px.price * (1 - discount)) : 0;
+    const canAfford = gs.money >= discountedPrice;
     const hasMats = px.upgradeMats ? Object.entries(px.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
-    if (!canAfford) { addMsg(`💰 골드 부족 (${px.price}G 필요)`, 'error'); return; }
+    if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
       const ores = { ...prev.oreInventory };
       if (px.upgradeMats) for (const [ore, n] of Object.entries(px.upgradeMats)) ores[ore] -= n;
-      return { ...prev, money: px.price > 0 ? prev.money - px.price : prev.money, oreInventory: ores,
+      return { ...prev, money: discountedPrice > 0 ? prev.money - discountedPrice : prev.money, oreInventory: ores,
         ownedPickaxes: [...(prev.ownedPickaxes ?? ['나무곡괭이']), key], pickaxe: key,
         pickaxeEnhance: { ...(prev.pickaxeEnhance ?? {}), [key]: 0 } };
     });
-    addMsg(`⛏ ${px.name} 구매!`, 'catch');
+    addMsg(`⛏ ${px.name} 구매!${discount > 0 && px.price > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
+    if (px.price > 0) gainNpcAffinity('상인', 2);
   };
 
   const equipPickaxe = (key) => {
@@ -1402,17 +1481,30 @@ export default function App() {
       const newEnhance = { ...(prev.pickaxeEnhance ?? {}), [key]: success ? enhLevel + 1 : enhLevel };
       return { ...prev, money: prev.money - cost, oreInventory: ores, pickaxeEnhance: newEnhance };
     });
-    if (success) addMsg(`⛏ 곡괭이 강화 성공! (${enhLevel} → ${enhLevel + 1})`, 'catch');
-    else addMsg(`강화 실패… (${Math.round(rate * 100)}% 확률)`, 'error');
+    if (success) {
+      addMsg(`⛏ 곡괭이 강화 성공! (${enhLevel} → ${enhLevel + 1})`, 'catch');
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, enhanceCount: (prevStats.enhanceCount ?? 0) + 1 };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+        return { ...prev, achStats: updatedStats };
+      });
+    } else addMsg(`강화 실패… (${Math.round(rate * 100)}% 확률)`, 'error');
   };
 
   const sellAll = () => {
     const total = gs.fishInventory.reduce((s, f) => s + f.price, 0);
-    setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: [] }));
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      return { ...prev, money: prev.money + total, fishInventory: [], achStats: updatedStats };
+    });
     addMsg(`💰 전체 판매 +${total}G`, 'catch');
     playSellSound(total);
     grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
     advanceQuest('sell', total);
+    gainNpcAffinity('상인', Math.max(1, Math.floor(total / 200)));
   };
 
   const sellOne = (id) => {
@@ -1472,10 +1564,12 @@ export default function App() {
       playCookComplete();
       grantAbility('요리', COOK_ABILITY_GAIN * raw.length);
       advanceQuest('cook', raw.length);
+      gainNpcAffinity('요리사', 3);
     } else if (npcName === '미나') {
       addMsg('🏨 미나: "편히 쉬고 가세요! 내일 퀘스트도 화이팅~"', 'info');
       addMsg('💤 여관에서 휴식했습니다. 체력 어빌리티 +0.5!', 'catch');
       grantAbility('체력', 0.5);
+      gainNpcAffinity('여관주인', 1);
     } else if (npcName === '철수') {
       const inv = stateRef.current?.oreInventory ?? {};
       const lines = Object.entries(inv)
@@ -1487,7 +1581,7 @@ export default function App() {
         addMsg('⛏ 철수: "광산에서 광석을 캐보세요! 희귀할수록 값이 비싸답니다."', 'info');
       }
     }
-  }, [addMsg, grantAbility, advanceQuest, stateRef]);
+  }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, stateRef]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1819,7 +1913,7 @@ export default function App() {
 
             {/* Tabs */}
             <div className="stats-tabs">
-              {['장비', '어빌리티', '제련/제작', '업적', '펫'].map(tab => (
+              {['장비', '어빌리티', '제련/제작', '업적', '펫', '관계도', '탐험'].map(tab => (
                 <button key={tab} tabIndex={-1}
                   className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''}`}
                   onClick={() => setStatsTab(tab)}>{tab}</button>
@@ -1990,8 +2084,16 @@ export default function App() {
                               return { ...prev, money: prev.money - cost, oreInventory: ores,
                                 rodEnhance: { ...(prev.rodEnhance ?? {}), [rodKey]: success ? enhLv + 1 : enhLv } };
                             });
-                            if (success) { addMsg(`🔨 ${rod.name} +${enhLv + 1} 강화 성공!`, 'catch'); grantAbility('강화', ENHANCE_ABILITY_GAIN); }
-                            else addMsg(`🔨 강화 실패... (${rod.name} +${enhLv} 유지)`, 'error');
+                            if (success) {
+                              addMsg(`🔨 ${rod.name} +${enhLv + 1} 강화 성공!`, 'catch');
+                              grantAbility('강화', ENHANCE_ABILITY_GAIN);
+                              setGs(prev2 => {
+                                const ps = prev2.achStats ?? {};
+                                const us = { ...ps, enhanceCount: (ps.enhanceCount ?? 0) + 1 };
+                                setTimeout(() => checkAndGrantAchievements(us), 0);
+                                return { ...prev2, achStats: us };
+                              });
+                            } else addMsg(`🔨 강화 실패... (${rod.name} +${enhLv} 유지)`, 'error');
                           }}
                         >
                           {enhLv >= 100 ? '최대 강화' : `강화 (+${enhLv} → +${enhLv + 1})`}
@@ -2098,8 +2200,15 @@ export default function App() {
                               return { ...prev, oreInventory: ores, processedOreInventory: proc };
                             });
                             grantAbility('제련', 2);
-                            if (success) addMsg(`🔥 ${recipe.name} 제련 성공!`, 'catch');
-                            else addMsg(`🔥 제련 실패… 재료 소모됨`, 'error');
+                            if (success) {
+                              addMsg(`🔥 ${recipe.name} 제련 성공!`, 'catch');
+                              setGs(prev2 => {
+                                const ps = prev2.achStats ?? {};
+                                const us = { ...ps, smeltCount: (ps.smeltCount ?? 0) + 1 };
+                                setTimeout(() => checkAndGrantAchievements(us), 0);
+                                return { ...prev2, achStats: us };
+                              });
+                            } else addMsg(`🔥 제련 실패… 재료 소모됨`, 'error');
                           }}>제련하기</button>
                         </div>
                       );
@@ -2297,6 +2406,98 @@ export default function App() {
                 </>
               );
             })()}
+
+            {/* ── 관계도 tab ── */}
+            {statsTab === '관계도' && (
+              <div className="section">
+                <div className="section-title">NPC 관계도</div>
+                {Object.entries(NPCS).map(([npcKey, npc]) => {
+                  const affinity = gs.npcAffinity?.[npcKey] ?? 0;
+                  const level = getAffinityLevel(affinity, npcKey);
+                  const next = npc.thresholds.find(t => affinity < t.at);
+                  return (
+                    <div key={npcKey} className="rod-card">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 22 }}>{npc.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: npc.color }}>{npc.name}</div>
+                          <div className="rod-meta">{npc.desc}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', fontSize: 12 }}>
+                          <div style={{ color: level ? npc.color : '#888', fontWeight: 700 }}>
+                            {level ? `[${level.label}]` : '[일반]'}
+                          </div>
+                          <div style={{ color: '#ffcc44' }}>{affinity} / 100</div>
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 8, overflow: 'hidden', marginBottom: 4 }}>
+                        <div style={{ width: `${affinity}%`, height: '100%', background: npc.color, borderRadius: 4, transition: 'width 0.3s' }} />
+                      </div>
+                      {level && <div style={{ fontSize: 11, color: '#88ff88', marginBottom: 2 }}>혜택: {level.reward}</div>}
+                      {next && <div style={{ fontSize: 11, color: '#aaa' }}>다음: [{next.label}] (호감도 {next.at} 달성 시) — {next.reward}</div>}
+                      {!next && <div style={{ fontSize: 11, color: npc.color }}>최고 관계 달성!</div>}
+                    </div>
+                  );
+                })}
+                {(() => {
+                  const discount = getShopDiscount(gs.npcAffinity);
+                  if (discount > 0) return (
+                    <div style={{ padding: '8px 0', fontSize: 12, color: '#ffcc44' }}>
+                      현재 상점 할인: {Math.round(discount * 100)}%
+                    </div>
+                  );
+                  return null;
+                })()}
+              </div>
+            )}
+
+            {/* ── 탐험 tab ── */}
+            {statsTab === '탐험' && (
+              <div className="section">
+                <div className="section-title">탐험 구역 ({(gs.exploredZones ?? []).length} / {EXPLORE_ZONES.length} 발견)</div>
+                {EXPLORE_ZONES.map(zone => {
+                  const unlocked = (gs.exploredZones ?? []).includes(zone.id);
+                  const canUnlock = Object.entries(zone.reqAbil).every(([abil, req]) => (gs.abilities?.[abil]?.value ?? 0) >= req);
+                  return (
+                    <div key={zone.id} className="rod-card" style={{ opacity: unlocked ? 1 : 0.7, borderColor: unlocked ? 'rgba(100,220,100,0.3)' : undefined }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 22 }}>{zone.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: unlocked ? '#88ff88' : '#ffe0a0' }}>
+                            {unlocked ? '✓ ' : '🔒 '}{zone.name}
+                          </div>
+                          <div className="rod-meta">{zone.desc}</div>
+                        </div>
+                        {unlocked && <span className="badge" style={{ background: '#1a7a1a' }}>발견됨</span>}
+                      </div>
+                      {unlocked
+                        ? <div style={{ fontSize: 11, color: '#88ff88' }}>혜택: {zone.benefit}</div>
+                        : <>
+                            <div style={{ fontSize: 11, color: canUnlock ? '#ffcc44' : '#888' }}>
+                              조건: {zone.reqLabel}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>
+                              {Object.entries(zone.reqAbil).map(([abil, req]) => {
+                                const cur = gs.abilities?.[abil]?.value ?? 0;
+                                return (
+                                  <span key={abil} style={{ marginRight: 8, color: cur >= req ? '#88ff88' : '#ff8888' }}>
+                                    {abil} {cur.toFixed(0)}/{req}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </>
+                      }
+                    </div>
+                  );
+                })}
+                <div style={{ marginTop: 8 }}>
+                  <button className="btn-buy" onClick={() => handleCommand('!탐험')}>
+                    🗺 탐험 실행 (!탐험)
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2478,7 +2679,13 @@ export default function App() {
               <span>🏪 상점</span>
               <button tabIndex={-1} onClick={() => setShowShop(false)}>✕</button>
             </div>
-            <div className="shop-money">보유: {gs.money.toLocaleString()}G</div>
+            <div className="shop-money">보유: {gs.money.toLocaleString()}G
+              {getShopDiscount(gs.npcAffinity) > 0 && (
+                <span style={{ marginLeft: 10, color: '#88ff88', fontSize: 12 }}>
+                  🧑‍💼 상인 할인 -{Math.round(getShopDiscount(gs.npcAffinity) * 100)}%
+                </span>
+              )}
+            </div>
 
             {/* ── Rods ── */}
             <div className="section">
