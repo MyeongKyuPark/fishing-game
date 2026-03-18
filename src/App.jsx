@@ -506,23 +506,23 @@ export default function App() {
     gameRef.current.speedBonus = bootsBonus + potionBonus;
   }, [gs.boots, gs.activePotion]);
 
-  // Expire active potion
-  useEffect(() => {
-    if (!gs.activePotion) return;
-    const remaining = gs.activePotion.expiresAt - Date.now();
-    if (remaining <= 0) { setGs(prev => ({ ...prev, activePotion: null })); return; }
-    const t = setTimeout(() => {
-      setGs(prev => ({ ...prev, activePotion: null }));
-      addMsg('포션 효과가 종료됐습니다.', 'error');
-    }, remaining);
-    return () => clearTimeout(t);
-  }, [gs.activePotion, addMsg]);
-
   // Sync marine gear to game loop
   useEffect(() => {
     if (!gameRef.current) return;
     gameRef.current.marineGear = gs.marineGear ?? null;
   }, [gs.marineGear]);
+
+  // Sync equipped items visuals to game loop
+  useEffect(() => {
+    if (!gameRef.current) return;
+    gameRef.current.equippedItems = {
+      boots: gs.boots ?? '기본신발',
+      ring: gs.equippedJewelry?.ring ?? null,
+      necklace: gs.equippedJewelry?.necklace ?? null,
+      gatherTool: gs.gatherTool ?? '맨손',
+      pickaxe: gs.pickaxe ?? '나무곡괭이',
+    };
+  }, [gs.boots, gs.equippedJewelry, gs.gatherTool, gs.pickaxe]);
 
   // Weather: deterministic per room+time, update when period changes
   const [weather, setWeather] = useState(() => getWeather(null, Date.now()));
@@ -598,6 +598,18 @@ export default function App() {
   const addMsg = useCallback((text, type = 'system') => {
     setMessages(prev => [...prev.slice(-120), { text, type }]);
   }, []);
+
+  // Expire active potion (after addMsg to avoid TDZ)
+  useEffect(() => {
+    if (!gs.activePotion) return;
+    const remaining = gs.activePotion.expiresAt - Date.now();
+    if (remaining <= 0) { setGs(prev => ({ ...prev, activePotion: null })); return; }
+    const t = setTimeout(() => {
+      setGs(prev => ({ ...prev, activePotion: null }));
+      addMsg('포션 효과가 종료됐습니다.', 'error');
+    }, remaining);
+    return () => clearTimeout(t);
+  }, [gs.activePotion, addMsg]);
 
   // Server collective quest milestone announcements
   useEffect(() => {

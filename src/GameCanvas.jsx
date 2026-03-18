@@ -798,10 +798,15 @@ function drawFlowerPatch(ctx, wx, wy, seed) {
   }
 }
 
-function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor, bodyColor, skinColor, gender, marineGear = null) {
+function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor, bodyColor, skinColor, gender, marineGear = null, equippedItems = {}) {
   const { facing, state, activityProgress } = player;
   const isScuba = marineGear === '스쿠버다이빙세트';
   const isBoat = marineGear === '보트';
+  const boots = equippedItems.boots ?? '기본신발';
+  const ring = equippedItems.ring;
+  const necklace = equippedItems.necklace;
+  const gatherTool = equippedItems.gatherTool ?? '맨손';
+  const pickaxeType = equippedItems.pickaxe ?? '나무곡괭이';
   const isSea = !!(player.seaFishing && marineGear);
   const now = Date.now();
 
@@ -845,9 +850,24 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
     ctx.beginPath(); ctx.ellipse(px - 10, py + 14 + legSwing, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(px + 10, py + 14 - legSwing, 3, 2, 0, 0, Math.PI * 2); ctx.fill();
   } else {
-    ctx.fillStyle = '#3a2810';
+    // Boot color by type
+    const bootColors = {
+      '기본신발': '#3a2810',
+      '빠른신발': '#4488cc',
+      '질풍신발': '#cc6622',
+    };
+    const bootCol = bootColors[boots] ?? '#3a2810';
+    ctx.fillStyle = bootCol;
     ctx.beginPath(); ctx.ellipse(px - 5, py + 14 + legSwing, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(px + 5, py + 14 - legSwing, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+    // 질풍신발 speed lines
+    if (boots === '질풍신발' && isMoving) {
+      ctx.strokeStyle = 'rgba(255,200,80,0.65)'; ctx.lineWidth = 1.2;
+      for (let li = 0; li < 3; li++) {
+        const lx = px - 14 + li * 5;
+        ctx.beginPath(); ctx.moveTo(lx, py + 16); ctx.lineTo(lx - 6, py + 14); ctx.stroke();
+      }
+    }
   }
   // Legs
   ctx.fillStyle = isScuba ? '#0a1a4a' : '#4a5070';
@@ -869,6 +889,25 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
     ctx.beginPath(); ctx.roundRect(px - 9, py - 1, 18, 3, 0); ctx.fill();
   }
 
+  // Necklace (drawn over body, below head)
+  if (necklace && !isScuba) {
+    const necklaceColors = {
+      '철반지': null, '청동목걸이': '#cc9944', '수정반지': null, '황금목걸이': '#ffd700',
+    };
+    const neckCol = necklaceColors[necklace];
+    if (neckCol) {
+      ctx.strokeStyle = neckCol; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(px, py - 5, 7, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.stroke();
+      // Pendant gem
+      ctx.fillStyle = necklace === '황금목걸이' ? '#ffd700' : '#88ccff';
+      ctx.beginPath(); ctx.arc(px, py + 2, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath(); ctx.arc(px - 0.8, py + 1, 1, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
   // Arms (base, overdrawn by fishing/mining)
   if (state !== 'fishing' && state !== 'mining') {
     ctx.fillStyle = isScuba ? '#1a3a6a' : bodyCol;
@@ -877,6 +916,18 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
     ctx.fillStyle = isScuba ? '#000077' : '#f6cc88'; // gloves vs hands
     ctx.beginPath(); ctx.arc(px - 12, py + 7, 3.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(px + 12, py + 7, 3.5, 0, Math.PI * 2); ctx.fill();
+    // Ring sparkle on right hand
+    if (ring && !isScuba) {
+      const ringColors = { '철반지': '#aaaaaa', '수정반지': '#66aaff', '청동목걸이': null, '황금목걸이': null };
+      const ringCol = ringColors[ring];
+      if (ringCol) {
+        ctx.fillStyle = ringCol;
+        ctx.beginPath(); ctx.arc(px + 12, py + 7, 3.5, 0, Math.PI * 2); ctx.fill();
+        // Sparkle
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath(); ctx.arc(px + 13, py + 6, 1.2, 0, Math.PI * 2); ctx.fill();
+      }
+    }
   }
 
   // ── Chibi head ──
@@ -1125,8 +1176,11 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
     ctx.lineTo(0, 18);
     ctx.stroke();
 
+    // Pickaxe head color by type
+    const pickaxeHeadColors = { '나무곡괭이': '#8a6a3a', '철곡괭이': '#8a8a8a', '금곡괭이': '#e8c830' };
+    const pickaxeHeadCol = pickaxeHeadColors[pickaxeType] ?? '#8a8a8a';
     // Pickaxe head (wedge shape)
-    ctx.fillStyle = '#8a8a8a';
+    ctx.fillStyle = pickaxeHeadCol;
     ctx.strokeStyle = '#555';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -1173,6 +1227,34 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
       ctx.beginPath();
       ctx.arc(px + 10, py + PH / 2 - 2, 4, 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  // ── Gathering animation ──
+  if (state === 'gathering') {
+    const t = now / 1000;
+    const toolIcons = { '맨손': null, '나무바구니': '🧺', '허브낫': '🌿', '황금낫': '✨' };
+    const toolIcon = toolIcons[gatherTool];
+    // Arm reach left-right bob
+    const bob = Math.sin(now / 400) * 4;
+    ctx.fillStyle = bodyCol;
+    ctx.beginPath(); ctx.roundRect(px - 14, py - 4, 5, 10 + bob * 0.5, 3); ctx.fill();
+    ctx.fillStyle = '#f6cc88';
+    ctx.beginPath(); ctx.arc(px - 12, py + 7 + bob, 3.5, 0, Math.PI * 2); ctx.fill();
+    // Tool icon or herb indicator
+    if (toolIcon) {
+      ctx.font = '11px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(toolIcon, px - 18, py + 5 + bob);
+    }
+    // Herb sparkles
+    for (let i = 0; i < 3; i++) {
+      const age = ((now / 600 + i * 0.33) % 1);
+      const sx2 = px - 22 + Math.sin(age * Math.PI * 2 + i) * 5;
+      const sy2 = py + 5 - age * 14;
+      const alpha = 0.7 - age * 0.6;
+      ctx.fillStyle = `rgba(80,220,80,${alpha})`;
+      ctx.beginPath(); ctx.arc(sx2, sy2, 2 - age, 0, Math.PI * 2); ctx.fill();
     }
   }
 
@@ -2072,7 +2154,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
       otherPlayerScreenPosRef.current = screenPositions;
 
       // My player (on top)
-      drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname, title, titleColor, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current, marineGearKey);
+      drawPlayer(ctx, player.x - camX, player.y - camY, player, nickname, title, titleColor, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current, marineGearKey, gameRef.current?.equippedItems ?? {});
 
       // Door entry prompt
       if (nearDoorRef.current) {

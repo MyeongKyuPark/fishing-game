@@ -309,9 +309,12 @@ function drawIndoorNPC(ctx, sx, sy, npc, speaking, now) {
 }
 
 // ── Player drawing (indoor) ───────────────────────────────────────────────────
-function drawIndoorPlayer(ctx, sx, sy, facing, nickname, hairColor, bodyColor, skinColor, gender, marineGear = null) {
+function drawIndoorPlayer(ctx, sx, sy, facing, nickname, hairColor, bodyColor, skinColor, gender, marineGear = null, equippedItems = {}) {
   const isScuba = marineGear === '스쿠버다이빙세트';
   const isBoat  = marineGear === '보트';
+  const boots = equippedItems.boots ?? '기본신발';
+  const ring = equippedItems.ring ?? null;
+  const necklace = equippedItems.necklace ?? null;
 
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.22)';
@@ -345,9 +348,46 @@ function drawIndoorPlayer(ctx, sx, sy, facing, nickname, hairColor, bodyColor, s
     ctx.beginPath(); ctx.ellipse(sx - 4, sy + 7, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(sx + 4, sy + 7, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
   } else {
-    ctx.fillStyle = '#3a2810';
+    const bootColors = { '기본신발': '#3a2810', '빠른신발': '#4488cc', '질풍신발': '#cc6622' };
+    const bootCol = bootColors[boots] ?? '#3a2810';
+    ctx.fillStyle = bootCol;
     ctx.beginPath(); ctx.ellipse(sx - 4, sy + 7, 5, 2.5, 0, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.ellipse(sx + 4, sy + 7, 5, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Necklace
+  if (necklace && !isScuba) {
+    const necklaceColors = { '청동목걸이': '#cc9944', '황금목걸이': '#ffd700' };
+    const neckCol = necklaceColors[necklace];
+    if (neckCol) {
+      ctx.strokeStyle = neckCol; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(sx, sy - 16, 6, Math.PI * 0.1, Math.PI * 0.9); ctx.stroke();
+      ctx.fillStyle = necklace === '황금목걸이' ? '#ffd700' : '#88ccff';
+      ctx.beginPath(); ctx.arc(sx, sy - 10, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath(); ctx.arc(sx - 0.6, sy - 10.8, 0.8, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // Arms + ring
+  if (!isScuba) {
+    ctx.fillStyle = bodyColor ?? '#5a7aaa';
+    ctx.beginPath(); ctx.roundRect(sx - 11, sy - 16, 4, 9, 2); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(sx + 7, sy - 16, 4, 9, 2); ctx.fill();
+    ctx.fillStyle = skinColor ?? '#f6cc88';
+    ctx.beginPath(); ctx.arc(sx - 9, sy - 7, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(sx + 9, sy - 7, 3, 0, Math.PI * 2); ctx.fill();
+    // Ring on right hand
+    if (ring) {
+      const ringColors = { '철반지': '#aaaaaa', '수정반지': '#66aaff' };
+      const ringCol = ringColors[ring];
+      if (ringCol) {
+        ctx.fillStyle = ringCol;
+        ctx.beginPath(); ctx.arc(sx + 9, sy - 7, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.beginPath(); ctx.arc(sx + 9.8, sy - 7.8, 1, 0, Math.PI * 2); ctx.fill();
+      }
+    }
   }
 
   // Head
@@ -603,7 +643,7 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
       }
 
       // Player
-      drawIndoorPlayer(ctx, offX + player.x, offY + player.y, player.facing, nickname, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current, gameRef.current?.marineGear ?? null);
+      drawIndoorPlayer(ctx, offX + player.x, offY + player.y, player.facing, nickname, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current, gameRef.current?.marineGear ?? null, gameRef.current?.equippedItems ?? {});
 
       // Header bar
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
