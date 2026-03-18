@@ -125,6 +125,29 @@ export const ORES = {
   금광석:   { price: 350, color: '#ffd700', mineRange: [18000, 35000], w: 8  },
 };
 
+// ── Pickaxes ─────────────────────────────────────────────────────────────────
+export const PICKAXES = {
+  나무곡괭이: { name: '나무 곡괭이', price: 0,    timeMult: 1.00, color: '#8B6914', desc: '기본 채굴 도구' },
+  철곡괭이:   { name: '철 곡괭이',   price: 300,  timeMult: 0.80, color: '#808080', desc: '채광 속도 +20%', upgradeMats: { 철광석: 5 } },
+  금곡괭이:   { name: '금 곡괭이',   price: 1500, timeMult: 0.60, color: '#FFD700', desc: '채광 속도 +40%', upgradeMats: { 금광석: 3, 철광석: 3 } },
+};
+
+export function pickaxeEnhanceCost(enhLevel) { return 40 + enhLevel * 15; }
+export function pickaxeEnhanceMatsNeeded(enhLevel) {
+  if (enhLevel < 30) return {};
+  if (enhLevel < 60) return { 철광석: 1 };
+  if (enhLevel < 80) return { 구리광석: 1 };
+  return { 수정: 1 };
+}
+export function pickaxeEnhanceSuccessRate(enhLevel, ganghwaAbil) {
+  const base = Math.max(0.20, 1.0 - enhLevel * 0.008);
+  const bonus = (ganghwaAbil ?? 0) * 0.003;
+  return Math.min(0.98, base + bonus);
+}
+export function pickaxeEnhanceEffect(enhLevel) {
+  return { timeReduction: enhLevel * 0.005 };
+}
+
 // ── Boots ────────────────────────────────────────────────────────────────────
 export const BOOTS = {
   기본신발: { name: '기본 신발', price: 0,    speedBonus: 0,   color: '#aaaaaa' },

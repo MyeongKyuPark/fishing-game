@@ -19,6 +19,34 @@ export async function saveFishRecord(nickname, fishName, size) {
   }
 }
 
+// Save overall best catch (best per player per species, stored flat for cross-species ranking)
+export async function saveOverallFishRecord(nickname, fishName, size, rarity) {
+  const docId = `${encodeURIComponent(nickname)}_${encodeURIComponent(fishName)}`;
+  const ref = doc(db, 'best_catches', docId);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists() || snap.data().size < size) {
+        tx.set(ref, { nickname, fishName, size, rarity, caughtAt: serverTimestamp() });
+      }
+    });
+  } catch (e) {
+    console.warn('overall fish record save failed', e);
+  }
+}
+
+// Subscribe to top 30 overall catches ordered by size desc
+export function subscribeOverallFishRankings(callback) {
+  const q = query(
+    collection(db, 'best_catches'),
+    orderBy('size', 'desc'),
+    limit(30),
+  );
+  return onSnapshot(q, snap => {
+    callback(snap.docs.map(d => d.data()));
+  }, err => console.warn('overall ranking subscribe error', err));
+}
+
 // Subscribe to top 10 for a specific fish species, ordered by size desc
 export function subscribeFishRankings(fishName, callback) {
   const q = query(

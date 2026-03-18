@@ -9,10 +9,12 @@ import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
 import RankSidebar from './RankSidebar';
 import ChannelLobby from './ChannelLobby';
-import { saveFishRecord, savePlayerTitle, broadcastAnnouncement, subscribeAnnouncements, incrementServerStat, subscribeServerStats } from './ranking';
+import { saveFishRecord, saveOverallFishRecord, savePlayerTitle, broadcastAnnouncement, subscribeAnnouncements, incrementServerStat, subscribeServerStats } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
-import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, weightedPick, randInt, TILE_SIZE,
-  getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect } from './gameData';
+import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES,
+  weightedPick, randInt, TILE_SIZE,
+  getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
+  pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
@@ -169,6 +171,9 @@ const DEFAULT_STATE = {
   firstLoginDate: null,
   marineGear: null,
   ownedMarineGear: [],
+  pickaxe: '나무곡괭이',
+  ownedPickaxes: ['나무곡괭이'],
+  pickaxeEnhance: { 나무곡괭이: 0 },
 };
 
 function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
@@ -738,6 +743,7 @@ export default function App() {
     addMsg(`🐟 ${name} ${size}cm 낚음! (${finalPrice}G)${seaMsg}`, 'catch');
     playFishCatch(fd.rarity);
     if (nicknameRef.current) saveFishRecord(nicknameRef.current, name, size);
+    if (nicknameRef.current) saveOverallFishRecord(nicknameRef.current, name, size, fd.rarity);
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `${name} ${size}cm`, age: 0, color: rarityColor(fd.rarity) };
 
@@ -961,6 +967,7 @@ export default function App() {
           (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction)
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
+        if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
         player.activityStart = performance.now();
         player.activityDuration = randInt(mn, mx);
         player.activityProgress = 0;
@@ -1000,6 +1007,7 @@ export default function App() {
         (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction)
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
+      if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx);
       player.activityProgress = 0;
@@ -1020,8 +1028,13 @@ export default function App() {
       player.currentOre = ore;
       const mineAbil = s.abilities?.채굴?.value ?? 0;
       const mineStamAbil = s.abilities?.체력?.value ?? 0;
-      const mineMult = Math.max(0.3, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003));
-      const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(1000, Math.round(t * mineMult)));
+      const pickaxeKey = s.pickaxe ?? '나무곡괭이';
+      const pickaxeEnhLv = s.pickaxeEnhance?.[pickaxeKey] ?? 0;
+      const { timeReduction: paxTimeRed } = pickaxeEnhanceEffect(pickaxeEnhLv);
+      const paxMult = PICKAXES[pickaxeKey]?.timeMult ?? 1.0;
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed));
+      const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
+      if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx);
       player.activityProgress = 0;
@@ -1187,6 +1200,50 @@ export default function App() {
   const equipCookware = (key) => {
     setGs(prev => ({ ...prev, cookware: key }));
     addMsg(`🍳 ${COOKWARE[key].name} 장착`);
+  };
+
+  const buyPickaxe = (key) => {
+    const px = PICKAXES[key];
+    if ((gs.ownedPickaxes ?? ['나무곡괭이']).includes(key)) { addMsg('이미 보유 중'); return; }
+    const canAfford = gs.money >= px.price;
+    const hasMats = px.upgradeMats ? Object.entries(px.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
+    if (!canAfford) { addMsg(`💰 골드 부족 (${px.price}G 필요)`, 'error'); return; }
+    if (!hasMats) { addMsg('재료 부족', 'error'); return; }
+    setGs(prev => {
+      const ores = { ...prev.oreInventory };
+      if (px.upgradeMats) for (const [ore, n] of Object.entries(px.upgradeMats)) ores[ore] -= n;
+      return { ...prev, money: px.price > 0 ? prev.money - px.price : prev.money, oreInventory: ores,
+        ownedPickaxes: [...(prev.ownedPickaxes ?? ['나무곡괭이']), key], pickaxe: key,
+        pickaxeEnhance: { ...(prev.pickaxeEnhance ?? {}), [key]: 0 } };
+    });
+    addMsg(`⛏ ${px.name} 구매!`, 'catch');
+  };
+
+  const equipPickaxe = (key) => {
+    setGs(prev => ({ ...prev, pickaxe: key }));
+    addMsg(`⛏ ${PICKAXES[key].name} 장착`);
+  };
+
+  const enhancePickaxe = () => {
+    const key = gs.pickaxe ?? '나무곡괭이';
+    const enhLevel = gs.pickaxeEnhance?.[key] ?? 0;
+    if (enhLevel >= 100) { addMsg('최대 강화 완료!'); return; }
+    const cost = pickaxeEnhanceCost(enhLevel);
+    const mats = pickaxeEnhanceMatsNeeded(enhLevel);
+    const canAfford = gs.money >= cost;
+    const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
+    if (!canAfford) { addMsg(`💰 골드 부족 (${cost}G 필요)`, 'error'); return; }
+    if (!hasMats) { addMsg('재료 부족', 'error'); return; }
+    const rate = pickaxeEnhanceSuccessRate(enhLevel, gs.abilities?.강화?.value ?? 0);
+    const success = Math.random() < rate;
+    setGs(prev => {
+      const ores = { ...prev.oreInventory };
+      for (const [ore, n] of Object.entries(mats)) ores[ore] = Math.max(0, (ores[ore] ?? 0) - n);
+      const newEnhance = { ...(prev.pickaxeEnhance ?? {}), [key]: success ? enhLevel + 1 : enhLevel };
+      return { ...prev, money: prev.money - cost, oreInventory: ores, pickaxeEnhance: newEnhance };
+    });
+    if (success) addMsg(`⛏ 곡괭이 강화 성공! (${enhLevel} → ${enhLevel + 1})`, 'catch');
+    else addMsg(`강화 실패… (${Math.round(rate * 100)}% 확률)`, 'error');
   };
 
   const sellAll = () => {
@@ -1783,6 +1840,61 @@ export default function App() {
                     );
                   })}
                 </div>
+
+                {/* ── Pickaxe enhancement ── */}
+                <div className="section">
+                  <div className="section-title">⛏ 곡괭이 강화</div>
+                  {(gs.ownedPickaxes ?? ['나무곡괭이']).map(pxKey => {
+                    const px = PICKAXES[pxKey];
+                    const enhLv = gs.pickaxeEnhance?.[pxKey] ?? 0;
+                    const cost = pickaxeEnhanceCost(enhLv);
+                    const mats = pickaxeEnhanceMatsNeeded(enhLv);
+                    const ganghwaAbil = gs.abilities?.강화?.value ?? 0;
+                    const rate = pickaxeEnhanceSuccessRate(enhLv, ganghwaAbil);
+                    const canAfford = gs.money >= cost;
+                    const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
+                    const matsStr = Object.entries(mats).map(([k, n]) => `${k}×${n}`).join(' ');
+                    const eff = pickaxeEnhanceEffect(enhLv);
+                    return (
+                      <div key={pxKey} className="rod-card">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          <span style={{ color: px.color, fontWeight: 700 }}>⛏ {px.name}</span>
+                          <span className="badge" style={{ background: enhLv >= 80 ? '#ff4400' : enhLv >= 50 ? '#ffaa00' : '#446688' }}>
+                            +{enhLv}
+                          </span>
+                        </div>
+                        <div className="rod-meta">효과: 채굴 -{(eff.timeReduction * 100).toFixed(0)}%</div>
+                        <div className="rod-meta">강화비: {cost}G{matsStr ? ` + ${matsStr}` : ''} · 성공률 {(rate * 100).toFixed(0)}%</div>
+                        <div className="rod-meta" style={{ color: canAfford && hasMats ? '#88ff88' : '#ff8888' }}>
+                          보유: {gs.money.toLocaleString()}G
+                          {Object.entries(mats).map(([ore, n]) => (
+                            <span key={ore} style={{ marginLeft: 6, color: (gs.oreInventory[ore] || 0) >= n ? '#88ff88' : '#ff8888' }}>
+                              · {ore} {gs.oreInventory[ore] || 0}/{n}
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          className={canAfford && hasMats ? 'btn-buy' : 'btn-dis'}
+                          disabled={!canAfford || !hasMats || enhLv >= 100}
+                          onClick={() => {
+                            if (enhLv >= 100) return;
+                            const success = Math.random() < pickaxeEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0);
+                            setGs(prev => {
+                              const ores = { ...prev.oreInventory };
+                              for (const [ore, n] of Object.entries(mats)) ores[ore] = Math.max(0, (ores[ore] || 0) - n);
+                              return { ...prev, money: prev.money - cost, oreInventory: ores,
+                                pickaxeEnhance: { ...(prev.pickaxeEnhance ?? {}), [pxKey]: success ? enhLv + 1 : enhLv } };
+                            });
+                            if (success) { addMsg(`⛏ ${px.name} +${enhLv + 1} 강화 성공!`, 'catch'); grantAbility('강화', ENHANCE_ABILITY_GAIN); }
+                            else addMsg(`⛏ 강화 실패... (+${enhLv} 유지)`, 'error');
+                          }}
+                        >
+                          {enhLv >= 100 ? '최대 강화' : `강화 (+${enhLv} → +${enhLv + 1})`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </>
             )}
           </div>
@@ -2141,6 +2253,43 @@ export default function App() {
                           </button>
                         : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyMarineGear(key)} disabled={!canBuy}>
                             {canBuy ? `${gear.price}G 구매` : (!canAfford ? '💰 골드 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Pickaxes ── */}
+            <div className="section">
+              <div className="section-title">⛏ 곡괭이 (채굴 도구)</div>
+              {Object.entries(PICKAXES).map(([key, px]) => {
+                const owned = (gs.ownedPickaxes ?? ['나무곡괭이']).includes(key);
+                const equipped = gs.pickaxe === key;
+                const canAfford = gs.money >= px.price;
+                const hasMats = px.upgradeMats
+                  ? Object.entries(px.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = px.upgradeMats ? Object.entries(px.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: px.color, fontWeight: 700 }}>⛏ {px.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {px.price > 0 ? `${px.price}G` : '무료'}
+                      {matsStr ? ` + 재료: ${matsStr}` : ''}
+                      {' · '}{px.desc}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipPickaxe(key)}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyPickaxe(key)} disabled={!canBuy}>
+                            {canBuy ? (px.price > 0 ? `${px.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
                           </button>
                       }
                     </div>

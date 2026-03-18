@@ -1453,12 +1453,14 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
           if (player.activityProgress >= 1) {
             if (player.state === 'fishing') {
               cbRef.current.onFishCaught(player.currentRod);
-              const [mn, mx] = RODS[player.currentRod].catchTimeRange;
+              const fishMult = g.fishTimeMult ?? 1.0;
+              const [mn, mx] = RODS[player.currentRod].catchTimeRange.map(t => Math.max(1000, Math.round(t * fishMult)));
               player.activityDuration = randInt(mn, mx);
             } else if (player.state === 'mining') {
               cbRef.current.onOreMined(player.currentOre);
               player.currentOre = pickOre();
-              const [mn, mx] = ORES[player.currentOre].mineRange;
+              const mineMult = g.mineTimeMult ?? 1.0;
+              const [mn, mx] = ORES[player.currentOre].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
               player.activityDuration = randInt(mn, mx);
             } else if (player.state === 'gathering') {
               cbRef.current.onHerbGathered?.(player.currentHerb);
