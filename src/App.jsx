@@ -11,7 +11,7 @@ import RankSidebar from './RankSidebar';
 import ChannelLobby from './ChannelLobby';
 import { saveFishRecord, saveOverallFishRecord, savePlayerTitle, broadcastAnnouncement, subscribeAnnouncements, incrementServerStat, subscribeServerStats } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
-import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES,
+import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
   SMELT_RECIPES, JEWELRY_RECIPES, POTION_RECIPES,
   weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
@@ -175,6 +175,8 @@ const DEFAULT_STATE = {
   pickaxe: '나무곡괭이',
   ownedPickaxes: ['나무곡괭이'],
   pickaxeEnhance: { 나무곡괭이: 0 },
+  gatherTool: '맨손',
+  ownedGatherTools: ['맨손'],
   processedOreInventory: {},  // { 정제철: 2, ... }
   jewelryInventory: [],       // [{ id, name, ... }]
   equippedJewelry: {},        // { ring: '수정반지', necklace: '황금목걸이' }
@@ -1082,9 +1084,12 @@ export default function App() {
       const herb = pickHerb();
       player.state = 'gathering';
       player.currentHerb = herb;
-      const gatherAbil = s.abilities?.체력?.value ?? 0;
-      const gatherMult = Math.max(0.4, 1 - gatherAbil * 0.003);
-      const [mn, mx2] = HERBS[herb].gatherRange.map(t2 => Math.max(1000, Math.round(t2 * gatherMult)));
+      const gatherAbil = s.abilities?.채집?.value ?? 0;
+      const gatherToolKey = s.gatherTool ?? '맨손';
+      const gatherToolMult = GATHER_TOOLS[gatherToolKey]?.timeMult ?? 1.0;
+      const gatherMult = Math.max(0.3, (1 - gatherAbil * 0.004) * gatherToolMult);
+      if (gameRef.current) gameRef.current.gatherTimeMult = gatherMult;
+      const [mn, mx2] = HERBS[herb].gatherRange.map(t2 => Math.max(800, Math.round(t2 * gatherMult)));
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx2);
       player.activityProgress = 0;
@@ -1230,6 +1235,27 @@ export default function App() {
   const equipCookware = (key) => {
     setGs(prev => ({ ...prev, cookware: key }));
     addMsg(`🍳 ${COOKWARE[key].name} 장착`);
+  };
+
+  const buyGatherTool = (key) => {
+    const gt = GATHER_TOOLS[key];
+    if ((gs.ownedGatherTools ?? ['맨손']).includes(key)) { addMsg('이미 보유 중'); return; }
+    const canAfford = gs.money >= gt.price;
+    const hasMats = gt.upgradeMats ? Object.entries(gt.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
+    if (!canAfford) { addMsg(`💰 골드 부족 (${gt.price}G 필요)`, 'error'); return; }
+    if (!hasMats) { addMsg('재료 부족', 'error'); return; }
+    setGs(prev => {
+      const ores = { ...prev.oreInventory };
+      if (gt.upgradeMats) for (const [ore, n] of Object.entries(gt.upgradeMats)) ores[ore] -= n;
+      return { ...prev, money: gt.price > 0 ? prev.money - gt.price : prev.money, oreInventory: ores,
+        ownedGatherTools: [...(prev.ownedGatherTools ?? ['맨손']), key], gatherTool: key };
+    });
+    addMsg(`🌿 ${gt.name} 구매!`, 'catch');
+  };
+
+  const equipGatherTool = (key) => {
+    setGs(prev => ({ ...prev, gatherTool: key }));
+    addMsg(`🌿 ${GATHER_TOOLS[key].name} 장착`);
   };
 
   const buyPickaxe = (key) => {
@@ -2469,6 +2495,43 @@ export default function App() {
                         ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipPickaxe(key)}>장착</button>)
                         : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyPickaxe(key)} disabled={!canBuy}>
                             {canBuy ? (px.price > 0 ? `${px.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Gather tools ── */}
+            <div className="section">
+              <div className="section-title">🌿 채집 도구</div>
+              {Object.entries(GATHER_TOOLS).map(([key, gt]) => {
+                const owned = (gs.ownedGatherTools ?? ['맨손']).includes(key);
+                const equipped = gs.gatherTool === key;
+                const canAfford = gs.money >= gt.price;
+                const hasMats = gt.upgradeMats
+                  ? Object.entries(gt.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = gt.upgradeMats ? Object.entries(gt.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: gt.color, fontWeight: 700 }}>🌿 {gt.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {gt.price > 0 ? `${gt.price}G` : '무료'}
+                      {matsStr ? ` + 재료: ${matsStr}` : ''}
+                      {' · '}{gt.desc}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipGatherTool(key)}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyGatherTool(key)} disabled={!canBuy}>
+                            {canBuy ? (gt.price > 0 ? `${gt.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
                           </button>
                       }
                     </div>

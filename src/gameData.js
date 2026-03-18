@@ -203,6 +203,14 @@ export const HERBS = {
   희귀허브: { price: 180, gatherRange: [8000,  15000], color: '#cc44cc' },
 };
 
+// ── Gathering tools (채집 도구) ────────────────────────────────────────────────
+export const GATHER_TOOLS = {
+  맨손: { name: '맨손', price: 0, timeMult: 1.00, color: '#f6cc88', desc: '기본 채집' },
+  나무바구니: { name: '나무 바구니', price: 150, timeMult: 0.85, color: '#8B6914', desc: '채집 속도 +15%' },
+  허브낫: { name: '허브 낫', price: 600, timeMult: 0.65, color: '#66cc44', desc: '채집 속도 +35%', upgradeMats: { 철광석: 3 } },
+  황금낫: { name: '황금 낫', price: 2000, timeMult: 0.45, color: '#FFD700', desc: '채집 속도 +55%', upgradeMats: { 금광석: 2, 수정: 2 } },
+};
+
 // ── Smelting recipes (제련) ────────────────────────────────────────────────────
 // input: required ores, output: processed ore name, price, color, desc
 export const SMELT_RECIPES = {

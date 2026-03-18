@@ -1467,7 +1467,8 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
               player.currentHerb = pickHerb?.() ?? player.currentHerb;
               const herbData = HERBS?.[player.currentHerb];
               if (herbData) {
-                const [mn, mx] = herbData.gatherRange;
+                const gatherMult = g.gatherTimeMult ?? 1.0;
+                const [mn, mx] = herbData.gatherRange.map(t => Math.max(800, Math.round(t * gatherMult)));
                 player.activityDuration = randInt(mn, mx);
               }
             }
