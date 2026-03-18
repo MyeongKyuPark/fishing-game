@@ -157,7 +157,6 @@ const DEFAULT_STATE = {
   firstLoginDate: null,
   marineGear: null,
   ownedMarineGear: [],
-  autoFish: false,
 };
 
 function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
@@ -208,7 +207,6 @@ function loadSave(nickname) {
       firstLoginDate: s.firstLoginDate ?? null,
       marineGear: s.marineGear ?? null,
       ownedMarineGear: s.ownedMarineGear ?? [],
-      autoFish: s.autoFish ?? false,
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -754,15 +752,6 @@ export default function App() {
     grantAbility('체력', STAMINA_GAIN);
     advanceQuest('fish');
 
-    // Auto-fish: restart fishing after a 1s delay
-    if (stateRef.current?.autoFish) {
-      setTimeout(() => {
-        const p = gameRef.current?.player;
-        if (p?.state === 'fishing' || p?.state === 'idle') {
-          // Already restarted by the game loop (loop restarts on completion), no action needed
-        }
-      }, 500);
-    }
   }, [addMsg, grantAbility, advanceQuest]);
 
   const onOreMined = useCallback((oreName) => {
@@ -1047,7 +1036,7 @@ export default function App() {
     }
 
     addMsg(`알 수 없는 명령어. !도움말 확인`, 'error');
-  }, [addMsg, advanceQuest]);
+  }, [addMsg, advanceQuest, grantAbility]);
 
   // ── Shop actions ─────────────────────────────────────────────────────────
 
