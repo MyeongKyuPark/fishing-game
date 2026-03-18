@@ -203,6 +203,96 @@ export const HERBS = {
   희귀허브: { price: 180, gatherRange: [8000,  15000], color: '#cc44cc' },
 };
 
+// ── Smelting recipes (제련) ────────────────────────────────────────────────────
+// input: required ores, output: processed ore name, price, color, desc
+export const SMELT_RECIPES = {
+  정제철: {
+    name: '정제철', color: '#b0b8c8', price: 200,
+    input: { 철광석: 3 },
+    desc: '철광석 3개 → 정제철 (장신구 제작 재료)',
+  },
+  청동괴: {
+    name: '청동괴', color: '#d4a050', price: 380,
+    input: { 철광석: 2, 구리광석: 2 },
+    desc: '철+구리 합금 (장신구 재료)',
+  },
+  정제수정: {
+    name: '정제수정', color: '#c0e8ff', price: 550,
+    input: { 수정: 2 },
+    desc: '수정 2개 → 정제수정 (고급 장신구)',
+  },
+  황금괴: {
+    name: '황금괴', color: '#ffd700', price: 1200,
+    input: { 금광석: 2 },
+    desc: '금광석 2개 → 황금괴 (전설 장신구)',
+  },
+};
+
+// ── Jewelry recipes (장신구 제작) ─────────────────────────────────────────────
+// effect: passive stat bonus applied to gs.activeJewelry
+export const JEWELRY_RECIPES = {
+  철반지: {
+    name: '철반지', icon: '💍', color: '#b0b8c8', price: 300,
+    input: { 정제철: 2 },
+    effect: { fishSpeed: 0.05 },   // +5% fishing speed
+    desc: '낚시 속도 +5%',
+    slot: 'ring',
+  },
+  청동목걸이: {
+    name: '청동목걸이', icon: '📿', color: '#d4a050', price: 600,
+    input: { 청동괴: 2 },
+    effect: { mineSpeed: 0.05 },   // +5% mining speed
+    desc: '채굴 속도 +5%',
+    slot: 'necklace',
+  },
+  수정반지: {
+    name: '수정반지', icon: '💍', color: '#c0e8ff', price: 1200,
+    input: { 정제수정: 2 },
+    effect: { fishSpeed: 0.12, sellBonus: 0.05 },
+    desc: '낚시 속도 +12%, 판매가 +5%',
+    slot: 'ring',
+  },
+  황금목걸이: {
+    name: '황금목걸이', icon: '📿', color: '#ffd700', price: 2500,
+    input: { 황금괴: 2 },
+    effect: { fishSpeed: 0.10, mineSpeed: 0.10, sellBonus: 0.10 },
+    desc: '낚시+채굴 속도 +10%, 판매가 +10%',
+    slot: 'necklace',
+  },
+};
+
+// ── Herb potions (포션 제작) ──────────────────────────────────────────────────
+export const POTION_RECIPES = {
+  이동속도포션: {
+    name: '이동속도 포션', icon: '🧪', color: '#44ccff',
+    input: { 들풀: 5 },
+    effect: { speedBonus: 2.0, duration: 60000 },  // +2 speed for 60s
+    desc: '60초간 이동속도 +2',
+    price: 150,
+  },
+  낚시포션: {
+    name: '낚시 포션', icon: '🧪', color: '#44ff88',
+    input: { 버섯: 3, 들풀: 3 },
+    effect: { fishSpeedBonus: 0.20, duration: 120000 },  // 20% faster fishing 120s
+    desc: '120초간 낚시 속도 +20%',
+    price: 350,
+  },
+  채굴포션: {
+    name: '채굴 포션', icon: '🧪', color: '#ff9944',
+    input: { 버섯: 4 },
+    effect: { mineSpeedBonus: 0.20, duration: 120000 },
+    desc: '120초간 채굴 속도 +20%',
+    price: 300,
+  },
+  희귀낚시포션: {
+    name: '희귀 낚시 포션', icon: '✨', color: '#cc44ff',
+    input: { 희귀허브: 3, 버섯: 2 },
+    effect: { rareBonus: 0.30, duration: 180000 },  // +30% rare fish chance 180s
+    desc: '180초간 희귀 물고기 확률 +30%',
+    price: 1200,
+  },
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 export function weightedPick(table) {
   const total = table.reduce((s, e) => s + e.w, 0);

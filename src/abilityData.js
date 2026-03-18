@@ -6,7 +6,9 @@ export const ABILITY_DEFS = {
   요리: { icon: '🍳', color: '#ff8844', desc: '요리할 때 숙련도 상승',          grindable: true },
   화술: { icon: '💬', color: '#ffcc44', desc: '판매할 때 숙련도 상승',          grindable: true },
   체력: { icon: '❤️', color: '#ff6666', desc: '활동 완료마다 숙련도 상승',       grindable: true },
-  강화: { icon: '🔨', color: '#cc8844', desc: '낚싯대 강화 시 숙련도 상승',     grindable: true },
+  강화: { icon: '🔨', color: '#cc8844', desc: '낚싯대/곡괭이 강화 시 숙련도 상승', grindable: true },
+  제련: { icon: '🔥', color: '#ff6622', desc: '광물 제련 시 숙련도 상승 (성공률 ↑)', grindable: true },
+  채집: { icon: '🌿', color: '#88cc44', desc: '허브 채집 시 숙련도 상승',        grindable: true },
 };
 
 export const DEFAULT_ABILITIES = Object.fromEntries(
