@@ -1581,7 +1581,11 @@ export default function App() {
           addMsg(`🐟 ${need} 이(가) 인벤토리에 없습니다.`, 'error'); return;
         }
       }
-      // Consume ingredients
+      // 요리사 affinity 50+ (제자): 15% chance to cook double
+      const cookDoubleChance = (stateRef.current?.npcAffinity?.요리사 ?? 0) >= 50 ? 0.15 : 0;
+      const cookedDouble = Math.random() < cookDoubleChance;
+      const dishEarned = recipe.price * (cookedDouble ? 2 : 1);
+      // Consume ingredients and add gold
       setGs(prev => {
         const newCrops = { ...(prev.cropInventory ?? {}) };
         for (const [item, qty] of Object.entries(recipe.crops ?? {})) newCrops[item] = Math.max(0, (newCrops[item] ?? 0) - qty);
@@ -1595,11 +1599,11 @@ export default function App() {
         const prevStats = prev.achStats ?? {};
         const updatedStats = { ...prevStats, dishCooked: (prevStats.dishCooked ?? 0) + 1, cookCount: (prevStats.cookCount ?? 0) + 1 };
         setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
-        return { ...prev, cropInventory: newCrops, fishInventory: newFishInv, money: prev.money + recipe.price, achStats: updatedStats };
+        return { ...prev, cropInventory: newCrops, fishInventory: newFishInv, money: prev.money + dishEarned, achStats: updatedStats };
       });
-      addMsg(`${recipe.icon} ${recipe.name} 완성! +${recipe.price}G`, 'catch');
+      addMsg(`${recipe.icon} ${recipe.name} 완성! +${dishEarned}G${cookedDouble ? ' 🍽 제자 보너스 2배!' : ''}`, 'catch');
       grantAbility('요리', 5);
-      advanceQuest('dish', 1);
+      advanceQuest('dish', cookedDouble ? 2 : 1);
       advanceQuest('cook', 1);
       gainNpcAffinity('요리사', 3);
       return;
