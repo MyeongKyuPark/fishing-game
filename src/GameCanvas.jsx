@@ -1297,7 +1297,7 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
   }
 
   // ── Fishing animation ──
-  if (state === 'fishing') {
+  if (state === 'fishing' || state === 'bite') {
     const t = now / 1000;
 
     if (isSea && isScuba) {
@@ -1353,7 +1353,10 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
       ctx.fillStyle = '#c89040';
       ctx.beginPath(); ctx.arc(rodTipX, rodTipY, 2.5, 0, Math.PI * 2); ctx.fill();
 
-      const floatBob = Math.sin(t * 1.6) * 3 + Math.sin(t * 2.9) * 1.2;
+      const isBite2 = state === 'bite';
+      const floatBob = isBite2
+        ? Math.sin(t * 18) * 7 + Math.sin(t * 11) * 4
+        : Math.sin(t * 1.6) * 3 + Math.sin(t * 2.9) * 1.2;
       const floatX = rodTipX + 10;
       const floatY = py + 24 + floatBob;
 
@@ -1363,15 +1366,17 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
       ctx.quadraticCurveTo(rodTipX + 14, rodTipY + 18, floatX, floatY);
       ctx.stroke();
 
-      for (const off of [0, 1100]) {
-        const rT = ((now + off) % 2200) / 2200;
+      const ringPeriod2 = isBite2 ? 600 : 2200;
+      for (const off of [0, ringPeriod2 / 2]) {
+        const rT = ((now + off) % ringPeriod2) / ringPeriod2;
         if (rT > 0.1) {
-          ctx.strokeStyle = `rgba(100,180,255,${Math.max(0, 0.5 - rT * 0.5)})`;
+          ctx.strokeStyle = isBite2 ? `rgba(255,100,100,${Math.max(0, 0.5 - rT * 0.5)})` : `rgba(100,180,255,${Math.max(0, 0.5 - rT * 0.5)})`;
           ctx.lineWidth = 1;
-          ctx.beginPath(); ctx.ellipse(floatX, floatY + 1, rT * 14, rT * 5, 0, 0, Math.PI * 2); ctx.stroke();
+          ctx.beginPath(); ctx.ellipse(floatX, floatY + 1, rT * (isBite2 ? 22 : 14), rT * 5, 0, 0, Math.PI * 2); ctx.stroke();
         }
       }
-      ctx.fillStyle = '#ff3333';
+      const biteFlash2 = isBite2 && Math.floor(now / 120) % 2 === 0;
+      ctx.fillStyle = biteFlash2 ? '#ffdd00' : '#ff3333';
       ctx.beginPath(); ctx.ellipse(floatX, floatY, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.beginPath(); ctx.ellipse(floatX, floatY - 2.5, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
@@ -1392,7 +1397,10 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
       ctx.fillStyle = '#c89040';
       ctx.beginPath(); ctx.arc(rodTipX, rodTipY, 2, 0, Math.PI * 2); ctx.fill();
 
-      const floatBob = Math.sin(t * 1.6) * 3 + Math.sin(t * 2.9) * 1.2;
+      const isBite = state === 'bite';
+      const floatBob = isBite
+        ? Math.sin(t * 18) * 7 + Math.sin(t * 11) * 4  // frantic splashing
+        : Math.sin(t * 1.6) * 3 + Math.sin(t * 2.9) * 1.2;
       const floatX = rodTipX + 8;
       const floatY = py + 26 + floatBob;
 
@@ -1402,16 +1410,20 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
       ctx.quadraticCurveTo(rodTipX + 12, rodTipY + 18, floatX, floatY);
       ctx.stroke();
 
-      for (const off of [0, 1100]) {
-        const rT = ((now + off) % 2200) / 2200;
+      // Ripple rings (larger and faster during bite)
+      const ringPeriod = isBite ? 600 : 2200;
+      for (const off of [0, ringPeriod / 2]) {
+        const rT = ((now + off) % ringPeriod) / ringPeriod;
         if (rT > 0.1) {
           const rAlpha = Math.max(0, 0.5 - rT * 0.5);
-          const rRadius = rT * 14;
-          ctx.strokeStyle = `rgba(100,180,255,${rAlpha})`; ctx.lineWidth = 1;
+          const rRadius = rT * (isBite ? 22 : 14);
+          ctx.strokeStyle = isBite ? `rgba(255,100,100,${rAlpha})` : `rgba(100,180,255,${rAlpha})`; ctx.lineWidth = 1;
           ctx.beginPath(); ctx.ellipse(floatX, floatY + 1, rRadius, rRadius * 0.35, 0, 0, Math.PI * 2); ctx.stroke();
         }
       }
-      ctx.fillStyle = '#ff3333';
+      // Float body — flash yellow/red during bite
+      const biteFlash = isBite && Math.floor(now / 120) % 2 === 0;
+      ctx.fillStyle = biteFlash ? '#ffdd00' : '#ff3333';
       ctx.beginPath(); ctx.ellipse(floatX, floatY, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.beginPath(); ctx.ellipse(floatX, floatY - 2.5, 4, 2.5, 0, 0, Math.PI * 2); ctx.fill();
@@ -1537,8 +1549,11 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
     const bx = px - bw / 2, by2 = py - PH / 2 - 14;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     ctx.fillRect(bx, by2, bw, bh);
-    ctx.fillStyle = state === 'fishing' ? '#44aaff' : state === 'gathering' ? '#44cc44' : '#ffaa44';
-    ctx.fillRect(bx, by2, bw * (activityProgress || 0), bh);
+    const barColor = state === 'bite' ? '#ff4444' : state === 'fishing' ? '#44aaff' : state === 'gathering' ? '#44cc44' : '#ffaa44';
+    // Bite bar depletes (show remaining time, not elapsed)
+    const barFill = state === 'bite' ? (1 - (activityProgress || 0)) : (activityProgress || 0);
+    ctx.fillStyle = barColor;
+    ctx.fillRect(bx, by2, bw * barFill, bh);
     ctx.strokeStyle = 'rgba(255,255,255,0.25)';
     ctx.lineWidth = 1;
     ctx.strokeRect(bx, by2, bw, bh);
@@ -1589,9 +1604,9 @@ function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor,
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGathered, onActivityChange, nickname, title, titleColor, otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, hairColor, bodyColor, skinColor, gender }) {
+export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGathered, onActivityChange, onFishBite, onFishEscaped, nickname, title, titleColor, otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, hairColor, bodyColor, skinColor, gender }) {
   const canvasRef = useRef(null);
-  const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange });
+  const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange, onFishBite, onFishEscaped });
   const showFullMapRef = useRef(false);
   const weatherParticlesRef = useRef([]);
   const minimapBoundsRef = useRef({ x: 0, y: 0, w: 100, h: 75 });
@@ -1615,7 +1630,7 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
 
   // Always keep callbacks fresh
   useEffect(() => {
-    cbRef.current = { onFishCaught, onOreMined, onHerbGathered, onActivityChange };
+    cbRef.current = { onFishCaught, onOreMined, onHerbGathered, onActivityChange, onFishBite, onFishEscaped };
   });
 
   // Init player state
@@ -1709,6 +1724,12 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
         e.preventDefault();
         if (gameRef.current) gameRef.current.keys[e.key] = true;
       }
+      if (e.key === ' ' && gameRef.current?.player?.state === 'bite') {
+        if (document.activeElement?.tagName !== 'INPUT') {
+          e.preventDefault();
+          gameRef.current.reelIn = true;
+        }
+      }
       if (e.key === 'Enter' && nearDoorRef.current) {
         onEnterRoomRef.current?.(nearDoorRef.current.id);
       }
@@ -1801,34 +1822,58 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
           player.state = 'idle';
           player.activityStart = null;
           player.activityProgress = 0;
+          g.reelIn = false;
           cbRef.current.onActivityChange(null);
         } else if (player.activityStart !== null) {
-          player.activityProgress = Math.min((ts - player.activityStart) / player.activityDuration, 1);
-
-          if (player.activityProgress >= 1) {
-            if (player.state === 'fishing') {
-              cbRef.current.onFishCaught(player.currentRod);
-              const fishMult = g.fishTimeMult ?? 1.0;
-              const [mn, mx] = RODS[player.currentRod].catchTimeRange.map(t => Math.max(1000, Math.round(t * fishMult)));
-              player.activityDuration = randInt(mn, mx);
-            } else if (player.state === 'mining') {
-              cbRef.current.onOreMined(player.currentOre);
-              player.currentOre = pickOre();
-              const mineMult = g.mineTimeMult ?? 1.0;
-              const [mn, mx] = ORES[player.currentOre].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
-              player.activityDuration = randInt(mn, mx);
-            } else if (player.state === 'gathering') {
-              cbRef.current.onHerbGathered?.(player.currentHerb);
-              player.currentHerb = pickHerb?.() ?? player.currentHerb;
-              const herbData = HERBS?.[player.currentHerb];
-              if (herbData) {
-                const gatherMult = g.gatherTimeMult ?? 1.0;
-                const [mn, mx] = herbData.gatherRange.map(t => Math.max(800, Math.round(t * gatherMult)));
-                player.activityDuration = randInt(mn, mx);
-              }
-            }
+          // Bite state: check for reel-in before updating progress
+          if (player.state === 'bite' && (g.reelIn)) {
+            g.reelIn = false;
+            cbRef.current.onFishCaught(player.currentRod);
+            const fishMult = g.fishTimeMult ?? 1.0;
+            const [mn, mx] = RODS[player.currentRod].catchTimeRange.map(t => Math.max(1000, Math.round(t * fishMult)));
+            player.activityDuration = randInt(mn, mx);
             player.activityStart = ts;
             player.activityProgress = 0;
+            player.state = 'fishing';
+            cbRef.current.onActivityChange('fishing');
+          } else {
+            player.activityProgress = Math.min((ts - player.activityStart) / player.activityDuration, 1);
+
+            if (player.activityProgress >= 1) {
+              if (player.state === 'fishing') {
+                // Transition to bite state — player must react
+                player.state = 'bite';
+                player.activityDuration = 2500;
+                cbRef.current.onFishBite?.();
+                cbRef.current.onActivityChange('bite');
+              } else if (player.state === 'bite') {
+                // Bite window expired — fish escaped
+                g.reelIn = false;
+                cbRef.current.onFishEscaped?.();
+                const fishMult = g.fishTimeMult ?? 1.0;
+                const [mn, mx] = RODS[player.currentRod].catchTimeRange.map(t => Math.max(1000, Math.round(t * fishMult)));
+                player.activityDuration = randInt(mn, mx);
+                player.state = 'fishing';
+                cbRef.current.onActivityChange('fishing');
+              } else if (player.state === 'mining') {
+                cbRef.current.onOreMined(player.currentOre);
+                player.currentOre = pickOre();
+                const mineMult = g.mineTimeMult ?? 1.0;
+                const [mn, mx] = ORES[player.currentOre].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
+                player.activityDuration = randInt(mn, mx);
+              } else if (player.state === 'gathering') {
+                cbRef.current.onHerbGathered?.(player.currentHerb);
+                player.currentHerb = pickHerb?.() ?? player.currentHerb;
+                const herbData = HERBS?.[player.currentHerb];
+                if (herbData) {
+                  const gatherMult = g.gatherTimeMult ?? 1.0;
+                  const [mn, mx] = herbData.gatherRange.map(t => Math.max(800, Math.round(t * gatherMult)));
+                  player.activityDuration = randInt(mn, mx);
+                }
+              }
+              player.activityStart = ts;
+              player.activityProgress = 0;
+            }
           }
         }
       }

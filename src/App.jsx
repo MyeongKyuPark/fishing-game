@@ -1141,6 +1141,16 @@ export default function App() {
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
 
+  const onFishBite = useCallback(() => {
+    addMsg('🎣 찌가 움직입니다! 낚아채세요!', 'catch');
+  }, [addMsg]);
+
+  const onFishEscaped = useCallback(() => {
+    addMsg('💨 낚싯줄이 풀렸습니다... 물고기가 도망쳤어요!', 'error');
+    if (gameRef.current?.player)
+      gameRef.current.player.floatText = { text: '놓쳤다!', age: 0, color: '#ff6644' };
+  }, []);
+
   // ── Command handler ───────────────────────────────────────────────────────
 
   const handleCommand = useCallback((input) => {
@@ -2043,6 +2053,8 @@ export default function App() {
           onOreMined={onOreMined}
           onHerbGathered={onHerbGathered}
           onActivityChange={onActivityChange}
+          onFishBite={onFishBite}
+          onFishEscaped={onFishEscaped}
           nickname={nickname}
           title={myTitle.label}
           titleColor={myTitle.color}
@@ -2102,6 +2114,25 @@ export default function App() {
             </div>
           )}
         </div>}
+        {activity === 'bite' && (
+          <div style={{
+            position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%, -50%)',
+            zIndex: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+            background: 'rgba(10,5,0,0.88)', borderRadius: 14, padding: '14px 28px',
+            border: '2px solid #ff5500', boxShadow: '0 0 24px rgba(255,100,0,0.5)',
+            animation: 'biteFlash 0.25s infinite alternate',
+          }}>
+            <div style={{ color: '#ffdd44', fontWeight: 700, fontSize: 16 }}>🎣 찌가 움직입니다!</div>
+            <button tabIndex={-1} style={{
+              background: 'rgba(220,60,0,0.9)', color: '#fff', border: '2px solid #ff9944',
+              borderRadius: 10, padding: '10px 28px', fontSize: 18, fontWeight: 700, cursor: 'pointer',
+              letterSpacing: 1,
+            }} onClick={() => { gameRef.current.reelIn = true; }}>
+              🪝 낚아채기!
+            </button>
+            <div style={{ color: 'rgba(255,220,150,0.6)', fontSize: 11 }}>Space · 클릭</div>
+          </div>
+        )}
         {indoorRoom === 'mine' && (
           <div style={{ position: 'absolute', top: 44, left: '50%', transform: 'translateX(-50%)', zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(10,10,20,0.88)', borderRadius: 10, padding: '5px 12px', border: '1px solid rgba(120,80,255,0.45)', whiteSpace: 'nowrap' }}>
             <span style={{ color: '#aabbcc', fontSize: 12 }}>⛏ 채굴 깊이</span>
