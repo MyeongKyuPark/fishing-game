@@ -183,6 +183,7 @@ const DEFAULT_STATE = {
   skinColor: '#f6cc88',
   gender: 'male',
   caughtSpecies: [],
+  fishRecords: {},             // { fishName: { size: float, caughtAt: timestamp } }
   firstLoginDate: null,
   marineGear: null,
   ownedMarineGear: [],
@@ -266,6 +267,7 @@ function loadSave(nickname) {
       skinColor: s.skinColor ?? '#f6cc88',
       gender: s.gender ?? 'male',
       caughtSpecies: s.caughtSpecies ?? [],
+      fishRecords: s.fishRecords ?? {},
       firstLoginDate: s.firstLoginDate ?? null,
       marineGear: s.marineGear ?? null,
       ownedMarineGear: s.ownedMarineGear ?? [],
@@ -989,14 +991,21 @@ export default function App() {
         maxMoney: newMaxMoney,
       };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      const prevRecord = prev.fishRecords?.[name]?.size ?? 0;
+      const isNewRecord = size > prevRecord;
       return {
         ...prev,
         fishInventory: [...prev.fishInventory, { name, size, price: finalPrice, id }],
         fishCaught: (prev.fishCaught ?? 0) + 1,
         achStats: updatedStats,
+        fishRecords: isNewRecord
+          ? { ...prev.fishRecords, [name]: { size, caughtAt: Date.now() } }
+          : prev.fishRecords,
       };
     });
-    addMsg(`🐟 ${name} ${size}cm 낚음! (${finalPrice}G)${seaMsg}`, 'catch');
+    const prevRecord = stateRef.current?.fishRecords?.[name]?.size ?? 0;
+    const isNewRecord = size > prevRecord;
+    addMsg(`🐟 ${name} ${size}cm 낚음! (${finalPrice}G)${seaMsg}${isNewRecord ? ' 🏆 신기록!' : ''}`, 'catch');
     playFishCatch(fd.rarity);
     if (nicknameRef.current) saveFishRecord(nicknameRef.current, name, size);
     if (nicknameRef.current) saveOverallFishRecord(nicknameRef.current, name, size, fd.rarity);
@@ -3250,18 +3259,27 @@ export default function App() {
                   };
                   return Object.entries(FISH).map(([fishName, fd]) => {
                     const caught = (gs.caughtSpecies ?? []).includes(fishName);
+                    const record = (gs.fishRecords ?? {})[fishName];
+                    const isMaxSize = record && record.size >= fd.maxSz * 0.97;
                     return (
                       <div key={fishName} style={{
-                        background: caught ? 'rgba(68,255,170,0.1)' : 'rgba(255,255,255,0.04)',
-                        border: `1px solid ${caught ? 'rgba(68,255,170,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                        background: caught ? (isMaxSize ? 'rgba(255,200,0,0.12)' : 'rgba(68,255,170,0.1)') : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${caught ? (isMaxSize ? 'rgba(255,200,0,0.5)' : 'rgba(68,255,170,0.3)') : 'rgba(255,255,255,0.08)'}`,
                         borderRadius: 6, padding: '6px 10px',
                         opacity: caught ? 1 : 0.65,
                       }}>
-                        <div style={{ fontWeight: 700, fontSize: 12, color: caught ? '#44ffaa' : '#aaa' }}>
-                          {caught ? '✓ ' : '🔍 '}{fishName}
+                        <div style={{ fontWeight: 700, fontSize: 12, color: caught ? (isMaxSize ? '#ffcc44' : '#44ffaa') : '#aaa' }}>
+                          {caught ? (isMaxSize ? '🏆 ' : '✓ ') : '🔍 '}{fishName}
                         </div>
                         {caught
-                          ? <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~</div>
+                          ? <>
+                              <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~</div>
+                              {record && (
+                                <div style={{ fontSize: 10, color: isMaxSize ? '#ffcc44' : '#aaa' }}>
+                                  최대: {record.size}cm {isMaxSize ? '(최고 크기!)' : `/ ${fd.maxSz}cm`}
+                                </div>
+                              )}
+                            </>
                           : <div style={{ fontSize: 10, color: '#7ab' }}>{FISH_HINT[fishName] ?? '낚시 중 발견 가능'}</div>
                         }
                       </div>
