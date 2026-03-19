@@ -32,6 +32,10 @@ export const ACHIEVEMENTS = [
   { id: 'enhance_30',   label: '단련의 장인',   desc: '장비 강화 30회 성공',      icon: '🔨', type: 'enhanceCount',  goal: 30,     reward: { money: 4000 } },
   { id: 'smelt_10',     label: '제련사',        desc: '광물 10회 제련',           icon: '🔥', type: 'smeltCount',    goal: 10,     reward: { money: 800 } },
   { id: 'cook_20',      label: '생선 요리사',   desc: '생선 20마리 조리',         icon: '🍳', type: 'cookCount',     goal: 20,     reward: { money: 1000 } },
+  // Dish cooking
+  { id: 'dish_5',       label: '요리 입문',     desc: '특별 요리 5개 만들기',     icon: '🍽', type: 'dishCooked',     goal: 5,      reward: { money: 600 } },
+  { id: 'dish_30',      label: '셰프',          desc: '특별 요리 30개 만들기',    icon: '👨‍🍳', type: 'dishCooked',    goal: 30,     reward: { money: 3000 } },
+  { id: 'dish_100',     label: '미슐랭 셰프',   desc: '특별 요리 100개 만들기',   icon: '⭐', type: 'dishCooked',     goal: 100,    reward: { money: 10000 } },
   // Farming
   { id: 'farm_10',      label: '새싹 농부',     desc: '작물 10개 수확',           icon: '🌱', type: 'cropsHarvested', goal: 10,     reward: { money: 500 } },
   { id: 'farm_50',      label: '숙련 농부',     desc: '작물 50개 수확',           icon: '🌾', type: 'cropsHarvested', goal: 50,     reward: { money: 2000 } },
