@@ -386,6 +386,8 @@ export default function App() {
   const [showDex, setShowDex] = useState(false);
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [showBank, setShowBank] = useState(false);
+  const [showAppearance, setShowAppearance] = useState(false);
+  const [appearanceDraft, setAppearanceDraft] = useState(null); // { hairColor, bodyColor, skinColor }
   const [bankInput, setBankInput] = useState('');
 
   // BroadcastChannel: 중복 탭 방지
@@ -1068,8 +1070,9 @@ export default function App() {
     playOreMined();
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `+${oreName}`, age: 0, color: ORES[oreName]?.color ?? '#fa4' };
-    // 3% windfall: extra 5–10 ores
-    const windfall = Math.random() < 0.03;
+    // Windfall: base 3%, boosted by 두더지 pet windfallBonus
+    const windfallChance = 0.03 + (gameRef.current?.petBonus?.windfallBonus ?? 0);
+    const windfall = Math.random() < windfallChance;
     if (windfall) {
       const extra = randInt(4, 9);
       setGs(prev => ({
@@ -1324,7 +1327,17 @@ export default function App() {
         addMsg('⛏ 광산 지역(동쪽)으로 이동하세요!', 'error');
         return;
       }
-      const ore = pickOre();
+      // Apply 심층광맥 ore boost if explored
+      const oreExplored = s.exploredZones ?? [];
+      let ore;
+      if (oreExplored.includes('심층광맥')) {
+        const deepZone = EXPLORE_ZONES.find(z => z.id === '심층광맥');
+        const oreBoosts = deepZone?.oreBoost ?? {};
+        const oreEntries = Object.entries(ORES).map(([k, v]) => ({ f: k, w: v.w * (oreBoosts[k] ?? 1.0) }));
+        ore = weightedPick(oreEntries);
+      } else {
+        ore = pickOre();
+      }
       player.state = 'mining';
       player.currentOre = ore;
       const mineAbil = s.abilities?.채굴?.value ?? 0;
@@ -1352,7 +1365,18 @@ export default function App() {
         addMsg('🌿 숲 지역(동쪽 초록 지대)으로 이동하세요!', 'error');
         return;
       }
-      const herb = pickHerb();
+      // Apply 신비의숲 herb boost if explored
+      const herbExplored = s.exploredZones ?? [];
+      let herb;
+      if (herbExplored.includes('신비의숲')) {
+        const forestZone = EXPLORE_ZONES.find(z => z.id === '신비의숲');
+        const hBoost = forestZone?.herbBoost ?? 1.0;
+        const weights = { 들풀: 50, 버섯: 30, 희귀허브: 10 };
+        const herbEntries = Object.keys(HERBS).map(k => ({ f: k, w: (weights[k] ?? 10) * (k === '희귀허브' ? hBoost : 1.0) }));
+        herb = weightedPick(herbEntries);
+      } else {
+        herb = pickHerb();
+      }
       player.state = 'gathering';
       player.currentHerb = herb;
       const gatherAbil = s.abilities?.채집?.value ?? 0;
@@ -2095,6 +2119,12 @@ export default function App() {
               <div className="action-btn" style={{ background: 'rgba(0,60,140,0.6)', borderColor: '#2266cc', cursor: 'default' }}>
                 <span>💤</span><span className="action-btn-label">휴식 중 {Math.ceil((gs.innBuff.expiresAt - Date.now()) / 60000)}분</span>
               </div>
+            )}
+            {indoorRoom === 'inn' && (
+              <button className="action-btn" tabIndex={-1} style={{ background: 'rgba(120,60,160,0.7)', borderColor: '#aa66ff' }}
+                onClick={() => { setAppearanceDraft({ hairColor: gs.hairColor, bodyColor: gs.bodyColor, skinColor: gs.skinColor }); setShowAppearance(true); }}>
+                <span>✂</span><span className="action-btn-label">외모 변경</span>
+              </button>
             )}
           </div>
         </div>
@@ -3690,6 +3720,103 @@ export default function App() {
               }
             </div>
 
+            {/* ── Buy seeds ── */}
+            <div className="section">
+              <div className="section-title">🌱 씨앗 구매</div>
+              {Object.entries(SEEDS).map(([key, sd]) => {
+                const discount = getShopDiscount(gs.npcAffinity);
+                const discPrice = Math.round(sd.price * (1 - discount));
+                const canBuy = gs.money >= discPrice;
+                return (
+                  <div key={key} className="rod-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontSize: 16 }}>🌱</span>
+                      <span style={{ fontWeight: 700, color: '#88ff88' }}>{sd.name}</span>
+                      <span style={{ fontSize: 11, color: '#ffcc44', marginLeft: 'auto' }}>{discPrice}G</span>
+                    </div>
+                    <div className="rod-meta">
+                      {sd.yield.item} {sd.yield.qty[0]}~{sd.yield.qty[1]}개 수확 · 성장 {Math.round(sd.growMs / 60000)}분
+                    </div>
+                    <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                      style={{ marginTop: 4, fontSize: 11 }}
+                      onClick={() => {
+                        if (!canBuy) return;
+                        // Find an empty plot and plant directly
+                        const plots = stateRef.current?.farmPlots ?? [];
+                        const emptyIdx = Array.from({ length: MAX_FARM_PLOTS }, (_, i) => i).find(i => !plots.some(p => p.id === i && !p.harvested));
+                        if (emptyIdx === undefined) {
+                          addMsg('🌱 빈 농장 자리가 없습니다!', 'error'); return;
+                        }
+                        const now = Date.now();
+                        const newPlot = { id: emptyIdx, seed: key, plantedAt: now, harvestAt: now + sd.growMs, watered: false, harvested: false };
+                        setGs(prev => ({ ...prev, money: prev.money - discPrice, farmPlots: [...(prev.farmPlots ?? []).filter(p => p.id !== emptyIdx || p.harvested), newPlot] }));
+                        addMsg(`🌱 ${sd.name} 구매 & 심기 완료! (-${discPrice}G)`, 'catch');
+                        gainNpcAffinity('상인', 1);
+                      }}>
+                      {canBuy ? `${discPrice}G 구매 & 심기` : '💰 골드 부족'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Pet food ── */}
+            <div className="section">
+              <div className="section-title">🍖 펫 간식</div>
+              {!gs.activePet ? (
+                <div className="empty">활성 펫이 없습니다. 펫을 장착하세요.</div>
+              ) : (() => {
+                const petKey = gs.activePet;
+                const pet = PETS[petKey];
+                const level = (gs.petLevels ?? {})[petKey] ?? 1;
+                const exp = (gs.petExp ?? {})[petKey] ?? 0;
+                if (level >= PET_MAX_LEVEL) {
+                  return <div className="empty">{pet?.icon} {pet?.name}은 이미 최대 레벨입니다!</div>;
+                }
+                const foodItems = [
+                  { name: '작은 간식', price: 300, exp: 5, desc: 'EXP +5' },
+                  { name: '특별 간식', price: 800, exp: 15, desc: 'EXP +15' },
+                  { name: '전설 간식', price: 2500, exp: 50, desc: 'EXP +50' },
+                ];
+                return foodItems.map(food => {
+                  const canBuy = gs.money >= food.price;
+                  return (
+                    <div key={food.name} className="rod-card">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>🍖</span>
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontWeight: 700 }}>{food.name}</span>
+                          <span style={{ fontSize: 11, color: '#aaa', marginLeft: 6 }}>{food.desc}</span>
+                        </div>
+                        <span style={{ color: '#ffcc44', fontSize: 12 }}>{food.price}G</span>
+                      </div>
+                      <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                        style={{ marginTop: 4, fontSize: 11, width: '100%' }}
+                        onClick={() => {
+                          if (!canBuy) return;
+                          const newExp = exp + food.exp;
+                          let newLevel = level;
+                          for (let lv = level; lv < PET_MAX_LEVEL; lv++) {
+                            if (newExp >= PET_EXP_THRESHOLDS[lv - 1]) newLevel = lv + 1;
+                            else break;
+                          }
+                          setGs(prev => ({
+                            ...prev,
+                            money: prev.money - food.price,
+                            petExp: { ...prev.petExp, [petKey]: newExp },
+                            petLevels: { ...prev.petLevels, [petKey]: newLevel },
+                          }));
+                          addMsg(`${pet?.icon} ${pet?.name}에게 ${food.name}! EXP +${food.exp} (${newExp}/${PET_EXP_THRESHOLDS[newLevel - 1] ?? '최대'})`, 'catch');
+                          if (newLevel > level) addMsg(`🎉 ${pet?.name} Lv.${level} → Lv.${newLevel}! 보너스 강화!`, 'legend');
+                        }}>
+                        {canBuy ? `${food.price}G 구매` : '💰 골드 부족'}
+                      </button>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
             {/* ── Sell crops ── */}
             <div className="section">
               <div className="section-title">🌾 작물 판매</div>
@@ -3723,6 +3850,64 @@ export default function App() {
                     })}
                   </div>
               }
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Appearance modal */}
+      {showAppearance && appearanceDraft && (
+        <div className="overlay" onClick={() => setShowAppearance(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 320 }}>
+            <div className="panel-head">
+              <span>✂ 외모 변경 (200G)</span>
+              <button tabIndex={-1} onClick={() => setShowAppearance(false)}>✕</button>
+            </div>
+            <div className="section">
+              <div className="section-title">피부색</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['#f6cc88', '#e8a878', '#c68642', '#8d5524', '#ffdab9', '#ffe0bd'].map(c => (
+                  <div key={c} onClick={() => setAppearanceDraft(d => ({ ...d, skinColor: c }))}
+                    style={{ width: 32, height: 32, borderRadius: '50%', background: c, cursor: 'pointer',
+                      border: `3px solid ${appearanceDraft.skinColor === c ? '#fff' : 'transparent'}` }} />
+                ))}
+              </div>
+            </div>
+            <div className="section">
+              <div className="section-title">머리색</div>
+              <input type="color" value={appearanceDraft.hairColor}
+                onChange={e => setAppearanceDraft(d => ({ ...d, hairColor: e.target.value }))}
+                style={{ width: 48, height: 32, border: 'none', borderRadius: 6, cursor: 'pointer' }} />
+            </div>
+            <div className="section">
+              <div className="section-title">옷 색상</div>
+              <input type="color" value={appearanceDraft.bodyColor}
+                onChange={e => setAppearanceDraft(d => ({ ...d, bodyColor: e.target.value }))}
+                style={{ width: 48, height: 32, border: 'none', borderRadius: 6, cursor: 'pointer' }} />
+            </div>
+            <div style={{ padding: '0 16px 16px' }}>
+              <button className={gs.money >= 200 ? 'btn-buy' : 'btn-dis'} style={{ width: '100%' }}
+                disabled={gs.money < 200}
+                onClick={() => {
+                  if (gs.money < 200) { addMsg('💰 200G 필요', 'error'); return; }
+                  setGs(prev => ({
+                    ...prev,
+                    money: prev.money - 200,
+                    hairColor: appearanceDraft.hairColor,
+                    bodyColor: appearanceDraft.bodyColor,
+                    skinColor: appearanceDraft.skinColor,
+                  }));
+                  if (gameRef.current?.player) {
+                    gameRef.current.player.hairColor = appearanceDraft.hairColor;
+                    gameRef.current.player.bodyColor = appearanceDraft.bodyColor;
+                    gameRef.current.player.skinColor = appearanceDraft.skinColor;
+                  }
+                  addMsg('✂ 외모가 변경됐습니다! (-200G)', 'catch');
+                  gainNpcAffinity('여관주인', 1);
+                  setShowAppearance(false);
+                }}>
+                {gs.money >= 200 ? '200G 변경 완료' : '💰 골드 부족'}
+              </button>
             </div>
           </div>
         </div>
