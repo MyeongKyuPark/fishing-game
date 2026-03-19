@@ -27,6 +27,7 @@ import { ACHIEVEMENTS, checkAchievements } from './achievementData';
 import { PETS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
 import { NPCS, getAffinityLevel, getShopDiscount } from './npcData';
 import { EXPLORE_ZONES, checkZoneUnlock } from './explorationData';
+import { SEASONS, getCurrentSeason } from './seasonData';
 
 const SKIN_PRESETS = ['#f6cc88', '#e8a870', '#c8845a', '#a06040', '#7a4830', '#fddbb4'];
 
@@ -924,6 +925,12 @@ export default function App() {
       }
     }
 
+    // Seasonal rare fish bonus
+    const seasonRareBonus = getCurrentSeason()?.rareFishBonus ?? 0;
+    if (seasonRareBonus > 0) {
+      table = applyBoosts(table, { 희귀: 1 + seasonRareBonus, 전설: 1 + seasonRareBonus * 1.5, 신화: 1 + seasonRareBonus * 2 });
+    }
+
     // Weather fish multiplier embedded in weight boost
     const wMult = weatherRef.current?.fishMult ?? 1.0;
     if (wMult !== 1.0) table = table.map(e => ({ ...e, w: e.w * wMult }));
@@ -944,7 +951,8 @@ export default function App() {
 
     const seaBonus = zoneDef?.seaBonus ?? (gameRef.current?.player?.seaFishing ? 1.5 : 1.0);
     const petSellBonus = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
-    const finalPrice = Math.round(price * seaBonus * petSellBonus);
+    const seasonPriceBonus = 1 + (getCurrentSeason()?.fishPriceBonus ?? 0);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * seasonPriceBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -1058,8 +1066,9 @@ export default function App() {
     // Server-wide stat
     incrementServerStat('totalFishCaught');
 
+    const seasonStaminaMult = getCurrentSeason()?.staminaGainMult ?? 1.0;
     grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
-    grantAbility('체력', STAMINA_GAIN);
+    grantAbility('체력', STAMINA_GAIN * seasonStaminaMult);
     advanceQuest('fish');
 
   }, [addMsg, grantAbility, advanceQuest, checkAndGrantAchievements]);
@@ -1392,7 +1401,8 @@ export default function App() {
       const gatherToolKey = s.gatherTool ?? '맨손';
       const gatherToolMult = GATHER_TOOLS[gatherToolKey]?.timeMult ?? 1.0;
       const potionGatherBonus = s.activePotion?.effect?.gatherSpeedBonus ?? 0;
-      const gatherMult = Math.max(0.3, (1 - gatherAbil * 0.004) * gatherToolMult * (1 - potionGatherBonus));
+      const seasonGatherBonus = getCurrentSeason()?.gatherSpeedBonus ?? 0;
+      const gatherMult = Math.max(0.3, (1 - gatherAbil * 0.004) * gatherToolMult * (1 - potionGatherBonus) * (1 - seasonGatherBonus));
       if (gameRef.current) gameRef.current.gatherTimeMult = gatherMult;
       const [mn, mx2] = HERBS[herb].gatherRange.map(t2 => Math.max(800, Math.round(t2 * gatherMult)));
       player.activityStart = performance.now();
@@ -1497,12 +1507,14 @@ export default function App() {
       const plots = stateRef.current?.farmPlots ?? [];
       const ready = plots.filter(p => !p.harvested && nowMs >= p.harvestAt);
       if (ready.length === 0) { addMsg('🌾 수확 가능한 작물이 없습니다.', 'error'); return; }
+      const seasonCropBonus = getCurrentSeason()?.cropYieldBonus ?? 0;
       const gained = {};
       for (const p of ready) {
         const seedData = SEEDS[p.seed];
         if (!seedData) continue;
         const [min, max] = seedData.yield.qty;
-        const qty = min + Math.floor(Math.random() * (max - min + 1));
+        const baseQty = min + Math.floor(Math.random() * (max - min + 1));
+        const qty = Math.floor(baseQty * (1 + seasonCropBonus));
         gained[seedData.yield.item] = (gained[seedData.yield.item] ?? 0) + qty;
       }
       setGs(prev => {
@@ -1970,6 +1982,7 @@ export default function App() {
 
   const totalFishVal = gs.fishInventory.reduce((s, f) => s + f.price, 0);
   const myTitle = getTitle(gs);
+  const currentSeason = getCurrentSeason();
 
   const handleEnterRoom = (id) => { playEnterRoom(); setIndoorRoom(id); };
   const handleExitRoom = () => {
@@ -2029,6 +2042,9 @@ export default function App() {
           <div className="hud-chip" style={{ color: RODS[gs.rod]?.color }}>
             🎣 {RODS[gs.rod]?.name}
           </div>
+          {currentSeason && (
+            <div className="hud-chip" style={{ fontSize: 11, color: currentSeason.color }}>{currentSeason.icon} {currentSeason.name}</div>
+          )}
           {weather && (
             <div className="hud-chip" style={{ fontSize: 11 }}>{weather.icon} {weather.label}</div>
           )}
@@ -3177,6 +3193,16 @@ export default function App() {
               <span>📋 오늘의 퀘스트</span>
               <button tabIndex={-1} onClick={() => setShowQuest(false)}>✕</button>
             </div>
+            {currentSeason && (
+              <div className="section">
+                <div className="rod-card" style={{ borderColor: `${currentSeason.color}66`, background: `${currentSeason.color}18` }}>
+                  <div style={{ fontWeight: 700, color: currentSeason.color, marginBottom: 4 }}>
+                    {currentSeason.icon} {currentSeason.name} 이벤트 진행 중!
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>{currentSeason.desc}</div>
+                </div>
+              </div>
+            )}
             <div className="section">
               {(gs.dailyQuests ?? []).map(q => {
                 const cur = Math.min(q.goal, (gs.questProgress ?? {})[q.id] ?? 0);
@@ -3842,18 +3868,22 @@ export default function App() {
                 ? <div className="empty">판매할 작물 없음 (농장에서 수확)</div>
                 : <div>
                     {Object.entries(gs.cropInventory ?? {}).filter(([, n]) => n > 0).map(([itemName, count]) => {
-                      const sp = (() => {
+                      const baseSp = (() => {
                         for (const sd of Object.values(SEEDS)) {
                           if (sd.yield.item === itemName) return sd.yield.sellPrice;
                         }
                         return 0;
                       })();
+                      const seasonCropPct = currentSeason?.cropPriceBonus ?? 0;
+                      const sp = Math.round(baseSp * (1 + seasonCropPct));
                       const total = sp * count;
                       return (
                         <div key={itemName} className="rod-card">
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                             <span style={{ color: '#88ff88', fontWeight: 700 }}>🌾 {itemName} ×{count}</span>
-                            <span style={{ color: '#ffcc44', fontSize: 12 }}>{sp}G/개</span>
+                            <span style={{ color: '#ffcc44', fontSize: 12 }}>
+                              {sp}G/개{seasonCropPct > 0 && <span style={{ color: currentSeason.color, fontSize: 10 }}> {currentSeason.icon}+{Math.round(seasonCropPct * 100)}%</span>}
+                            </span>
                           </div>
                           <button tabIndex={-1} className="btn-buy" onClick={() => {
                             setGs(prev => {
