@@ -143,6 +143,16 @@ const QUEST_POOL = [
   { id: 'dish5',   label: '요리 레시피 5개 만들기', goal: 5,    type: 'dish',    reward: 1400 },
 ];
 
+// Mine depth system: ore weight multipliers per depth (index = depth-1)
+const MINE_DEPTH_ORE_MULT = {
+  철광석:  [1.00, 0.75, 0.55, 0.40, 0.25],
+  구리광석: [1.00, 1.00, 0.85, 0.70, 0.55],
+  수정:    [1.00, 1.50, 2.00, 2.50, 3.00],
+  금광석:  [1.00, 2.00, 3.50, 5.00, 7.00],
+};
+const MINE_DEPTH_REQ = [0, 0, 10, 25, 50, 80]; // required 채굴 ability per depth
+const MINE_DEPTH_TIME = [1.00, 1.35, 1.75, 2.20, 2.70]; // time multiplier per depth
+
 function getDailyQuests() {
   const dateStr = new Date().toDateString();
   let hash = 0;
@@ -220,6 +230,8 @@ const DEFAULT_STATE = {
   bankDeposit: 0,             // deposited gold amount
   bankLastInterest: null,     // timestamp of last interest payment
   bankLoan: 0,                // current loan amount (for future use)
+  // Mine
+  mineDepth: 1,               // 1~5, deeper = rarer ore but slower
 };
 
 function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
@@ -1088,8 +1100,9 @@ export default function App() {
     playOreMined();
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `+${oreName}`, age: 0, color: ORES[oreName]?.color ?? '#fa4' };
-    // Windfall: base 3%, boosted by 두더지 pet windfallBonus
-    const windfallChance = 0.03 + (gameRef.current?.petBonus?.windfallBonus ?? 0);
+    // Windfall: base 3%, boosted by depth and 두더지 pet windfallBonus
+    const curDepth = stateRef.current?.mineDepth ?? 1;
+    const windfallChance = 0.03 + (curDepth - 1) * 0.015 + (gameRef.current?.petBonus?.windfallBonus ?? 0);
     const windfall = Math.random() < windfallChance;
     if (windfall) {
       const extra = randInt(4, 9);
@@ -1347,20 +1360,26 @@ export default function App() {
         addMsg('⛏ 광산 지역(동쪽)으로 이동하세요!', 'error');
         return;
       }
-      // Apply 심층광맥 ore boost if explored
-      const oreExplored = s.exploredZones ?? [];
-      let ore;
-      if (oreExplored.includes('심층광맥')) {
-        const deepZone = EXPLORE_ZONES.find(z => z.id === '심층광맥');
-        const oreBoosts = deepZone?.oreBoost ?? {};
-        const oreEntries = Object.entries(ORES).map(([k, v]) => ({ f: k, w: v.w * (oreBoosts[k] ?? 1.0) }));
-        ore = weightedPick(oreEntries);
-      } else {
-        ore = pickOre();
+      // Mine depth: deeper floors give rarer ore but take longer
+      const mineDepth = s.mineDepth ?? 1;
+      const mineAbil = s.abilities?.채굴?.value ?? 0;
+      const depthReq = MINE_DEPTH_REQ[mineDepth] ?? 0;
+      if (mineAbil < depthReq) {
+        addMsg(`⛏ ${mineDepth}층은 채굴 ${depthReq} 이상 필요합니다! (현재 ${mineAbil.toFixed(1)})`, 'error');
+        setGs(prev => ({ ...prev, mineDepth: 1 }));
+        return;
       }
+      // Build ore weight table: base × depth multiplier × 심층광맥 zone boost
+      const oreExplored = s.exploredZones ?? [];
+      const deepZone = EXPLORE_ZONES.find(z => z.id === '심층광맥');
+      const zoneBoosts = oreExplored.includes('심층광맥') ? (deepZone?.oreBoost ?? {}) : {};
+      const oreEntries = Object.entries(ORES).map(([k, v]) => ({
+        f: k,
+        w: v.w * (MINE_DEPTH_ORE_MULT[k]?.[mineDepth - 1] ?? 1.0) * (zoneBoosts[k] ?? 1.0),
+      }));
+      const ore = weightedPick(oreEntries);
       player.state = 'mining';
       player.currentOre = ore;
-      const mineAbil = s.abilities?.채굴?.value ?? 0;
       const mineStamAbil = s.abilities?.체력?.value ?? 0;
       const pickaxeKey = s.pickaxe ?? '나무곡괭이';
       const pickaxeEnhLv = s.pickaxeEnhance?.[pickaxeKey] ?? 0;
@@ -1368,14 +1387,16 @@ export default function App() {
       const paxMult = PICKAXES[pickaxeKey]?.timeMult ?? 1.0;
       const potionMineBonus = (s.activePotion?.effect?.mineSpeedBonus ?? 0);
       const petMineMult = gameRef.current?.petBonus?.mineTimeMult ?? 1.0;
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * petMineMult);
+      const depthTimeMult = MINE_DEPTH_TIME[mineDepth - 1] ?? 1.0;
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * petMineMult * depthTimeMult);
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();
       player.activityDuration = randInt(mn, mx);
       player.activityProgress = 0;
       setActivity('mining');
-      addMsg('⛏ 광질 시작! (방향키로 취소)');
+      const depthLabel = mineDepth > 1 ? ` (${mineDepth}층)` : '';
+      addMsg(`⛏ 광질 시작!${depthLabel} (방향키로 취소)`);
       return;
     }
 
@@ -2081,6 +2102,33 @@ export default function App() {
             </div>
           )}
         </div>}
+        {indoorRoom === 'mine' && (
+          <div style={{ position: 'absolute', top: 44, left: '50%', transform: 'translateX(-50%)', zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(10,10,20,0.88)', borderRadius: 10, padding: '5px 12px', border: '1px solid rgba(120,80,255,0.45)', whiteSpace: 'nowrap' }}>
+            <span style={{ color: '#aabbcc', fontSize: 12 }}>⛏ 채굴 깊이</span>
+            {[1, 2, 3, 4, 5].map(d => {
+              const req = MINE_DEPTH_REQ[d] ?? 0;
+              const mineAbil = gs.abilities?.채굴?.value ?? 0;
+              const canUse = mineAbil >= req;
+              const active = (gs.mineDepth ?? 1) === d;
+              return (
+                <button key={d} tabIndex={-1} style={{
+                  background: active ? 'rgba(120,60,255,0.85)' : canUse ? 'rgba(50,50,80,0.85)' : 'rgba(25,25,40,0.85)',
+                  border: `1px solid ${active ? '#aa66ff' : canUse ? '#5566aa' : '#333355'}`,
+                  color: active ? '#fff' : canUse ? '#99bbdd' : '#445566',
+                  borderRadius: 6, padding: '3px 9px', fontSize: 11,
+                  cursor: canUse ? 'pointer' : 'not-allowed',
+                }}
+                  title={req > 0 ? `채굴 ${req} 필요` : '기본'}
+                  onClick={() => {
+                    if (!canUse) { addMsg(`⛏ ${d}층은 채굴 ${req} 이상 필요합니다!`, 'error'); return; }
+                    setGs(prev => ({ ...prev, mineDepth: d }));
+                    addMsg(`⛏ ${d}층으로 이동합니다.${d > 1 ? ` (시간 ×${MINE_DEPTH_TIME[d-1].toFixed(2)}, 희귀 광석 확률 ↑)` : ''}`, 'system');
+                  }}
+                >{d}층{active ? ' ✓' : req > 0 && !canUse ? ` 🔒` : ''}</button>
+              );
+            })}
+          </div>
+        )}
         {!indoorRoom && weather?.canFish === false && (
           <div className="weather-warning" style={{ position: 'absolute', top: 48, left: '50%', transform: 'translateX(-50%)', background: 'rgba(30,20,0,0.85)', color: '#ffcc44', border: '1px solid #ffaa00', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 700, zIndex: 50, pointerEvents: 'none', whiteSpace: 'nowrap' }}>
             ⛈ 폭풍 중에는 낚시할 수 없습니다!
