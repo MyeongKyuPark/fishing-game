@@ -1343,7 +1343,7 @@ export default function App() {
 
     if (cmd === '!광질') {
       if (player.state !== 'idle') { addMsg('먼저 !그만 으로 중지하세요.'); return; }
-      if (!isInMineZone(player.x, player.y)) {
+      if (indoorRoomRef.current !== 'mine' && !isInMineZone(player.x, player.y)) {
         addMsg('⛏ 광산 지역(동쪽)으로 이동하세요!', 'error');
         return;
       }
@@ -2101,14 +2101,16 @@ export default function App() {
         {!indoorRoom && <RankSidebar myNickname={nickname} />}
 
         {/* Shortcut buttons (desktop only) */}
-        {!indoorRoom && <div className="shortcut-bar">
+        <div className="shortcut-bar">
           <button tabIndex={-1} onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
           <button tabIndex={-1} onClick={() => setShowShop(v => !v)}>🏪 상점</button>
           <button tabIndex={-1} onClick={() => setShowStats(v => !v)}>📊 상태</button>
           <button tabIndex={-1} onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
           <button tabIndex={-1} onClick={() => setShowQuest(v => !v)}>📋 퀘스트</button>
           <button tabIndex={-1} onClick={() => setShowDex(v => !v)}>📖 도감</button>
-        </div>}
+          {indoorRoom && <button tabIndex={-1} style={{ color: '#ffaaaa', borderColor: 'rgba(255,100,100,0.4)' }} onClick={handleExitRoom}>🚪 나가기</button>}
+          {indoorRoom === 'mine' && <button tabIndex={-1} style={{ color: '#aaffcc', borderColor: 'rgba(100,255,150,0.4)' }} onClick={() => handleCommand('!광질')}>⛏ 광질</button>}
+        </div>
 
         {/* Mobile controls: joystick + action buttons */}
         <div className="mobile-controls">
@@ -2144,6 +2146,16 @@ export default function App() {
             {nearDoor && !indoorRoom && (
               <button className="action-btn action-btn-enter" tabIndex={-1} onClick={() => gameRef.current?.enterRoom?.()}>
                 <span>🚪</span><span className="action-btn-label">입장</span>
+              </button>
+            )}
+            {indoorRoom && (
+              <button className="action-btn" tabIndex={-1} style={{ background: 'rgba(180,60,60,0.7)', borderColor: '#ff6666' }} onClick={handleExitRoom}>
+                <span>🚪</span><span className="action-btn-label">나가기</span>
+              </button>
+            )}
+            {indoorRoom === 'mine' && (
+              <button className="action-btn" tabIndex={-1} style={{ background: 'rgba(60,120,60,0.7)', borderColor: '#66cc88' }} onClick={() => handleCommand('!광질')}>
+                <span>⛏</span><span className="action-btn-label">광질</span>
               </button>
             )}
             {nearIndoorNpc && indoorRoom && (
