@@ -322,6 +322,20 @@ export const POTION_RECIPES = {
   },
 };
 
+// ── Dish Recipes (요리 레시피) ─────────────────────────────────────────────────
+// crops: { itemName: qty }, fish: { name } | { rarity } | null
+export const DISH_RECIPES = {
+  감자볶음:     { name: '감자 볶음',     icon: '🥔', crops: { 감자: 3 },                          price: 220,   desc: '감자 3개 → 구수한 볶음' },
+  당근수프:     { name: '당근 수프',     icon: '🥕', crops: { 당근: 2 },                          price: 290,   desc: '당근 2개 → 따뜻한 수프' },
+  밀빵:         { name: '밀빵',          icon: '🍞', crops: { 밀: 5 },                            price: 200,   desc: '밀 5개 → 갓 구운 빵' },
+  생선구이:     { name: '생선 구이',     icon: '🐟', crops: { 감자: 1 }, fish: { rarity: '흔함' }, price: 520,   desc: '흔한 생선 + 감자 1개' },
+  생선스튜:     { name: '생선 스튜',     icon: '🍲', crops: { 당근: 1, 밀: 1 }, fish: { rarity: '보통' }, price: 900,  desc: '보통 생선 + 당근·밀 각 1개' },
+  연어스테이크: { name: '연어 스테이크', icon: '🍽', crops: { 당근: 2 }, fish: { name: '연어' },   price: 1800,  desc: '연어 + 당근 2개' },
+  황금어볶음:   { name: '황금어 볶음',   icon: '✨', crops: { 치유초: 1 }, fish: { name: '황금붕어' }, price: 2500, desc: '황금붕어 + 치유초 1개' },
+  용고기정식:   { name: '용고기 정식',   icon: '🐉', crops: { 황금사과: 1 }, fish: { name: '용고기' }, price: 10000, desc: '용고기 + 황금사과 1개' },
+  신화의만찬:   { name: '신화의 만찬',   icon: '🌟', crops: { 황금사과: 2, 치유초: 2 }, fish: { rarity: '신화' }, price: 30000, desc: '신화 물고기 + 황금사과 2 + 치유초 2 (수제자 전용)', reqNpc: { 요리사: 80 } },
+};
+
 // ── Seeds & Crops (씨앗 / 작물) ──────────────────────────────────────────────
 export const SEEDS = {
   감자씨앗:  { name: '감자 씨앗',   price: 80,   growMs: 5 * 60 * 1000,  yield: { item: '감자',    qty: [2, 4], sellPrice: 60  } },

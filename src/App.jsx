@@ -1225,7 +1225,9 @@ export default function App() {
       }));
       addMsg(`🍳 생선 ${raw.length}마리 요리 완료! (x${totalMult.toFixed(2)})`, 'catch');
       playCookComplete();
-      grantAbility('요리', COOK_ABILITY_GAIN * raw.length);
+      // 요리사 affinity 20+ grants +20% cooking ability gain
+      const cookAffinityMult = (stateRef.current?.npcAffinity?.요리사 ?? 0) >= 20 ? 1.20 : 1.0;
+      grantAbility('요리', COOK_ABILITY_GAIN * raw.length * cookAffinityMult);
       advanceQuest('cook', raw.length);
       gainNpcAffinity('요리사', 3);
       setGs(prev => {
@@ -1551,6 +1553,14 @@ export default function App() {
       const dishKey = input.trim().slice(4).trim();
       const recipe = DISH_RECIPES[dishKey];
       if (!recipe) { addMsg('알 수 없는 요리. !요리책 으로 목록 확인', 'error'); return; }
+      // Check NPC affinity requirement
+      if (recipe.reqNpc) {
+        for (const [npc, reqLv] of Object.entries(recipe.reqNpc)) {
+          if ((stateRef.current?.npcAffinity?.[npc] ?? 0) < reqLv) {
+            addMsg(`🔒 이 요리는 ${npc}와의 관계 ${reqLv} 이상 필요합니다!`, 'error'); return;
+          }
+        }
+      }
       if (!nearCooking(player.x, player.y) && indoorRoomRef.current !== 'cooking') {
         addMsg('🍳 요리소 근처로 이동하세요!', 'error'); return;
       }
@@ -1923,7 +1933,8 @@ export default function App() {
       }));
       addMsg(`🍳 수연이 생선 ${raw.length}마리를 요리해줬어요! (x${totalMult.toFixed(2)})`, 'catch');
       playCookComplete();
-      grantAbility('요리', COOK_ABILITY_GAIN * raw.length);
+      const cookAffinityMult2 = (stateRef.current?.npcAffinity?.요리사 ?? 0) >= 20 ? 1.20 : 1.0;
+      grantAbility('요리', COOK_ABILITY_GAIN * raw.length * cookAffinityMult2);
       advanceQuest('cook', raw.length);
       gainNpcAffinity('요리사', 3);
     } else if (npcName === '미나') {
@@ -1933,9 +1944,11 @@ export default function App() {
         const remainMin = Math.ceil((cooldownMs - (Date.now() - lastRest)) / 60000);
         addMsg(`🏨 미나: "아직 피로가 덜 쌓였어요! ${remainMin}분 후에 다시 오세요."`, 'info');
       } else {
+        const innAffinity = stateRef.current?.npcAffinity?.여관주인 ?? 0;
+        const innStaminaBonus = innAffinity >= 20 ? 1.0 : 0; // +1 stamina at 단골손님
         addMsg('🏨 미나: "편히 쉬고 가세요! 내일 퀘스트도 화이팅~"', 'info');
-        addMsg('💤 여관에서 휴식했습니다. 체력 어빌리티 +0.5!', 'catch');
-        grantAbility('체력', 0.5);
+        addMsg(`💤 여관에서 휴식했습니다. 체력 어빌리티 +${0.5 + innStaminaBonus}!`, 'catch');
+        grantAbility('체력', 0.5 + innStaminaBonus);
         gainNpcAffinity('여관주인', 1);
         setGs(prev => ({ ...prev, innRestAt: Date.now() }));
       }
@@ -2732,39 +2745,50 @@ export default function App() {
                     <div className="section-title">🍽 특별 요리 레시피</div>
                     <div className="rod-meta" style={{ marginBottom: 8, color: 'rgba(255,255,255,0.45)' }}>요리소 근처에서 !요리 [요리명] 또는 버튼 클릭</div>
                     {Object.entries(DISH_RECIPES).map(([key, recipe]) => {
-                      const cropOk = Object.entries(recipe.crops ?? {}).every(([c, n]) => (gs.cropInventory?.[c] ?? 0) >= n);
+                      // Check NPC affinity lock
+                      const npcLocked = recipe.reqNpc && Object.entries(recipe.reqNpc).some(
+                        ([npc, reqLv]) => (gs.npcAffinity?.[npc] ?? 0) < reqLv
+                      );
+                      const cropOk = !npcLocked && Object.entries(recipe.crops ?? {}).every(([c, n]) => (gs.cropInventory?.[c] ?? 0) >= n);
                       const fishNeeded = recipe.fish;
-                      const fishOk = !fishNeeded || (() => {
+                      const fishOk = !fishNeeded || (!npcLocked && (() => {
                         const inv = gs.fishInventory ?? [];
                         return fishNeeded.name
                           ? inv.some(f => f.name === fishNeeded.name)
                           : inv.some(f => FISH[f.name]?.rarity === fishNeeded.rarity);
-                      })();
-                      const canCook = cropOk && fishOk;
+                      })());
+                      const canCook = !npcLocked && cropOk && fishOk;
                       return (
-                        <div key={key} className="rod-card">
+                        <div key={key} className="rod-card" style={npcLocked ? { opacity: 0.55 } : {}}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                            <span style={{ fontSize: 18 }}>{recipe.icon}</span>
-                            <span style={{ fontWeight: 700, color: '#ffe0a0' }}>{recipe.name}</span>
+                            <span style={{ fontSize: 18 }}>{npcLocked ? '🔒' : recipe.icon}</span>
+                            <span style={{ fontWeight: 700, color: npcLocked ? '#888' : '#ffe0a0' }}>{recipe.name}</span>
                             <span style={{ color: '#ffcc44', fontSize: 12 }}>+{recipe.price}G</span>
                           </div>
                           <div className="rod-meta">{recipe.desc}</div>
-                          <div className="rod-meta" style={{ marginTop: 3 }}>
-                            {Object.entries(recipe.crops ?? {}).map(([c, n]) => (
-                              <span key={c} style={{ marginRight: 6, color: (gs.cropInventory?.[c] ?? 0) >= n ? '#88ff88' : '#ff8888' }}>
-                                🌾{c} {gs.cropInventory?.[c] ?? 0}/{n}
-                              </span>
-                            ))}
-                            {fishNeeded && (
-                              <span style={{ color: fishOk ? '#88ff88' : '#ff8888' }}>
-                                🐟{fishNeeded.name ?? fishNeeded.rarity + ' 생선'} {fishOk ? '✓' : '✗'}
-                              </span>
-                            )}
-                          </div>
+                          {npcLocked && (
+                            <div className="rod-meta" style={{ color: '#ff8888' }}>
+                              🔒 {Object.entries(recipe.reqNpc).map(([npc, lv]) => `${npc} 관계 ${lv} 필요`).join(', ')}
+                            </div>
+                          )}
+                          {!npcLocked && (
+                            <div className="rod-meta" style={{ marginTop: 3 }}>
+                              {Object.entries(recipe.crops ?? {}).map(([c, n]) => (
+                                <span key={c} style={{ marginRight: 6, color: (gs.cropInventory?.[c] ?? 0) >= n ? '#88ff88' : '#ff8888' }}>
+                                  🌾{c} {gs.cropInventory?.[c] ?? 0}/{n}
+                                </span>
+                              ))}
+                              {fishNeeded && (
+                                <span style={{ color: fishOk ? '#88ff88' : '#ff8888' }}>
+                                  🐟{fishNeeded.name ?? fishNeeded.rarity + ' 생선'} {fishOk ? '✓' : '✗'}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <button tabIndex={-1} className={canCook ? 'btn-buy' : 'btn-dis'}
                             style={{ marginTop: 6, fontSize: 11 }} disabled={!canCook}
                             onClick={() => handleCommand(`!요리 ${key}`)}>
-                            요리하기 (+{recipe.price}G)
+                            {npcLocked ? '🔒 잠금됨' : `요리하기 (+${recipe.price}G)`}
                           </button>
                         </div>
                       );
