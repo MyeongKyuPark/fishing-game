@@ -12,7 +12,7 @@ import ChannelLobby from './ChannelLobby';
 import { saveFishRecord, saveOverallFishRecord, savePlayerTitle, broadcastAnnouncement, subscribeAnnouncements, incrementServerStat, subscribeServerStats } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
-  SMELT_RECIPES, JEWELRY_RECIPES, POTION_RECIPES, SEEDS, MAX_FARM_PLOTS,
+  SMELT_RECIPES, JEWELRY_RECIPES, POTION_RECIPES, DISH_RECIPES, SEEDS, MAX_FARM_PLOTS,
   weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
@@ -24,7 +24,7 @@ import { getTitle, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm } from './mapData';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
-import { PETS, PET_RARITY_COLOR } from './petData';
+import { PETS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
 import { NPCS, getAffinityLevel, getShopDiscount } from './npcData';
 import { EXPLORE_ZONES, checkZoneUnlock } from './explorationData';
 
@@ -137,6 +137,9 @@ const QUEST_POOL = [
   { id: 'dep500',  label: '은행에 500G 예금',       goal: 500,  type: 'deposit', reward: 200 },
   { id: 'dep2000', label: '은행에 2000G 예금',      goal: 2000, type: 'deposit', reward: 600 },
   { id: 'dep8000', label: '은행에 8000G 예금',      goal: 8000, type: 'deposit', reward: 1500 },
+  { id: 'dish1',   label: '요리 레시피 1개 만들기', goal: 1,    type: 'dish',    reward: 250 },
+  { id: 'dish3',   label: '요리 레시피 3개 만들기', goal: 3,    type: 'dish',    reward: 700 },
+  { id: 'dish5',   label: '요리 레시피 5개 만들기', goal: 5,    type: 'dish',    reward: 1400 },
 ];
 
 function getDailyQuests() {
@@ -199,6 +202,11 @@ const DEFAULT_STATE = {
   // Pets
   petEggs: {},                // { petKey: { boughtAt: timestamp, hatchAt: timestamp } }
   activePet: null,            // petKey string
+  petLevels: {},              // { petKey: 1-5 }
+  petExp: {},                 // { petKey: totalExp }
+  // Inn
+  innBuff: null,              // { expiresAt: ms } or null
+  innRestAt: null,            // timestamp of last free rest
   // NPC Affinity
   npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0 },  // 0~100 affinity per NPC
   // Exploration
@@ -275,6 +283,10 @@ function loadSave(nickname) {
       achStats: s.achStats ?? {},
       petEggs: s.petEggs ?? {},
       activePet: s.activePet ?? null,
+      petLevels: s.petLevels ?? {},
+      petExp: s.petExp ?? {},
+      innBuff: s.innBuff ?? null,
+      innRestAt: s.innRestAt ?? null,
       npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, ...(s.npcAffinity ?? {}) },
       exploredZones: s.exploredZones ?? [],
       farmPlots: s.farmPlots ?? [],
@@ -564,12 +576,30 @@ export default function App() {
     gameRef.current.marineGear = gs.marineGear ?? null;
   }, [gs.marineGear]);
 
-  // Sync pet bonus to game loop
+  // Sync pet bonus to game loop (with level scaling)
   useEffect(() => {
     if (!gameRef.current) return;
     const pet = gs.activePet ? PETS[gs.activePet] : null;
-    gameRef.current.petBonus = pet?.bonus ?? {};
-  }, [gs.activePet]);
+    if (!pet) { gameRef.current.petBonus = {}; return; }
+    const level = (gs.petLevels ?? {})[gs.activePet] ?? 1;
+    const mult = PET_LEVEL_MULT[Math.min(level, PET_MAX_LEVEL) - 1] ?? 1.0;
+    const scaledBonus = {};
+    for (const [k, v] of Object.entries(pet.bonus)) {
+      if (k.endsWith('Mult')) {
+        // Mult values like 0.85 = 15% speed boost; scale the effect portion
+        scaledBonus[k] = 1 - (1 - v) * mult;
+      } else {
+        scaledBonus[k] = v * mult;
+      }
+    }
+    gameRef.current.petBonus = scaledBonus;
+  }, [gs.activePet, gs.petLevels]);
+
+  // Sync inn buff to game loop
+  useEffect(() => {
+    if (!gameRef.current) return;
+    gameRef.current.innBuff = gs.innBuff;
+  }, [gs.innBuff]);
 
   // Sync equipped items visuals to game loop
   useEffect(() => {
@@ -588,6 +618,23 @@ export default function App() {
   useEffect(() => { weatherRef.current = weather; }, [weather]);
   useEffect(() => { if (gameRef.current) gameRef.current.weather = weather; }, [weather]);
   useEffect(() => { if (gameRef.current) gameRef.current.farmPlots = gs.farmPlots ?? []; }, [gs.farmPlots]);
+
+  // Rain auto-waters unwatered growing crops
+  useEffect(() => {
+    if (weather?.id !== 'rain') return;
+    setGs(prev => {
+      const now = Date.now();
+      const anyUnwatered = (prev.farmPlots ?? []).some(p => !p.watered && now < p.harvestAt);
+      if (!anyUnwatered) return prev;
+      const newPlots = (prev.farmPlots ?? []).map(p =>
+        (!p.watered && now < p.harvestAt)
+          ? { ...p, watered: true, harvestAt: p.harvestAt - Math.floor((p.harvestAt - now) * 0.25) }
+          : p
+      );
+      setTimeout(() => addMsg('🌧️ 비가 내려 작물에 물을 줬습니다! (성장 25% 단축)', 'catch'), 0);
+      return { ...prev, farmPlots: newPlots };
+    });
+  }, [weather?.id, addMsg]);
   useEffect(() => {
     if (!roomId) return;
     setWeather(getWeather(roomId, Date.now()));
@@ -672,6 +719,18 @@ export default function App() {
     }, remaining);
     return () => clearTimeout(t);
   }, [gs.activePotion, addMsg]);
+
+  // Expire inn buff
+  useEffect(() => {
+    if (!gs.innBuff) return;
+    const remaining = gs.innBuff.expiresAt - Date.now();
+    if (remaining <= 0) { setGs(prev => ({ ...prev, innBuff: null })); return; }
+    const t = setTimeout(() => {
+      setGs(prev => ({ ...prev, innBuff: null }));
+      addMsg('💤 여관 휴식 버프가 종료됐습니다.', 'info');
+    }, remaining);
+    return () => clearTimeout(t);
+  }, [gs.innBuff, addMsg]);
 
   // Bank interest: 2% per real-hour, capped at 24h offline
   useEffect(() => {
@@ -1075,6 +1134,8 @@ export default function App() {
        '!채집  – 허브 채집 (숲 지역)',
        '!그만  – 현재 활동 중지',
        '!요리  – 물고기 요리 (요리소 근처)',
+       '!요리책  – 특별 요리 레시피 목록',
+       '!요리 [요리명] – 특별 요리 만들기 (요리소 근처)',
        '!상점  – 상점 열기 (상점 건물 근처)',
        '!판매  – 물고기 전체 판매 (상점 근처)',
        '!인벤  – 인벤토리 열기/닫기',
@@ -1086,6 +1147,8 @@ export default function App() {
        '!심기 [씨앗명] – 씨앗 심기 (농장 근처)',
        '!물주기  – 작물에 물 주기 (성장 25% 단축)',
        '!수확   – 다 자란 작물 수확 (농장 근처)',
+       '!펫먹이 [물고기명] – 활성 펫에게 물고기 먹이주기 (레벨업)',
+       '!여관휴식 – 500G로 10분 낚시속도 +20% (여관 내)',
       ].forEach(t => addMsg(t));
       return;
     }
@@ -1187,8 +1250,9 @@ export default function App() {
         const enhEffect = rodEnhanceEffect(enhLevel);
         const potionFishBonus = (s.activePotion?.effect?.fishSpeedBonus ?? 0);
         const petFishMult = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
+        const innBuffMult = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * petFishMult
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * petFishMult * innBuffMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1239,8 +1303,9 @@ export default function App() {
       const enhEffect = rodEnhanceEffect(enhLevel);
       const potionFishBonus2 = (s.activePotion?.effect?.fishSpeedBonus ?? 0);
       const petFishMult2 = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
+      const innBuffMult2 = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * petFishMult2
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * petFishMult2 * innBuffMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1425,6 +1490,114 @@ export default function App() {
         setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
         return { ...prev, achStats: updatedStats };
       });
+      return;
+    }
+
+    if (cmd === '!요리책') {
+      const lines = Object.entries(DISH_RECIPES).map(([key, r]) =>
+        `${r.icon} ${r.name}: ${r.desc} → ${r.price}G`
+      );
+      addMsg('🍽 특별 요리 레시피 (!요리 [요리명]):');
+      lines.forEach(l => addMsg(l));
+      return;
+    }
+
+    if (input.trim().startsWith('!요리 ')) {
+      const dishKey = input.trim().slice(4).trim();
+      const recipe = DISH_RECIPES[dishKey];
+      if (!recipe) { addMsg('알 수 없는 요리. !요리책 으로 목록 확인', 'error'); return; }
+      if (!nearCooking(player.x, player.y) && indoorRoomRef.current !== 'cooking') {
+        addMsg('🍳 요리소 근처로 이동하세요!', 'error'); return;
+      }
+      const crops = stateRef.current?.cropInventory ?? {};
+      for (const [item, qty] of Object.entries(recipe.crops ?? {})) {
+        if ((crops[item] ?? 0) < qty) { addMsg(`🌾 ${item} 부족 (${qty}개 필요, 보유: ${crops[item] ?? 0})`, 'error'); return; }
+      }
+      let consumedFish = null;
+      if (recipe.fish) {
+        const inv = stateRef.current?.fishInventory ?? [];
+        if (recipe.fish.name) {
+          consumedFish = inv.find(f => f.name === recipe.fish.name);
+        } else if (recipe.fish.rarity) {
+          consumedFish = inv.find(f => FISH[f.name]?.rarity === recipe.fish.rarity);
+        }
+        if (!consumedFish) {
+          const need = recipe.fish.name ?? `${recipe.fish.rarity} 등급 생선`;
+          addMsg(`🐟 ${need} 이(가) 인벤토리에 없습니다.`, 'error'); return;
+        }
+      }
+      // Consume ingredients
+      setGs(prev => {
+        const newCrops = { ...(prev.cropInventory ?? {}) };
+        for (const [item, qty] of Object.entries(recipe.crops ?? {})) newCrops[item] = Math.max(0, (newCrops[item] ?? 0) - qty);
+        let removedOne = false;
+        const newFishInv = consumedFish
+          ? prev.fishInventory.filter(f => {
+              if (!removedOne && f === consumedFish) { removedOne = true; return false; }
+              return true;
+            })
+          : prev.fishInventory;
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, dishCooked: (prevStats.dishCooked ?? 0) + 1, cookCount: (prevStats.cookCount ?? 0) + 1 };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+        return { ...prev, cropInventory: newCrops, fishInventory: newFishInv, money: prev.money + recipe.price, achStats: updatedStats };
+      });
+      addMsg(`${recipe.icon} ${recipe.name} 완성! +${recipe.price}G`, 'catch');
+      grantAbility('요리', 5);
+      advanceQuest('dish', 1);
+      advanceQuest('cook', 1);
+      gainNpcAffinity('요리사', 3);
+      return;
+    }
+
+    // ── 펫 먹이주기 ──────────────────────────────────────────────────────────
+    if (input.trim().startsWith('!펫먹이 ')) {
+      const fishName = input.trim().slice(5).trim();
+      const activePet = s.activePet;
+      if (!activePet) { addMsg('펫이 장착되지 않았습니다.', 'error'); return; }
+      const petInfo = PETS[activePet];
+      const egg = (s.petEggs ?? {})[activePet];
+      if (!egg || Date.now() < egg.hatchAt) { addMsg('펫이 아직 부화하지 않았습니다.', 'error'); return; }
+      const fishIdx = s.fishInventory.findIndex(f => f === fishName);
+      if (fishIdx === -1) { addMsg(`인벤토리에 ${fishName}이/가 없습니다.`, 'error'); return; }
+      const fishInfo = FISH[fishName];
+      const expGain = Math.max(1, Math.ceil((fishInfo?.price ?? 20) / 40));
+      const curExp = (s.petExp ?? {})[activePet] ?? 0;
+      const curLevel = (s.petLevels ?? {})[activePet] ?? 1;
+      const newExp = curExp + expGain;
+      let newLevel = curLevel;
+      for (let lv = curLevel; lv < PET_MAX_LEVEL; lv++) {
+        if (newExp >= PET_EXP_THRESHOLDS[lv - 1]) newLevel = lv + 1;
+        else break;
+      }
+      setGs(prev => {
+        const newFishInv = [...prev.fishInventory];
+        newFishInv.splice(newFishInv.findIndex(f => f === fishName), 1);
+        return {
+          ...prev,
+          fishInventory: newFishInv,
+          petExp: { ...prev.petExp, [activePet]: newExp },
+          petLevels: { ...prev.petLevels, [activePet]: newLevel },
+        };
+      });
+      addMsg(`${petInfo.icon} ${petInfo.name}에게 ${fishName} 먹이주기! EXP +${expGain} (${newExp}/${PET_EXP_THRESHOLDS[newLevel - 1] ?? '최대'})`, 'catch');
+      if (newLevel > curLevel) addMsg(`🎉 ${petInfo.name} Lv.${curLevel} → Lv.${newLevel}! 보너스 강화!`, 'legend');
+      return;
+    }
+
+    // ── 여관 특별 휴식 ────────────────────────────────────────────────────────
+    if (cmd === '!여관휴식') {
+      if (indoorRoomRef.current !== 'inn') { addMsg('여관 안에서만 사용할 수 있습니다.', 'error'); return; }
+      const buff = s.innBuff;
+      if (buff && Date.now() < buff.expiresAt) {
+        const remain = Math.ceil((buff.expiresAt - Date.now()) / 60000);
+        addMsg(`이미 휴식 효과가 활성 중입니다. (${remain}분 남음)`, 'error'); return;
+      }
+      if (s.money < 500) { addMsg('골드 500G가 필요합니다.', 'error'); return; }
+      const expiresAt = Date.now() + 10 * 60 * 1000;
+      setGs(prev => ({ ...prev, money: prev.money - 500, innBuff: { expiresAt } }));
+      addMsg('💤 특별 휴식: 10분간 낚시 속도 +20%! (-500G)', 'catch');
+      gainNpcAffinity('여관주인', 2);
       return;
     }
 
@@ -1709,10 +1882,25 @@ export default function App() {
       advanceQuest('cook', raw.length);
       gainNpcAffinity('요리사', 3);
     } else if (npcName === '미나') {
-      addMsg('🏨 미나: "편히 쉬고 가세요! 내일 퀘스트도 화이팅~"', 'info');
-      addMsg('💤 여관에서 휴식했습니다. 체력 어빌리티 +0.5!', 'catch');
-      grantAbility('체력', 0.5);
-      gainNpcAffinity('여관주인', 1);
+      const lastRest = stateRef.current?.innRestAt ?? 0;
+      const cooldownMs = 60 * 60 * 1000;
+      if (Date.now() - lastRest < cooldownMs) {
+        const remainMin = Math.ceil((cooldownMs - (Date.now() - lastRest)) / 60000);
+        addMsg(`🏨 미나: "아직 피로가 덜 쌓였어요! ${remainMin}분 후에 다시 오세요."`, 'info');
+      } else {
+        addMsg('🏨 미나: "편히 쉬고 가세요! 내일 퀘스트도 화이팅~"', 'info');
+        addMsg('💤 여관에서 휴식했습니다. 체력 어빌리티 +0.5!', 'catch');
+        grantAbility('체력', 0.5);
+        gainNpcAffinity('여관주인', 1);
+        setGs(prev => ({ ...prev, innRestAt: Date.now() }));
+      }
+      const buff = stateRef.current?.innBuff;
+      if (buff && Date.now() < buff.expiresAt) {
+        const remain = Math.ceil((buff.expiresAt - Date.now()) / 60000);
+        addMsg(`✨ 휴식 버프 활성 중: 낚시 속도 +20% (${remain}분 남음)`, 'catch');
+      } else {
+        addMsg('💰 500G로 특별 휴식 가능! (!여관휴식) → 낚시 속도 10분 +20%', 'info');
+      }
     } else if (npcName === '철수') {
       const inv = stateRef.current?.oreInventory ?? {};
       const lines = Object.entries(inv)
@@ -1811,6 +1999,11 @@ export default function App() {
           {weather && (
             <div className="hud-chip" style={{ fontSize: 11 }}>{weather.icon} {weather.label}</div>
           )}
+          {gs.innBuff && Date.now() < gs.innBuff.expiresAt && (
+            <div className="hud-chip" style={{ color: '#88ccff', fontSize: 11 }}>
+              💤 휴식 {Math.ceil((gs.innBuff.expiresAt - Date.now()) / 60000)}분
+            </div>
+          )}
           {activity && (
             <div className={`hud-chip hud-active ${activity}`}>
               {activity === 'fishing' ? '🐟 낚시 중…' : activity === 'gathering' ? '🌿 채집 중…' : '⛏ 채굴 중…'}
@@ -1891,6 +2084,17 @@ export default function App() {
               <button className="action-btn action-btn-enter" tabIndex={-1} onClick={() => handleNpcInteract(nearIndoorNpc.name)}>
                 <span>💬</span><span className="action-btn-label">대화</span>
               </button>
+            )}
+            {indoorRoom === 'inn' && !(gs.innBuff && Date.now() < gs.innBuff.expiresAt) && (
+              <button className="action-btn" tabIndex={-1} style={{ background: 'rgba(0,100,200,0.7)', borderColor: '#4488ff' }}
+                onClick={() => handleCommand('!여관휴식')}>
+                <span>💤</span><span className="action-btn-label">특별 휴식 (500G)</span>
+              </button>
+            )}
+            {indoorRoom === 'inn' && gs.innBuff && Date.now() < gs.innBuff.expiresAt && (
+              <div className="action-btn" style={{ background: 'rgba(0,60,140,0.6)', borderColor: '#2266cc', cursor: 'default' }}>
+                <span>💤</span><span className="action-btn-label">휴식 중 {Math.ceil((gs.innBuff.expiresAt - Date.now()) / 60000)}분</span>
+              </div>
             )}
           </div>
         </div>
@@ -2467,6 +2671,50 @@ export default function App() {
                       );
                     })}
                   </div>
+
+                  {/* Dish recipes */}
+                  <div className="section">
+                    <div className="section-title">🍽 특별 요리 레시피</div>
+                    <div className="rod-meta" style={{ marginBottom: 8, color: 'rgba(255,255,255,0.45)' }}>요리소 근처에서 !요리 [요리명] 또는 버튼 클릭</div>
+                    {Object.entries(DISH_RECIPES).map(([key, recipe]) => {
+                      const cropOk = Object.entries(recipe.crops ?? {}).every(([c, n]) => (gs.cropInventory?.[c] ?? 0) >= n);
+                      const fishNeeded = recipe.fish;
+                      const fishOk = !fishNeeded || (() => {
+                        const inv = gs.fishInventory ?? [];
+                        return fishNeeded.name
+                          ? inv.some(f => f.name === fishNeeded.name)
+                          : inv.some(f => FISH[f.name]?.rarity === fishNeeded.rarity);
+                      })();
+                      const canCook = cropOk && fishOk;
+                      return (
+                        <div key={key} className="rod-card">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                            <span style={{ fontSize: 18 }}>{recipe.icon}</span>
+                            <span style={{ fontWeight: 700, color: '#ffe0a0' }}>{recipe.name}</span>
+                            <span style={{ color: '#ffcc44', fontSize: 12 }}>+{recipe.price}G</span>
+                          </div>
+                          <div className="rod-meta">{recipe.desc}</div>
+                          <div className="rod-meta" style={{ marginTop: 3 }}>
+                            {Object.entries(recipe.crops ?? {}).map(([c, n]) => (
+                              <span key={c} style={{ marginRight: 6, color: (gs.cropInventory?.[c] ?? 0) >= n ? '#88ff88' : '#ff8888' }}>
+                                🌾{c} {gs.cropInventory?.[c] ?? 0}/{n}
+                              </span>
+                            ))}
+                            {fishNeeded && (
+                              <span style={{ color: fishOk ? '#88ff88' : '#ff8888' }}>
+                                🐟{fishNeeded.name ?? fishNeeded.rarity + ' 생선'} {fishOk ? '✓' : '✗'}
+                              </span>
+                            )}
+                          </div>
+                          <button tabIndex={-1} className={canCook ? 'btn-buy' : 'btn-dis'}
+                            style={{ marginTop: 6, fontSize: 11 }} disabled={!canCook}
+                            onClick={() => handleCommand(`!요리 ${key}`)}>
+                            요리하기 (+{recipe.price}G)
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </>
               );
             })()}
@@ -2500,28 +2748,81 @@ export default function App() {
             {/* ── 펫 tab ── */}
             {statsTab === '펫' && (() => {
               const now = Date.now();
+              const petLevels = gs.petLevels ?? {};
+              const petExp = gs.petExp ?? {};
+              const innBuff = gs.innBuff;
+              const innBuffActive = innBuff && now < innBuff.expiresAt;
               return (
                 <>
-                  {gs.activePet && (
+                  {innBuffActive && (
                     <div className="section">
-                      <div className="section-title">활성 펫</div>
-                      <div className="rod-card" style={{ borderColor: 'rgba(255,170,0,0.4)' }}>
+                      <div className="rod-card" style={{ borderColor: 'rgba(100,200,255,0.5)', background: 'rgba(0,100,200,0.15)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span style={{ fontSize: 24 }}>{PETS[gs.activePet]?.icon}</span>
+                          <span style={{ fontSize: 20 }}>💤</span>
                           <div>
-                            <div style={{ fontWeight: 700, color: PET_RARITY_COLOR[PETS[gs.activePet]?.rarity] ?? '#fff' }}>
-                              {PETS[gs.activePet]?.name}
-                            </div>
-                            <div className="rod-meta">{PETS[gs.activePet]?.desc}</div>
+                            <div style={{ fontWeight: 700, color: '#88ccff' }}>여관 휴식 버프 활성</div>
+                            <div className="rod-meta">낚시 속도 +20% · {Math.ceil((innBuff.expiresAt - now) / 60000)}분 남음</div>
                           </div>
-                          <button className="btn-dis" style={{ marginLeft: 'auto', fontSize: 11 }}
-                            onClick={() => { setGs(prev => ({ ...prev, activePet: null })); addMsg('펫 해제됨', 'system'); }}>
-                            해제
-                          </button>
                         </div>
                       </div>
                     </div>
                   )}
+                  {gs.activePet && (() => {
+                    const pet = PETS[gs.activePet];
+                    const level = petLevels[gs.activePet] ?? 1;
+                    const exp = petExp[gs.activePet] ?? 0;
+                    const nextThresh = level < PET_MAX_LEVEL ? PET_EXP_THRESHOLDS[level - 1] : null;
+                    const mult = PET_LEVEL_MULT[level - 1] ?? 1.0;
+                    return (
+                      <div className="section">
+                        <div className="section-title">활성 펫</div>
+                        <div className="rod-card" style={{ borderColor: 'rgba(255,170,0,0.4)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 24 }}>{pet?.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: PET_RARITY_COLOR[pet?.rarity] ?? '#fff' }}>
+                                {pet?.name} <span style={{ color: '#ffcc44', fontSize: 12 }}>Lv.{level}</span>
+                                {level >= PET_MAX_LEVEL && <span style={{ color: '#ff8844', fontSize: 11, marginLeft: 4 }}>MAX</span>}
+                              </div>
+                              <div className="rod-meta">{pet?.desc} · 보너스 ×{mult.toFixed(2)}</div>
+                              {level < PET_MAX_LEVEL && (
+                                <div style={{ marginTop: 4 }}>
+                                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 2 }}>
+                                    EXP {exp} / {nextThresh} (Lv.{level + 1}까지)
+                                  </div>
+                                  <div style={{ height: 4, background: 'rgba(255,255,255,0.15)', borderRadius: 2 }}>
+                                    <div style={{ width: `${Math.min(100, (exp / nextThresh) * 100)}%`, height: '100%', background: '#ffcc44', borderRadius: 2 }} />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <button className="btn-dis" style={{ fontSize: 11 }}
+                              onClick={() => { setGs(prev => ({ ...prev, activePet: null })); addMsg('펫 해제됨', 'system'); }}>
+                              해제
+                            </button>
+                          </div>
+                          {level < PET_MAX_LEVEL && (
+                            <div style={{ marginTop: 8 }}>
+                              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>
+                                물고기로 먹이주기 (!펫먹이 [물고기명]):
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {[...new Set(gs.fishInventory ?? [])].slice(0, 6).map(fname => (
+                                  <button key={fname} className="btn-eq" style={{ fontSize: 11, padding: '2px 6px' }}
+                                    onClick={() => handleCommand(`!펫먹이 ${fname}`)}>
+                                    {fname} (+{Math.max(1, Math.ceil((FISH[fname]?.price ?? 20) / 40))}exp)
+                                  </button>
+                                ))}
+                                {(gs.fishInventory?.length ?? 0) === 0 && (
+                                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>인벤토리에 물고기 없음</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   <div className="section">
                     <div className="section-title">내 펫 / 알</div>
                     {Object.keys(PETS).every(k => !(gs.petEggs ?? {})[k]) && !gs.activePet
@@ -2533,6 +2834,7 @@ export default function App() {
                           const isActive = gs.activePet === key;
                           const remainMs = Math.max(0, egg.hatchAt - now);
                           const remainMin = Math.ceil(remainMs / 60000);
+                          const level = petLevels[key] ?? 1;
                           return (
                             <div key={key} className="rod-card">
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2540,6 +2842,7 @@ export default function App() {
                                 <div style={{ flex: 1 }}>
                                   <div style={{ fontWeight: 700, color: PET_RARITY_COLOR[pet.rarity] ?? '#fff' }}>
                                     {hatched ? pet.name : `${pet.name} 알`}
+                                    {hatched && <span style={{ color: '#ffcc44', fontSize: 11, marginLeft: 4 }}>Lv.{level}</span>}
                                   </div>
                                   <div className="rod-meta">
                                     {hatched ? pet.desc : `부화까지 ${remainMin}분 남음`}
@@ -2557,6 +2860,14 @@ export default function App() {
                           );
                         })
                     }
+                  </div>
+                  <div className="section">
+                    <div className="section-title" style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>펫 레벨업 안내</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
+                      물고기를 먹이면 EXP를 얻어 레벨이 오릅니다.<br/>
+                      레벨이 높을수록 보너스 효과가 증가합니다.<br/>
+                      Lv.2: ×1.25 / Lv.3: ×1.5 / Lv.4: ×1.75 / Lv.5: ×2.0
+                    </div>
                   </div>
                 </>
               );
