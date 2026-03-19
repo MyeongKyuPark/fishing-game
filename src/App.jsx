@@ -636,10 +636,10 @@ export default function App() {
           ? { ...p, watered: true, harvestAt: p.harvestAt - Math.floor((p.harvestAt - now) * 0.25) }
           : p
       );
-      setTimeout(() => addMsg('🌧️ 비가 내려 작물에 물을 줬습니다! (성장 25% 단축)', 'catch'), 0);
+      setTimeout(() => addMsgRef.current('🌧️ 비가 내려 작물에 물을 줬습니다! (성장 25% 단축)', 'catch'), 0);
       return { ...prev, farmPlots: newPlots };
     });
-  }, [weather?.id, addMsg]);
+  }, [weather?.id]);
   useEffect(() => {
     if (!roomId) return;
     setWeather(getWeather(roomId, Date.now()));
