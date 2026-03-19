@@ -97,6 +97,29 @@ const ROOMS = {
     exitTx: 5, exitTy: 9,
     entryTx: 5, entryTy: 7,
   },
+  bank: {
+    label: '🏦 은행',
+    w: 12, h: 10,
+    tiles: [
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+      ['W','S','S','S','S','S','S','S','S','S','S','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','C','C','C','C','C','C','C','C','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','R','R','R','R','R','R','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','W','W','W','W','D','W','W','W','W','W','W'],
+    ],
+    floor: '#c8b88a', wall: '#7a6a45', rug: '#4488aa',
+    npcs: [
+      { tx: 5, ty: 2, name: '은행원', bodyColor: '#5588cc', hairColor: '#2a1800',
+        dialog: '어서오세요! 예금으로\n이자를 받아보세요~', facing: 'down' },
+    ],
+    exitTx: 5, exitTy: 9,
+    entryTx: 5, entryTy: 7,
+  },
 };
 
 function isWalkable(tile) {

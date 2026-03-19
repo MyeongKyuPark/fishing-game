@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import {
-  TILE_SIZE, MAP_W, MAP_H, TILE, TILE_COLOR, WALKABLE, RODS, ORES, HERBS, randInt,
+  TILE_SIZE, MAP_W, MAP_H, TILE, TILE_COLOR, WALKABLE, RODS, ORES, HERBS, randInt, SEEDS,
 } from './gameData';
 import { playSwimSplash } from './soundManager';
 import {
@@ -233,6 +233,138 @@ function drawShopBuilding(ctx, camX, camY) {
   ctx.fillText('🏪 상점', cx, sy2 + sh * 0.68);
 }
 
+function drawBankBuilding(ctx, camX, camY) {
+  const bx = 1 * TILE_SIZE - camX;
+  const by = 14 * TILE_SIZE - camY;
+  const bw = 9 * TILE_SIZE;
+  const bh = 4 * TILE_SIZE;
+  const cx = bx + bw / 2;
+
+  // Drop shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillRect(bx + 6, by + 6, bw, bh);
+
+  // Main wall — stone grey-blue
+  ctx.fillStyle = '#c8d0d8';
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.fillStyle = '#b8c0c8';
+  ctx.fillRect(bx, by + bh * 0.5, bw, bh * 0.5);
+
+  // Horizontal stone lines
+  ctx.strokeStyle = '#a8b0b8'; ctx.lineWidth = 1.5;
+  for (let i = 1; i < 4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(bx, by + bh * i / 4); ctx.lineTo(bx + bw, by + bh * i / 4);
+    ctx.stroke();
+  }
+  // Vertical stone lines
+  for (let i = 1; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(bx + bw * i / 5, by); ctx.lineTo(bx + bw * i / 5, by + bh);
+    ctx.stroke();
+  }
+
+  // ── Columns ──
+  const colPositions = [bx + 28, bx + bw / 2 - 14, bx + bw / 2 + 14, bx + bw - 44];
+  for (const colX of colPositions) {
+    // Column base
+    ctx.fillStyle = '#d8dce4';
+    ctx.fillRect(colX, by, 16, bh);
+    // Column highlight
+    ctx.fillStyle = '#eef0f4';
+    ctx.fillRect(colX + 2, by, 4, bh);
+    // Capital and base
+    ctx.fillStyle = '#b0b8c0';
+    ctx.fillRect(colX - 4, by, 24, 8);
+    ctx.fillRect(colX - 4, by + bh - 8, 24, 8);
+  }
+
+  // ── Pediment (triangular top) ──
+  ctx.fillStyle = '#d8dce4';
+  ctx.beginPath();
+  ctx.moveTo(bx - 8, by);
+  ctx.lineTo(cx, by - 44);
+  ctx.lineTo(bx + bw + 8, by);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#a8b0b8'; ctx.lineWidth = 2; ctx.stroke();
+  // Pediment inner triangle
+  ctx.fillStyle = '#c8ccd4';
+  ctx.beginPath();
+  ctx.moveTo(bx + 20, by - 2);
+  ctx.lineTo(cx, by - 36);
+  ctx.lineTo(bx + bw - 20, by - 2);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── Entablature ──
+  ctx.fillStyle = '#b0b8c0';
+  ctx.fillRect(bx - 8, by, bw + 16, 10);
+
+  // ── Vault door ──
+  const dw = 52, dh = 52, dx = cx - dw / 2, dy = by + bh - dh;
+  ctx.fillStyle = '#5a6a7a';
+  ctx.fillRect(dx, dy, dw, dh);
+  // Vault arch
+  ctx.fillStyle = '#4a5a6a';
+  ctx.beginPath();
+  ctx.arc(dx + dw / 2, dy, dw / 2, Math.PI, 0);
+  ctx.fill();
+  // Vault door frame
+  ctx.strokeStyle = '#8a9aaa'; ctx.lineWidth = 3;
+  ctx.strokeRect(dx, dy, dw, dh);
+  // Vault wheel (decorative)
+  ctx.strokeStyle = '#aabbcc'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(dx + dw / 2, dy + dh * 0.6, 12, 0, Math.PI * 2); ctx.stroke();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(dx + dw / 2, dy + dh * 0.6);
+    ctx.lineTo(dx + dw / 2 + Math.cos(a) * 12, dy + dh * 0.6 + Math.sin(a) * 12);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#88aacc'; ctx.beginPath(); ctx.arc(dx + dw / 2, dy + dh * 0.6, 4, 0, Math.PI * 2); ctx.fill();
+
+  // ── Left window ──
+  const lw = { x: bx + 18, y: by + bh * 0.18, w: 44, h: 38 };
+  ctx.fillStyle = '#aaddff'; ctx.fillRect(lw.x, lw.y, lw.w, lw.h);
+  const gwl = ctx.createRadialGradient(lw.x + lw.w/2, lw.y + lw.h/2, 2, lw.x + lw.w/2, lw.y + lw.h/2, 28);
+  gwl.addColorStop(0, 'rgba(180,230,255,0.5)'); gwl.addColorStop(1, 'rgba(100,180,255,0)');
+  ctx.fillStyle = gwl; ctx.fillRect(lw.x - 8, lw.y - 8, lw.w + 16, lw.h + 16);
+  ctx.strokeStyle = '#6688aa'; ctx.lineWidth = 3; ctx.strokeRect(lw.x, lw.y, lw.w, lw.h);
+  ctx.strokeStyle = '#7799bb'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(lw.x + lw.w/2, lw.y); ctx.lineTo(lw.x + lw.w/2, lw.y + lw.h);
+  ctx.moveTo(lw.x, lw.y + lw.h/2); ctx.lineTo(lw.x + lw.w, lw.y + lw.h/2);
+  ctx.stroke();
+
+  // ── Right window ──
+  const rw = { x: bx + bw - 18 - 44, y: by + bh * 0.18, w: 44, h: 38 };
+  ctx.fillStyle = '#aaddff'; ctx.fillRect(rw.x, rw.y, rw.w, rw.h);
+  const gwr = ctx.createRadialGradient(rw.x + rw.w/2, rw.y + rw.h/2, 2, rw.x + rw.w/2, rw.y + rw.h/2, 28);
+  gwr.addColorStop(0, 'rgba(180,230,255,0.5)'); gwr.addColorStop(1, 'rgba(100,180,255,0)');
+  ctx.fillStyle = gwr; ctx.fillRect(rw.x - 8, rw.y - 8, rw.w + 16, rw.h + 16);
+  ctx.strokeStyle = '#6688aa'; ctx.lineWidth = 3; ctx.strokeRect(rw.x, rw.y, rw.w, rw.h);
+  ctx.strokeStyle = '#7799bb'; ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(rw.x + rw.w/2, rw.y); ctx.lineTo(rw.x + rw.w/2, rw.y + rw.h);
+  ctx.moveTo(rw.x, rw.y + rw.h/2); ctx.lineTo(rw.x + rw.w, rw.y + rw.h/2);
+  ctx.stroke();
+
+  // ── Hanging sign ──
+  const sw = 100, sh = 28, sy2 = by - 52;
+  ctx.strokeStyle = '#6688aa'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx - 30, by - 6); ctx.lineTo(cx - 30, sy2 + sh);
+  ctx.moveTo(cx + 30, by - 6); ctx.lineTo(cx + 30, sy2 + sh);
+  ctx.stroke();
+  ctx.fillStyle = '#4466aa';
+  ctx.beginPath(); ctx.roundRect(cx - sw/2, sy2, sw, sh, 6); ctx.fill();
+  ctx.strokeStyle = '#2244aa'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 13px "Noto Sans KR", sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('🏦 은행', cx, sy2 + sh * 0.70);
+}
+
 function drawChair(ctx, sx, sy, occupied) {
   const cx = sx + TILE_SIZE / 2;
   const col = occupied ? '#4a2008' : '#7a4a20';
@@ -299,6 +431,143 @@ function drawFishingSign(ctx, sx, sy) {
   ctx.fillStyle = 'rgba(200,255,210,0.75)';
   ctx.fillText('의자에 앉아 !낚시', sx, by + 43);
   ctx.fillText('방향키로 취소', sx, by + 55);
+}
+
+// Farm plot grid: 3 cols × 2 rows within the farm zone (cols 30-38, rows 14-17)
+const FARM_PLOT_POSITIONS = [
+  { tx: 31, ty: 14 }, { tx: 33, ty: 14 }, { tx: 35, ty: 14 },
+  { tx: 31, ty: 16 }, { tx: 33, ty: 16 }, { tx: 35, ty: 16 },
+];
+
+function drawCrop(ctx, wx, wy, pct, isReady, seedKey) {
+  const cx = wx + TILE_SIZE / 2;
+  const cy = wy + TILE_SIZE / 2;
+  const now = Date.now();
+
+  // Soil patch
+  ctx.fillStyle = '#8a5c2a';
+  ctx.beginPath(); ctx.ellipse(cx, wy + TILE_SIZE - 5, 11, 6, 0, 0, Math.PI * 2); ctx.fill();
+
+  if (pct < 0.1) {
+    // Just planted — tiny bump
+    ctx.fillStyle = '#6aaa44';
+    ctx.beginPath(); ctx.arc(cx, wy + TILE_SIZE - 10, 3, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+
+  const h = Math.min(20, Math.round(pct * 20));
+  const stemY = wy + TILE_SIZE - 8;
+
+  // Stem
+  ctx.strokeStyle = '#4a8a28';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, stemY); ctx.lineTo(cx, stemY - h); ctx.stroke();
+
+  if (pct < 0.5) {
+    // Small leaves
+    ctx.fillStyle = '#5aaa38';
+    ctx.beginPath(); ctx.ellipse(cx - 5, stemY - h * 0.5, 5, 3, -0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 5, stemY - h * 0.7, 5, 3, 0.4, 0, Math.PI * 2); ctx.fill();
+  } else if (!isReady) {
+    // Grown leaves
+    ctx.fillStyle = '#48b030';
+    ctx.beginPath(); ctx.ellipse(cx - 7, stemY - h * 0.6, 7, 4, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 7, stemY - h * 0.8, 7, 4, 0.5, 0, Math.PI * 2); ctx.fill();
+    // Small bud
+    const budColor = seedKey === '황금씨앗' ? '#ffdd00' : seedKey === '약초씨앗' ? '#88ee44' : '#ff8844';
+    ctx.fillStyle = budColor;
+    ctx.beginPath(); ctx.arc(cx, stemY - h, 4, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // Ready — full bloom + golden glow
+    const pulse = 0.85 + 0.15 * Math.sin(now / 400);
+    const glow = ctx.createRadialGradient(cx, stemY - h, 0, cx, stemY - h, 14 * pulse);
+    glow.addColorStop(0, 'rgba(255,240,80,0.5)'); glow.addColorStop(1, 'rgba(255,240,80,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, stemY - h, 14 * pulse, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = '#44cc22';
+    ctx.beginPath(); ctx.ellipse(cx - 8, stemY - h * 0.65, 8, 5, -0.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 8, stemY - h * 0.85, 8, 5, 0.5, 0, Math.PI * 2); ctx.fill();
+
+    const fruitColor = seedKey === '황금씨앗' ? '#ffdd00' : seedKey === '약초씨앗' ? '#88ee44' : seedKey === '당근씨앗' ? '#ff7722' : seedKey === '밀씨앗' ? '#ddb84a' : '#cc4444';
+    ctx.fillStyle = fruitColor;
+    ctx.beginPath(); ctx.arc(cx, stemY - h, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // "수확!" label
+    ctx.font = 'bold 9px "Noto Sans KR", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.lineWidth = 2.5;
+    ctx.strokeText('수확!', cx, wy + 4);
+    ctx.fillText('수확!', cx, wy + 4);
+  }
+}
+
+function drawGoldenPondSign(ctx, sx, sy) {
+  const boardW = 104, boardH = 46;
+  const bx = sx - boardW / 2, by = sy - boardH - 8;
+  const now = Date.now();
+
+  ctx.fillStyle = '#5a4010';
+  ctx.fillRect(sx - 4, by + boardH, 8, 22);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath(); ctx.roundRect(bx + 3, by + 3, boardW, boardH, 7); ctx.fill();
+
+  // Glowing golden background
+  const pulse = 0.8 + 0.2 * Math.sin(now / 600);
+  const grad = ctx.createLinearGradient(bx, by, bx + boardW, by + boardH);
+  grad.addColorStop(0, `rgba(180,120,0,${pulse})`);
+  grad.addColorStop(0.5, `rgba(220,160,0,${pulse})`);
+  grad.addColorStop(1, `rgba(180,120,0,${pulse})`);
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.roundRect(bx, by, boardW, boardH, 7); ctx.fill();
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.stroke();
+
+  ctx.fillStyle = '#fff8cc';
+  ctx.beginPath(); ctx.roundRect(bx, by, boardW, 5, [7, 7, 0, 0]); ctx.fill();
+
+  ctx.font = 'bold 13px "Noto Sans KR", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff8cc';
+  ctx.fillText('✨ 황금 연못', sx, by + 20);
+
+  ctx.strokeStyle = 'rgba(255,255,200,0.2)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx + 10, by + 26); ctx.lineTo(bx + boardW - 10, by + 26); ctx.stroke();
+
+  ctx.font = '10px "Noto Sans KR", sans-serif';
+  ctx.fillStyle = 'rgba(255,248,160,0.8)';
+  ctx.fillText('낚시 G1↑ 또는 비밀낚시터 탐험 필요', sx, by + 38);
+}
+
+function drawFreshwaterSign(ctx, sx, sy) {
+  const boardW = 96, boardH = 46;
+  const bx = sx - boardW / 2, by = sy - boardH - 8;
+
+  ctx.fillStyle = '#5a3a18';
+  ctx.fillRect(sx - 4, by + boardH, 8, 24);
+
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.beginPath(); ctx.roundRect(bx + 3, by + 3, boardW, boardH, 7); ctx.fill();
+
+  ctx.fillStyle = '#1a5a88';
+  ctx.beginPath(); ctx.roundRect(bx, by, boardW, boardH, 7); ctx.fill();
+  ctx.strokeStyle = '#44aadd'; ctx.lineWidth = 2; ctx.stroke();
+
+  ctx.fillStyle = '#66ccff';
+  ctx.beginPath(); ctx.roundRect(bx, by, boardW, 5, [7, 7, 0, 0]); ctx.fill();
+
+  ctx.font = 'bold 13px "Noto Sans KR", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#e0f8ff';
+  ctx.fillText('🌊 민물 낚시터', sx, by + 20);
+
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(bx + 10, by + 26); ctx.lineTo(bx + boardW - 10, by + 26); ctx.stroke();
+
+  ctx.font = '10px "Noto Sans KR", sans-serif';
+  ctx.fillStyle = 'rgba(180,240,255,0.75)';
+  ctx.fillText('의자에 앉아 !낚시', sx, by + 38);
 }
 
 function drawCookingBuilding(ctx, camX, camY) {
@@ -538,6 +807,10 @@ function drawFullMap(ctx, W, H, playerX, playerY, otherPlayers, nickname) {
   label('🏪 상점',    5,  6);
   label('🍳 요리소', 15,  6);
   label('🏨 여관',   25,  6);
+  label('🏦 은행',    5, 17);
+  label('🌊 민물',   19, 17);
+  label('🌱 농장',   34, 17);
+  label('✨ 황금연못', 38, 10);
   label('🌲 숲',     37,  9);
   label('🎣 낚시터', 20, 25);
   label('⛏ 광산',   57, 11);
@@ -1653,6 +1926,29 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
           drawFishingSign(ctx, sx, sy);
       }
 
+      // Bank building decoration
+      {
+        const bbx = 1 * TILE_SIZE - camX, bby = 14 * TILE_SIZE - camY;
+        if (bbx < W + 2 * TILE_SIZE && bbx + 9 * TILE_SIZE > 0 && bby < H + TILE_SIZE && bby + 4 * TILE_SIZE > 0)
+          drawBankBuilding(ctx, camX, camY);
+      }
+
+      // Freshwater pond sign (north edge of pond)
+      {
+        const sx = 19 * TILE_SIZE + TILE_SIZE / 2 - camX;
+        const sy = 15 * TILE_SIZE - camY;
+        if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
+          drawFreshwaterSign(ctx, sx, sy);
+      }
+
+      // Golden pond sign (inside forest, north of pond)
+      {
+        const sx = 38 * TILE_SIZE + TILE_SIZE / 2 - camX;
+        const sy = 8 * TILE_SIZE - camY;
+        if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
+          drawGoldenPondSign(ctx, sx, sy);
+      }
+
       // Fishing chairs (mark occupied ones)
       for (const c of FISHING_CHAIRS) {
         const cx = c.tx * TILE_SIZE + TILE_SIZE / 2;
@@ -1729,6 +2025,27 @@ export default function GameCanvas({ gameRef, onFishCaught, onOreMined, onHerbGa
       const ml = [34 * TILE_SIZE - camX, 1 * TILE_SIZE - camY];
       if (ml[0] > 0 && ml[0] < W && ml[1] > 0 && ml[1] < H)
         ctx.fillText('광산 지역', ml[0], ml[1]);
+      const fml = [34 * TILE_SIZE - camX, 16 * TILE_SIZE - camY];
+      if (fml[0] > 0 && fml[0] < W && fml[1] > 0 && fml[1] < H)
+        ctx.fillText('🌱 농장', fml[0], fml[1]);
+
+      // Farm crop visuals
+      {
+        const now2 = Date.now();
+        const farmPlots = gameRef.current?.farmPlots ?? [];
+        farmPlots.forEach((plot, i) => {
+          if (i >= FARM_PLOT_POSITIONS.length) return;
+          const pos = FARM_PLOT_POSITIONS[i];
+          const wx = pos.tx * TILE_SIZE - camX;
+          const wy = pos.ty * TILE_SIZE - camY;
+          if (wx < -TILE_SIZE * 2 || wx > W + TILE_SIZE || wy < -TILE_SIZE * 2 || wy > H + TILE_SIZE) return;
+          const elapsed = now2 - plot.plantedAt;
+          const total = plot.harvestAt - plot.plantedAt;
+          const pct = Math.min(1, elapsed / total);
+          const isReady = now2 >= plot.harvestAt;
+          drawCrop(ctx, wx, wy, pct, isReady, plot.seed);
+        });
+      }
 
       // Level-up screen flash effect (milestones 25/50/75)
       const lvEffect = gameRef.current?.levelUpEffect;

@@ -12,16 +12,17 @@ import ChannelLobby from './ChannelLobby';
 import { saveFishRecord, saveOverallFishRecord, savePlayerTitle, broadcastAnnouncement, subscribeAnnouncements, incrementServerStat, subscribeServerStats } from './ranking';
 import { updatePlayerPresence, removePlayerPresence, subscribeOtherPlayers } from './multiplay';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
-  SMELT_RECIPES, JEWELRY_RECIPES, POTION_RECIPES,
+  SMELT_RECIPES, JEWELRY_RECIPES, POTION_RECIPES, SEEDS, MAX_FARM_PLOTS,
   weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
-  pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect } from './gameData';
+  pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
+  ZONE_FISH, FISHING_ZONES } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
 import { getTitle, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
-import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS } from './mapData';
+import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm } from './mapData';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
 import { PETS, PET_RARITY_COLOR } from './petData';
 import { NPCS, getAffinityLevel, getShopDiscount } from './npcData';
@@ -130,6 +131,12 @@ const QUEST_POOL = [
   { id: 'sell8000',label: '8000G 이상 판매',       goal: 8000, type: 'sell', reward: 3000 },
   { id: 'herb3',   label: '허브 3개 채집',         goal: 3,    type: 'herb', reward: 120 },
   { id: 'herb10',  label: '허브 10개 채집',        goal: 10,   type: 'herb', reward: 350 },
+  { id: 'farm1',   label: '작물 1개 수확',          goal: 1,    type: 'farm', reward: 150 },
+  { id: 'farm3',   label: '작물 3개 수확',          goal: 3,    type: 'farm', reward: 400 },
+  { id: 'farm5',   label: '작물 5개 수확',          goal: 5,    type: 'farm', reward: 800 },
+  { id: 'dep500',  label: '은행에 500G 예금',       goal: 500,  type: 'deposit', reward: 200 },
+  { id: 'dep2000', label: '은행에 2000G 예금',      goal: 2000, type: 'deposit', reward: 600 },
+  { id: 'dep8000', label: '은행에 8000G 예금',      goal: 8000, type: 'deposit', reward: 1500 },
 ];
 
 function getDailyQuests() {
@@ -196,6 +203,13 @@ const DEFAULT_STATE = {
   npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0 },  // 0~100 affinity per NPC
   // Exploration
   exploredZones: [],          // ['비밀낚시터', '심층광맥', '신비의숲', '고대유적']
+  // Farming
+  farmPlots: [],              // [{ id, seed, plantedAt, harvestAt, watered, harvested }]
+  cropInventory: {},          // { '감자': 3, '당근': 1, ... }
+  // Bank
+  bankDeposit: 0,             // deposited gold amount
+  bankLastInterest: null,     // timestamp of last interest payment
+  bankLoan: 0,                // current loan amount (for future use)
 };
 
 function saveKey(nickname) { return `fishingGame_v1_${nickname}`; }
@@ -263,6 +277,11 @@ function loadSave(nickname) {
       activePet: s.activePet ?? null,
       npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, ...(s.npcAffinity ?? {}) },
       exploredZones: s.exploredZones ?? [],
+      farmPlots: s.farmPlots ?? [],
+      cropInventory: s.cropInventory ?? {},
+      bankDeposit: s.bankDeposit ?? 0,
+      bankLastInterest: s.bankLastInterest ?? null,
+      bankLoan: s.bankLoan ?? 0,
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -354,6 +373,8 @@ export default function App() {
   const [serverStats, setServerStats] = useState({});
   const [showDex, setShowDex] = useState(false);
   const [showAnnounce, setShowAnnounce] = useState(false);
+  const [showBank, setShowBank] = useState(false);
+  const [bankInput, setBankInput] = useState('');
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -566,6 +587,7 @@ export default function App() {
   const [weather, setWeather] = useState(() => getWeather(null, Date.now()));
   useEffect(() => { weatherRef.current = weather; }, [weather]);
   useEffect(() => { if (gameRef.current) gameRef.current.weather = weather; }, [weather]);
+  useEffect(() => { if (gameRef.current) gameRef.current.farmPlots = gs.farmPlots ?? []; }, [gs.farmPlots]);
   useEffect(() => {
     if (!roomId) return;
     setWeather(getWeather(roomId, Date.now()));
@@ -650,6 +672,23 @@ export default function App() {
     }, remaining);
     return () => clearTimeout(t);
   }, [gs.activePotion, addMsg]);
+
+  // Bank interest: 2% per real-hour, capped at 24h offline
+  useEffect(() => {
+    if (!nickname) return;
+    const deposit = gs.bankDeposit ?? 0;
+    if (deposit <= 0) return;
+    const now = Date.now();
+    const lastInterest = gs.bankLastInterest ?? now;
+    const elapsedMs = Math.min(now - lastInterest, 24 * 60 * 60 * 1000); // max 24h
+    const hoursElapsed = elapsedMs / (60 * 60 * 1000);
+    if (hoursElapsed < 0.01) return; // less than 36 seconds, skip
+    const interest = Math.floor(deposit * 0.02 * hoursElapsed);
+    if (interest <= 0) return;
+    setGs(prev => ({ ...prev, money: prev.money + interest, bankLastInterest: now }));
+    addMsg(`🏦 은행 이자 +${interest}G (${deposit.toLocaleString()}G × 2%/시간 × ${hoursElapsed.toFixed(2)}시간)`, 'catch');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nickname, gs.bankDeposit]);
 
   // Server collective quest milestone announcements
   useEffect(() => {
@@ -763,8 +802,16 @@ export default function App() {
     const fishGrade = s?.abilities?.낚시?.grade  ?? 0;
     const speechAbil = s?.abilities?.화술?.value ?? 0;
 
-    // Ability-gated fish table
-    let table = getAbilityFishTable(fishAbil);
+    // Zone-based fish table selection
+    const zone = gameRef.current?.fishingZone ?? '강';
+    const zoneDef = FISHING_ZONES[zone];
+    let table;
+    if (zone === '심해' || zone === '민물' || zone === '바다' || zone === '황금연못') {
+      table = ZONE_FISH[zone] ?? getAbilityFishTable(fishAbil);
+    } else {
+      // '강' — use normal ability-gated table
+      table = getAbilityFishTable(fishAbil);
+    }
 
     // Grade rare bonus — boost rare/legendary/mythic weights
     const gradeBoostPct = gradeRareBonus(fishGrade);
@@ -832,10 +879,10 @@ export default function App() {
       * (1 + speechAbil * 0.005 + fishAbil * 0.002 + enhEffect.priceBonus)
     );
 
-    const seaBonus = gameRef.current?.player?.seaFishing ? 1.5 : 1.0;
+    const seaBonus = zoneDef?.seaBonus ?? (gameRef.current?.player?.seaFishing ? 1.5 : 1.0);
     const petSellBonus = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
     const finalPrice = Math.round(price * seaBonus * petSellBonus);
-    const seaMsg = seaBonus > 1 ? ' 🌊 바다낚시 보너스!' : '';
+    const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
     if (Math.random() < 0.03) {
@@ -1035,6 +1082,10 @@ export default function App() {
        '!스탯  – 캐릭터 스탯 보기',
        '!퀘스트 – 오늘의 퀘스트 확인',
        '!탐험  – 새 탐험 구역 발견 시도',
+       '!씨앗    – 씨앗 목록 확인',
+       '!심기 [씨앗명] – 씨앗 심기 (농장 근처)',
+       '!물주기  – 작물에 물 주기 (성장 25% 단축)',
+       '!수확   – 다 자란 작물 수확 (농장 근처)',
       ].forEach(t => addMsg(t));
       return;
     }
@@ -1108,6 +1159,7 @@ export default function App() {
       player.activityStart = null;
       player.activityProgress = 0;
       player.seaFishing = false;
+      if (gameRef.current) gameRef.current.fishingZone = '강';
       setActivity(null);
       addMsg('활동을 중지했습니다.');
       return;
@@ -1129,6 +1181,7 @@ export default function App() {
         player.seaFishing = true;
         player.vx = 0; player.vy = 0;
         const fishAbil = s.abilities?.낚시?.value ?? 0;
+        if (gameRef.current) gameRef.current.fishingZone = (s.marineGear === '스쿠버다이빙세트' && fishAbil >= 50) ? '심해' : '바다';
         const stamAbil = s.abilities?.체력?.value ?? 0;
         const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
         const enhEffect = rodEnhanceEffect(enhLevel);
@@ -1163,6 +1216,15 @@ export default function App() {
         addMsg('🪑 이미 다른 플레이어가 앉아 있습니다! 다른 의자를 이용하세요.', 'error');
         return;
       }
+      // Golden pond access check
+      if (nearest.zone === '황금연못') {
+        const fishGrade = s?.abilities?.낚시?.grade ?? 0;
+        const explored = stateRef.current?.exploredZones ?? [];
+        if (fishGrade < 1 && !explored.includes('비밀낚시터')) {
+          addMsg('✨ 황금 연못: 낚시 그레이드 1 이상 또는 비밀 낚시터 탐험 완료 필요!', 'error');
+          return;
+        }
+      }
       player.x = nearest.cx;
       player.y = nearest.cy - TILE_SIZE / 2;
       player.vx = 0; player.vy = 0;
@@ -1170,6 +1232,7 @@ export default function App() {
       player.state = 'fishing';
       player.currentRod = s.rod;
       player.seaFishing = nearest.seaFishing ?? false;
+      if (gameRef.current) gameRef.current.fishingZone = nearest.zone ?? '강';
       const fishAbil = s.abilities?.낚시?.value ?? 0;
       const stamAbil = s.abilities?.체력?.value ?? 0;
       const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
@@ -1230,7 +1293,8 @@ export default function App() {
       const gatherAbil = s.abilities?.채집?.value ?? 0;
       const gatherToolKey = s.gatherTool ?? '맨손';
       const gatherToolMult = GATHER_TOOLS[gatherToolKey]?.timeMult ?? 1.0;
-      const gatherMult = Math.max(0.3, (1 - gatherAbil * 0.004) * gatherToolMult);
+      const potionGatherBonus = s.activePotion?.effect?.gatherSpeedBonus ?? 0;
+      const gatherMult = Math.max(0.3, (1 - gatherAbil * 0.004) * gatherToolMult * (1 - potionGatherBonus));
       if (gameRef.current) gameRef.current.gatherTimeMult = gatherMult;
       const [mn, mx2] = HERBS[herb].gatherRange.map(t2 => Math.max(800, Math.round(t2 * gatherMult)));
       player.activityStart = performance.now();
@@ -1282,6 +1346,85 @@ export default function App() {
         addMsg(`🗺 새 구역 발견: ${z.icon} ${z.name}! ${z.benefit}`, 'catch');
         if (gameRef.current) gameRef.current.levelUpEffect = { age: 0 };
       }
+      return;
+    }
+
+    if (cmd === '!씨앗') {
+      const lines = Object.entries(SEEDS).map(([, seedData]) =>
+        `${seedData.name} ${seedData.price}G (${Math.round(seedData.growMs/60000)}분, 수확: ${seedData.yield.item})`
+      );
+      addMsg('🌱 씨앗 목록: ' + lines.join(' | '));
+      return;
+    }
+
+    if (input.trim().startsWith('!심기 ')) {
+      const seedKey = input.trim().slice(4).trim();
+      if (!nearFarm(player.x, player.y)) { addMsg('🌱 농장 근처로 이동하세요! (지도 동쪽 숲 남쪽)', 'error'); return; }
+      const seed = SEEDS[seedKey];
+      if (!seed) { addMsg('알 수 없는 씨앗입니다. !씨앗 으로 목록 확인', 'error'); return; }
+      const plots = stateRef.current?.farmPlots ?? [];
+      if (plots.length >= MAX_FARM_PLOTS) { addMsg(`🌱 농장 칸이 꽉 찼습니다! (최대 ${MAX_FARM_PLOTS}칸)`, 'error'); return; }
+      if ((stateRef.current?.money ?? 0) < seed.price) { addMsg(`💰 골드 부족 (${seed.price}G 필요)`, 'error'); return; }
+      const nowMs = Date.now();
+      const plot = { id: nowMs, seed: seedKey, plantedAt: nowMs, harvestAt: nowMs + seed.growMs, watered: false, harvested: false };
+      setGs(prev => ({ ...prev, money: prev.money - seed.price, farmPlots: [...(prev.farmPlots ?? []), plot] }));
+      addMsg(`🌱 ${seed.name} 심기 완료! ${Math.round(seed.growMs / 60000)}분 후 수확 가능`, 'catch');
+      return;
+    }
+
+    if (cmd === '!물주기') {
+      if (!nearFarm(player.x, player.y)) { addMsg('💧 농장 근처로 이동하세요!', 'error'); return; }
+      const plots = stateRef.current?.farmPlots ?? [];
+      const waterable = plots.filter(p => !p.watered && Date.now() < p.harvestAt);
+      if (waterable.length === 0) { addMsg('💧 물을 줄 수 있는 작물이 없습니다. (이미 완료되거나 모두 물줌)', 'error'); return; }
+      const now = Date.now();
+      setGs(prev => {
+        const newPlots = (prev.farmPlots ?? []).map(p => {
+          if (!p.watered && now < p.harvestAt) {
+            const remaining = p.harvestAt - now;
+            return { ...p, watered: true, harvestAt: p.harvestAt - Math.floor(remaining * 0.25) };
+          }
+          return p;
+        });
+        return { ...prev, farmPlots: newPlots };
+      });
+      addMsg(`💧 물 주기 완료! ${waterable.length}개 작물 성장 25% 단축`, 'catch');
+      grantAbility('채집', 0.5 * waterable.length);
+      return;
+    }
+
+    if (cmd === '!수확') {
+      if (!nearFarm(player.x, player.y)) { addMsg('🌾 농장 근처로 이동하세요!', 'error'); return; }
+      const nowMs = Date.now();
+      const plots = stateRef.current?.farmPlots ?? [];
+      const ready = plots.filter(p => !p.harvested && nowMs >= p.harvestAt);
+      if (ready.length === 0) { addMsg('🌾 수확 가능한 작물이 없습니다.', 'error'); return; }
+      const gained = {};
+      for (const p of ready) {
+        const seedData = SEEDS[p.seed];
+        if (!seedData) continue;
+        const [min, max] = seedData.yield.qty;
+        const qty = min + Math.floor(Math.random() * (max - min + 1));
+        gained[seedData.yield.item] = (gained[seedData.yield.item] ?? 0) + qty;
+      }
+      setGs(prev => {
+        const readyIds = new Set(ready.map(r => r.id));
+        const newPlots = prev.farmPlots.filter(p => !readyIds.has(p.id));
+        const newCrop = { ...(prev.cropInventory ?? {}) };
+        for (const [item, qty] of Object.entries(gained)) newCrop[item] = (newCrop[item] ?? 0) + qty;
+        return { ...prev, farmPlots: newPlots, cropInventory: newCrop };
+      });
+      const totalHarvested = Object.values(gained).reduce((s, n) => s + n, 0);
+      const summary = Object.entries(gained).map(([k, v]) => `${k} ${v}개`).join(', ');
+      addMsg(`🌾 수확 완료! ${summary}`, 'catch');
+      grantAbility('채집', 0.3 * ready.length);
+      advanceQuest('farm', totalHarvested);
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, cropsHarvested: (prevStats.cropsHarvested ?? 0) + totalHarvested };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+        return { ...prev, achStats: updatedStats };
+      });
       return;
     }
 
@@ -1580,6 +1723,8 @@ export default function App() {
       } else {
         addMsg('⛏ 철수: "광산에서 광석을 캐보세요! 희귀할수록 값이 비싸답니다."', 'info');
       }
+    } else if (npcName === '은행원') {
+      setShowBank(true);
     }
   }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, stateRef]);
 
@@ -1913,7 +2058,7 @@ export default function App() {
 
             {/* Tabs */}
             <div className="stats-tabs">
-              {['장비', '어빌리티', '제련/제작', '업적', '펫', '관계도', '탐험'].map(tab => (
+              {['장비', '어빌리티', '제련/제작', '업적', '펫', '관계도', '탐험', '농장'].map(tab => (
                 <button key={tab} tabIndex={-1}
                   className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''}`}
                   onClick={() => setStatsTab(tab)}>{tab}</button>
@@ -2268,7 +2413,9 @@ export default function App() {
                   <div className="section">
                     <div className="section-title">🧪 포션 제작</div>
                     {Object.entries(POTION_RECIPES).map(([key, recipe]) => {
-                      const hasMats = Object.entries(recipe.input).every(([herb, n]) => (gs.herbInventory?.[herb] || 0) >= n);
+                      const herbOk = Object.entries(recipe.input ?? {}).every(([h, n]) => (gs.herbInventory?.[h] || 0) >= n);
+                      const cropOk = Object.entries(recipe.cropInput ?? {}).every(([c, n]) => (gs.cropInventory?.[c] || 0) >= n);
+                      const hasMats = herbOk && cropOk;
                       const stock = gs.potionInventory?.[key] ?? 0;
                       const isActive = gs.activePotion?.type === key;
                       return (
@@ -2279,10 +2426,16 @@ export default function App() {
                             {isActive && <span className="badge" style={{ background: '#1a88cc' }}>효과 중</span>}
                           </div>
                           <div className="rod-meta">{recipe.desc}</div>
-                          <div className="rod-meta" style={{ color: hasMats ? '#88ff88' : '#ff8888' }}>
-                            재료: {Object.entries(recipe.input).map(([herb, n]) => (
+                          <div className="rod-meta">
+                            재료:{' '}
+                            {Object.entries(recipe.input ?? {}).map(([herb, n]) => (
                               <span key={herb} style={{ marginRight: 6, color: (gs.herbInventory?.[herb] || 0) >= n ? '#88ff88' : '#ff8888' }}>
                                 {herb} {gs.herbInventory?.[herb] || 0}/{n}
+                              </span>
+                            ))}
+                            {Object.entries(recipe.cropInput ?? {}).map(([crop, n]) => (
+                              <span key={crop} style={{ marginRight: 6, color: (gs.cropInventory?.[crop] || 0) >= n ? '#88ff88' : '#ff8888' }}>
+                                🌾{crop} {gs.cropInventory?.[crop] || 0}/{n}
                               </span>
                             ))}
                           </div>
@@ -2290,9 +2443,11 @@ export default function App() {
                             <button className={hasMats ? 'btn-buy' : 'btn-dis'} disabled={!hasMats} onClick={() => {
                               setGs(prev => {
                                 const herbs = { ...(prev.herbInventory ?? {}) };
-                                for (const [herb, n] of Object.entries(recipe.input)) herbs[herb] = Math.max(0, (herbs[herb] || 0) - n);
+                                for (const [herb, n] of Object.entries(recipe.input ?? {})) herbs[herb] = Math.max(0, (herbs[herb] || 0) - n);
+                                const crops = { ...(prev.cropInventory ?? {}) };
+                                for (const [crop, n] of Object.entries(recipe.cropInput ?? {})) crops[crop] = Math.max(0, (crops[crop] || 0) - n);
                                 const pots = { ...(prev.potionInventory ?? {}), [key]: (prev.potionInventory?.[key] ?? 0) + 1 };
-                                return { ...prev, herbInventory: herbs, potionInventory: pots };
+                                return { ...prev, herbInventory: herbs, cropInventory: crops, potionInventory: pots };
                               });
                               addMsg(`${recipe.icon} ${recipe.name} 제조 완료!`, 'catch');
                             }}>제조</button>
@@ -2498,6 +2653,113 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* ── 농장 tab ── */}
+            {statsTab === '농장' && (() => {
+              const now = Date.now();
+              const plots = gs.farmPlots ?? [];
+              const cropInv = gs.cropInventory ?? {};
+              const cropEntries = Object.entries(cropInv).filter(([, n]) => n > 0);
+              // Find sellPrice for a crop from SEEDS
+              const getCropSellPrice = (itemName) => {
+                for (const sd of Object.values(SEEDS)) {
+                  if (sd.yield.item === itemName) return sd.yield.sellPrice;
+                }
+                return 0;
+              };
+              return (
+                <>
+                  <div className="section">
+                    <div className="section-title">🌱 농장 현황 ({plots.length}/{MAX_FARM_PLOTS}칸)</div>
+                    {plots.length === 0 && (
+                      <div className="empty">심은 작물이 없습니다. !심기 [씨앗명] 으로 씨앗을 심으세요.</div>
+                    )}
+                    {plots.map(plot => {
+                      const sd = SEEDS[plot.seed];
+                      if (!sd) return null;
+                      const isReady = now >= plot.harvestAt;
+                      const elapsed = now - plot.plantedAt;
+                      const total = plot.harvestAt - plot.plantedAt;
+                      const pct = Math.min(100, Math.round((elapsed / total) * 100));
+                      const remainMs = Math.max(0, plot.harvestAt - now);
+                      const remainMin = Math.ceil(remainMs / 60000);
+                      return (
+                        <div key={plot.id} className="rod-card" style={{ borderColor: isReady ? 'rgba(100,220,100,0.4)' : undefined }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 18 }}>🌱</span>
+                            <span style={{ fontWeight: 700, color: isReady ? '#88ff88' : '#ffe0a0' }}>{sd.name}</span>
+                            {isReady && <span className="badge" style={{ background: '#1a7a1a' }}>수확 가능!</span>}
+                            {!isReady && plot.watered && <span className="badge" style={{ background: '#1a4a8a' }}>💧 물줌</span>}
+                          </div>
+                          <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 8, overflow: 'hidden', marginBottom: 4 }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: isReady ? '#44ff88' : plot.watered ? '#44aaff' : '#4488ff', borderRadius: 4 }} />
+                          </div>
+                          <div style={{ fontSize: 11, color: '#aaa' }}>
+                            {isReady ? `✅ 수확 준비 완료! (수확: ${sd.yield.item})` : `⏳ ${remainMin}분 남음 (${pct}%)${plot.watered ? ' · 물 줌 ✓' : ''}`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                      {plots.some(p => now >= p.harvestAt) && (
+                        <button className="btn-buy" onClick={() => handleCommand('!수확')}>
+                          🌾 전체 수확
+                        </button>
+                      )}
+                      {plots.some(p => !p.watered && now < p.harvestAt) && (
+                        <button className="btn-eq" onClick={() => handleCommand('!물주기')}>
+                          💧 물 주기 (성장 25%↑)
+                        </button>
+                      )}
+                    </div>
+                    {plots.length < MAX_FARM_PLOTS && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>씨앗 심기 (농장 근처에서):</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {Object.entries(SEEDS).map(([key, sd]) => (
+                            <button key={key} className={gs.money >= sd.price ? 'btn-buy' : 'btn-dis'}
+                              style={{ fontSize: 11 }}
+                              disabled={gs.money < sd.price}
+                              onClick={() => handleCommand(`!심기 ${key}`)}>
+                              🌱 {sd.name} ({sd.price}G)
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="section">
+                    <div className="section-title">🌾 수확물 창고</div>
+                    {cropEntries.length === 0
+                      ? <div className="empty">수확한 작물이 없습니다.</div>
+                      : cropEntries.map(([itemName, count]) => {
+                          const sp = getCropSellPrice(itemName);
+                          const total = sp * count;
+                          return (
+                            <div key={itemName} className="rod-card">
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <span style={{ fontWeight: 700, color: '#88ff88' }}>🌾 {itemName} ×{count}</span>
+                                <span style={{ color: '#ffcc44', fontSize: 12 }}>{sp}G/개 (총 {total}G)</span>
+                              </div>
+                              <button className="btn-buy" style={{ fontSize: 11 }} onClick={() => {
+                                setGs(prev => {
+                                  const newCrop = { ...(prev.cropInventory ?? {}), [itemName]: 0 };
+                                  return { ...prev, money: prev.money + total, cropInventory: newCrop };
+                                });
+                                addMsg(`💰 ${itemName} ${count}개 판매 +${total}G`, 'catch');
+                                advanceQuest('sell', total);
+                              }}>
+                                전체 판매 ({total}G)
+                              </button>
+                            </div>
+                          );
+                        })
+                    }
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -3116,6 +3378,133 @@ export default function App() {
                   </>
               }
             </div>
+
+            {/* ── Sell crops ── */}
+            <div className="section">
+              <div className="section-title">🌾 작물 판매</div>
+              {Object.entries(gs.cropInventory ?? {}).filter(([, n]) => n > 0).length === 0
+                ? <div className="empty">판매할 작물 없음 (농장에서 수확)</div>
+                : <div>
+                    {Object.entries(gs.cropInventory ?? {}).filter(([, n]) => n > 0).map(([itemName, count]) => {
+                      const sp = (() => {
+                        for (const sd of Object.values(SEEDS)) {
+                          if (sd.yield.item === itemName) return sd.yield.sellPrice;
+                        }
+                        return 0;
+                      })();
+                      const total = sp * count;
+                      return (
+                        <div key={itemName} className="rod-card">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ color: '#88ff88', fontWeight: 700 }}>🌾 {itemName} ×{count}</span>
+                            <span style={{ color: '#ffcc44', fontSize: 12 }}>{sp}G/개</span>
+                          </div>
+                          <button tabIndex={-1} className="btn-buy" onClick={() => {
+                            setGs(prev => {
+                              const newCrop = { ...(prev.cropInventory ?? {}), [itemName]: 0 };
+                              return { ...prev, money: prev.money + total, cropInventory: newCrop };
+                            });
+                            addMsg(`💰 ${itemName} ${count}개 → ${total}G!`, 'catch');
+                            advanceQuest('sell', total);
+                          }}>전체 판매 ({total}G)</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+              }
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bank modal */}
+      {showBank && (
+        <div className="overlay" onClick={() => setShowBank(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>🏦 은행</span>
+              <button tabIndex={-1} onClick={() => setShowBank(false)}>✕</button>
+            </div>
+            <div className="section">
+              <div className="section-title">예금 현황</div>
+              <div className="rod-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, color: '#ffcc44' }}>💰 지갑</span>
+                  <span style={{ color: '#ffcc44' }}>{gs.money.toLocaleString()}G</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, color: '#44ccff' }}>🏦 예금</span>
+                  <span style={{ color: '#44ccff' }}>{(gs.bankDeposit ?? 0).toLocaleString()}G</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
+                  이자율: 2%/시간 (최대 24시간 소급 적용)
+                  {gs.bankLastInterest && (
+                    <span style={{ marginLeft: 8 }}>
+                      · 다음 이자: {Math.max(0, 60 - Math.floor((Date.now() - gs.bankLastInterest) / 60000))}분 후
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="section">
+              <div className="section-title">입금 / 출금</div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  type="number" min={1} placeholder="금액 입력"
+                  value={bankInput}
+                  onChange={e => setBankInput(e.target.value)}
+                  style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }}
+                />
+                <button tabIndex={-1} className="btn-buy" onClick={() => {
+                  const amt = Math.floor(Number(bankInput));
+                  if (!amt || amt <= 0) { addMsg('금액을 입력하세요.', 'error'); return; }
+                  if (amt > gs.money) { addMsg('💰 지갑 잔액 부족', 'error'); return; }
+                  const nowTs = Date.now();
+                  setGs(prev => {
+                    const prevStats = prev.achStats ?? {};
+                    const updatedStats = { ...prevStats, totalDeposited: (prevStats.totalDeposited ?? 0) + amt };
+                    setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                    return {
+                      ...prev,
+                      money: prev.money - amt,
+                      bankDeposit: (prev.bankDeposit ?? 0) + amt,
+                      bankLastInterest: prev.bankLastInterest ?? nowTs,
+                      achStats: updatedStats,
+                    };
+                  });
+                  advanceQuest('deposit', amt);
+                  addMsg(`🏦 ${amt.toLocaleString()}G 입금 완료!`, 'catch');
+                  setBankInput('');
+                }}>입금</button>
+                <button tabIndex={-1} className="btn-eq" onClick={() => {
+                  const amt = Math.floor(Number(bankInput));
+                  if (!amt || amt <= 0) { addMsg('금액을 입력하세요.', 'error'); return; }
+                  if (amt > (gs.bankDeposit ?? 0)) { addMsg('🏦 예금 잔액 부족', 'error'); return; }
+                  setGs(prev => ({
+                    ...prev,
+                    money: prev.money + amt,
+                    bankDeposit: (prev.bankDeposit ?? 0) - amt,
+                  }));
+                  addMsg(`🏦 ${amt.toLocaleString()}G 출금 완료!`, 'catch');
+                  setBankInput('');
+                }}>출금</button>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button tabIndex={-1} className="btn-dis" style={{ fontSize: 11 }}
+                  onClick={() => setBankInput(String(gs.money))}>전액 입금</button>
+                <button tabIndex={-1} className="btn-dis" style={{ fontSize: 11 }}
+                  onClick={() => setBankInput(String(gs.bankDeposit ?? 0))}>전액 출금</button>
+              </div>
+            </div>
+            {(gs.bankDeposit ?? 0) > 0 && (
+              <div className="section">
+                <div className="section-title">이자 계산</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                  1시간 후 예상 이자: +{Math.floor((gs.bankDeposit ?? 0) * 0.02)}G<br />
+                  24시간 후 누적 이자: +{Math.floor((gs.bankDeposit ?? 0) * 0.02 * 24)}G
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

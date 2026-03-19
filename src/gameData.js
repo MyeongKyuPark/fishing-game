@@ -299,6 +299,76 @@ export const POTION_RECIPES = {
     desc: '180초간 희귀 물고기 확률 +30%',
     price: 1200,
   },
+  활력포션: {
+    name: '활력 포션', icon: '🥕', color: '#ff8844',
+    cropInput: { 감자: 3, 당근: 2 },
+    effect: { speedBonus: 1.5, fishSpeedBonus: 0.15, duration: 90000 },
+    desc: '90초간 이동속도 +1.5, 낚시속도 +15%',
+    price: 400,
+  },
+  채집강화포션: {
+    name: '채집 강화 포션', icon: '🌿', color: '#44cc88',
+    cropInput: { 밀: 4, 치유초: 2 },
+    effect: { gatherSpeedBonus: 0.30, duration: 150000 },
+    desc: '150초간 채집 속도 +30%',
+    price: 600,
+  },
+  황금포션: {
+    name: '황금 포션', icon: '✨', color: '#ffd700',
+    cropInput: { 황금사과: 1 },
+    effect: { rareBonus: 0.60, fishSpeedBonus: 0.20, duration: 120000 },
+    desc: '120초간 희귀 물고기 +60%, 낚시속도 +20%',
+    price: 3000,
+  },
+};
+
+// ── Seeds & Crops (씨앗 / 작물) ──────────────────────────────────────────────
+export const SEEDS = {
+  감자씨앗:  { name: '감자 씨앗',   price: 80,   growMs: 5 * 60 * 1000,  yield: { item: '감자',    qty: [2, 4], sellPrice: 60  } },
+  당근씨앗:  { name: '당근 씨앗',   price: 120,  growMs: 8 * 60 * 1000,  yield: { item: '당근',    qty: [2, 3], sellPrice: 90  } },
+  밀씨앗:    { name: '밀 씨앗',     price: 60,   growMs: 3 * 60 * 1000,  yield: { item: '밀',      qty: [3, 6], sellPrice: 40  } },
+  약초씨앗:  { name: '약초 씨앗',   price: 300,  growMs: 15 * 60 * 1000, yield: { item: '치유초',  qty: [1, 2], sellPrice: 350 } },
+  황금씨앗:  { name: '황금 씨앗',   price: 1200, growMs: 30 * 60 * 1000, yield: { item: '황금사과', qty: [1, 2], sellPrice: 1500 } },
+};
+export const MAX_FARM_PLOTS = 6;
+
+// ── Zone-specific fish tables ────────────────────────────────────────────────
+export const ZONE_FISH = {
+  // 민물낚시터: freshwater pond (default, near dock)
+  민물: [
+    { f:'붕어', w:30 }, { f:'잉어', w:25 }, { f:'미꾸라지', w:20 },
+    { f:'메기', w:15 }, { f:'황금붕어', w:10 },
+  ],
+  // 강낚시터: river (dock chairs, ability-gated standard pool)
+  강: null,  // uses normal ability-gated table
+
+  // 바다낚시터: sea (deep pier chairs, seaFishing=true)
+  바다: [
+    { f:'멸치', w:20 }, { f:'꽁치', w:18 }, { f:'황다랑어', w:15 },
+    { f:'오징어', w:15 }, { f:'낙지', w:12 }, { f:'참치', w:12 },
+    { f:'광어', w:8 },
+  ],
+
+  // 심해낚시터: deep sea (requires 스쿠버다이빙세트 + 낚시 50+)
+  심해: [
+    { f:'광어', w:20 }, { f:'참치', w:18 }, { f:'감성돔', w:15 },
+    { f:'우럭', w:12 }, { f:'뱀장어', w:10 }, { f:'황새치', w:8 },
+    { f:'용고기', w:7 }, { f:'고대어', w:5 },
+  ],
+
+  // 황금연못: golden pond (requires 낚시 ability grade 1+ OR 탐험 비밀낚시터)
+  황금연못: [
+    { f:'황금붕어', w:40 }, { f:'연어', w:25 }, { f:'금눈돔', w:20 },
+    { f:'감성돔', w:10 }, { f:'용고기', w:5 },
+  ],
+};
+
+export const FISHING_ZONES = {
+  민물: { name: '민물 낚시터', icon: '🌊', desc: '기본 낚시터', reqAbil: 0, color: '#44aaff' },
+  강:   { name: '강 낚시터',   icon: '🏞', desc: '능력치 기반 물고기 출현', reqAbil: 0, color: '#66ccff' },
+  바다: { name: '바다 낚시터', icon: '⚓', desc: '바다 물고기, 판매가 ×1.5', reqAbil: 20, color: '#0088ff', seaBonus: 1.5 },
+  심해: { name: '심해 낚시터', icon: '🐙', desc: '희귀 물고기만 출현 (스쿠버 필요)', reqAbil: 50, reqGear: '스쿠버다이빙세트', color: '#0044aa', seaBonus: 2.0 },
+  황금연못: { name: '황금 연못', icon: '✨', desc: '황금 물고기 전용', reqGrade: 1, color: '#ffd700', seaBonus: 1.2 },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

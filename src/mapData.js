@@ -67,6 +67,31 @@ function buildMap() {
       t[r][c] = TILE.STONE;
   }
 
+  // ── Farm zone: cols 30-38, rows 14-17 ─────────────────────────────────────
+  // (between forest and beach, south of path)
+  for (let r = 14; r <= 17; r++)
+    for (let c = 30; c <= 38; c++)
+      t[r][c] = TILE.GRASS; // keep as grass, farm plots drawn on top
+
+  // ── Freshwater pond: cols 16-22, rows 15-17 ───────────────────────────────
+  for (let r = 15; r <= 17; r++)
+    for (let c = 16; c <= 22; c++)
+      t[r][c] = TILE.WATER;
+
+  // ── Golden pond: cols 36-40, rows 8-10 (hidden in forest) ─────────────────
+  for (let r = 8; r <= 10; r++)
+    for (let c = 36; c <= 40; c++)
+      t[r][c] = TILE.WATER;
+
+  // ── Bank building: cols 1-9, rows 14-17 ───────────────────────────────────
+  // (south of main path, above sand — entrance at south face)
+  for (let r = 14; r <= 17; r++)
+    for (let c = 1; c <= 9; c++)
+      t[r][c] = TILE.BUILDING;
+  // Bank entrance path (row 17 bottom edge, not overwritten by sand at row 18+)
+  t[17][4] = TILE.PATH;
+  t[17][5] = TILE.PATH;
+
   // ── Sand beach: rows 18-20, cols 0-44 ─────────────────────────────────────
   for (let r = 18; r <= 20; r++)
     for (let c = 0; c <= 44; c++)
@@ -104,20 +129,27 @@ function buildMap() {
 export const MAP_TILES = buildMap();
 
 export const FISHING_CHAIRS = [
-  // Main dock chairs (row 22)
-  { tx: 5,  ty: 22 },
-  { tx: 9,  ty: 22 },
-  { tx: 13, ty: 22 },
-  { tx: 17, ty: 22 },
-  { tx: 21, ty: 22 },
-  { tx: 25, ty: 22 },
-  { tx: 29, ty: 22 },
-  { tx: 33, ty: 22 },
+  // Freshwater pond chairs (row 14, north edge of pond at cols 16-22)
+  { tx: 16, ty: 14, zone: '민물' },
+  { tx: 19, ty: 14, zone: '민물' },
+  { tx: 22, ty: 14, zone: '민물' },
+  // Main dock chairs (row 22) — river zone
+  { tx: 5,  ty: 22, zone: '강' },
+  { tx: 9,  ty: 22, zone: '강' },
+  { tx: 13, ty: 22, zone: '강' },
+  { tx: 17, ty: 22, zone: '강' },
+  { tx: 21, ty: 22, zone: '강' },
+  { tx: 25, ty: 22, zone: '강' },
+  { tx: 29, ty: 22, zone: '강' },
+  { tx: 33, ty: 22, zone: '강' },
+  // Golden pond chairs (row 7, north edge of pond at cols 36-40)
+  { tx: 37, ty: 7, zone: '황금연못' },
+  { tx: 39, ty: 7, zone: '황금연못' },
   // Deep pier chairs (row 26) — sea fishing zone
-  { tx: 22, ty: 26, seaFishing: true },
-  { tx: 24, ty: 26, seaFishing: true },
-  { tx: 26, ty: 26, seaFishing: true },
-  { tx: 28, ty: 26, seaFishing: true },
+  { tx: 22, ty: 26, seaFishing: true, zone: '바다' },
+  { tx: 24, ty: 26, seaFishing: true, zone: '바다' },
+  { tx: 26, ty: 26, seaFishing: true, zone: '바다' },
+  { tx: 28, ty: 26, seaFishing: true, zone: '바다' },
 ];
 
 export const CHAIR_RANGE = 3 * TILE_SIZE;
@@ -138,6 +170,11 @@ export const INN_TY = 11;
 export const INN_RANGE = 4 * TILE_SIZE;
 
 export const FOREST_ZONE = { tx1: 30, ty1: 0, tx2: 44, ty2: 18 };
+
+export const FARM_ZONE = { tx1: 30, ty1: 14, tx2: 38, ty2: 17 };
+export const FARM_TX = 34;  // center of farm zone
+export const FARM_TY = 15;
+export const FARM_RANGE = 5 * TILE_SIZE;
 
 export const PLAYER_START_X = 15 * TILE_SIZE + TILE_SIZE / 2;
 export const PLAYER_START_Y = 14 * TILE_SIZE + TILE_SIZE / 2;
@@ -171,6 +208,13 @@ export const DOOR_TRIGGERS = [
     wx: 47.5 * TILE_SIZE, wy: 8.5 * TILE_SIZE,
     range: 2.2 * TILE_SIZE,
     exitWx: 47.5 * TILE_SIZE, exitWy: 10.5 * TILE_SIZE,
+  },
+  {
+    id: 'bank',
+    label: '🏦 은행 입장',
+    wx: 4.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
+    range: 1.8 * TILE_SIZE,
+    exitWx: 4.5 * TILE_SIZE, exitWy: 19 * TILE_SIZE,
   },
 ];
 
@@ -221,6 +265,12 @@ export function nearCooking(px, py) {
   return Math.hypot(px - cx, py - cy) <= COOKING_RANGE;
 }
 
+export function nearFarm(px, py) {
+  const fx = FARM_TX * TILE_SIZE + TILE_SIZE / 2;
+  const fy = FARM_TY * TILE_SIZE + TILE_SIZE / 2;
+  return Math.hypot(px - fx, py - fy) <= FARM_RANGE;
+}
+
 export function pickOre() {
   const entries = Object.entries(ORES).map(([k, v]) => ({ f: k, w: v.w }));
   return weightedPick(entries);
@@ -232,4 +282,16 @@ export function pickHerb() {
   const weights = { 들풀: 50, 버섯: 30, 희귀허브: 10 };
   const weighted = Object.entries(HERBS).map(([k]) => ({ f: k, w: weights[k] ?? 10 }));
   return weightedPick(weighted);
+}
+
+export function getFishingZone(px, py, marineGear, fishAbil) {
+  const tx = Math.floor(px / TILE_SIZE);
+  const ty = Math.floor(py / TILE_SIZE);
+  // Freshwater pond area (cols 16-22, rows 14-17)
+  if (tx >= 15 && tx <= 23 && ty >= 14 && ty <= 18) return '민물';
+  // Deep sea (on water with scuba + high ability)
+  if (marineGear === '스쿠버다이빙세트' && fishAbil >= 50) return '심해';
+  // Sea fishing area (deep pier)
+  if (ty >= 23 && ty <= 26) return '바다';
+  return '강'; // default river/dock
 }
