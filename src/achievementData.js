@@ -3,8 +3,8 @@ export const ACHIEVEMENTS = [
   // Fishing
   { id: 'fish_10',      label: '첫 어획',      desc: '물고기 10마리 낚기',       icon: '🎣', type: 'fishCaught',    goal: 10,     reward: { money: 200 } },
   { id: 'fish_100',     label: '낚시 애호가',   desc: '물고기 100마리 낚기',      icon: '🐟', type: 'fishCaught',    goal: 100,    reward: { money: 1000 } },
-  { id: 'fish_500',     label: '낚시 달인',     desc: '물고기 500마리 낚기',      icon: '🏆', type: 'fishCaught',    goal: 500,    reward: { money: 4000 } },
-  { id: 'fish_2000',    label: '전설 낚시꾼',   desc: '물고기 2000마리 낚기',     icon: '👑', type: 'fishCaught',    goal: 2000,   reward: { money: 15000 } },
+  { id: 'fish_500',     label: '낚시 달인',     desc: '물고기 500마리 낚기',      icon: '🏆', type: 'fishCaught',    goal: 500,    reward: { money: 4000, baitInventory: { 황금미끼: 1 } } },
+  { id: 'fish_2000',    label: '전설 낚시꾼',   desc: '물고기 2000마리 낚기',     icon: '👑', type: 'fishCaught',    goal: 2000,   reward: { money: 15000, baitInventory: { 신화미끼: 1 } } },
   // Rarity
   { id: 'legendary_1',  label: '전설의 손맛',   desc: '전설 물고기 1마리 낚기',   icon: '⭐', type: 'legendaryCount', goal: 1,      reward: { money: 1000 } },
   { id: 'legendary_10', label: '전설 헌터',     desc: '전설 물고기 10마리 낚기',  icon: '⭐', type: 'legendaryCount', goal: 10,     reward: { money: 5000 } },
@@ -13,11 +13,11 @@ export const ACHIEVEMENTS = [
   // Encyclopedia
   { id: 'species_5',    label: '생물 탐구',     desc: '5종 물고기 도감 등록',     icon: '📖', type: 'speciesCount',  goal: 5,      reward: { money: 500 } },
   { id: 'species_12',   label: '어류학자',      desc: '12종 물고기 도감 등록',    icon: '📖', type: 'speciesCount',  goal: 12,     reward: { money: 2000 } },
-  { id: 'species_all',  label: '박물학자',      desc: '모든 물고기 도감 완성',    icon: '🌊', type: 'speciesCount',  goal: 23,     reward: { money: 8000 } },
+  { id: 'species_all',  label: '박물학자',      desc: '모든 물고기 도감 완성',    icon: '🌊', type: 'speciesCount',  goal: 30,     reward: { money: 8000 } },
   // Mining
   { id: 'ore_50',       label: '광부의 시작',   desc: '광석 50개 채굴',           icon: '⛏', type: 'oreMined',      goal: 50,     reward: { money: 500 } },
   { id: 'ore_300',      label: '숙련 광부',     desc: '광석 300개 채굴',          icon: '⛏', type: 'oreMined',      goal: 300,    reward: { money: 2500 } },
-  { id: 'ore_1000',     label: '광산 왕',       desc: '광석 1000개 채굴',         icon: '💎', type: 'oreMined',      goal: 1000,   reward: { money: 8000 } },
+  { id: 'ore_1000',     label: '광산 왕',       desc: '광석 1000개 채굴',         icon: '💎', type: 'oreMined',      goal: 1000,   reward: { money: 8000, potionInventory: { 채굴포션: 2 } } },
   // Gathering
   { id: 'herb_30',      label: '약초 수집가',   desc: '허브 30개 채집',           icon: '🌿', type: 'herbGathered',  goal: 30,     reward: { money: 400 } },
   { id: 'herb_200',     label: '숙련 약초꾼',   desc: '허브 200개 채집',          icon: '🌿', type: 'herbGathered',  goal: 200,    reward: { money: 2500 } },
@@ -39,7 +39,7 @@ export const ACHIEVEMENTS = [
   // Farming
   { id: 'farm_10',      label: '새싹 농부',     desc: '작물 10개 수확',           icon: '🌱', type: 'cropsHarvested', goal: 10,     reward: { money: 500 } },
   { id: 'farm_50',      label: '숙련 농부',     desc: '작물 50개 수확',           icon: '🌾', type: 'cropsHarvested', goal: 50,     reward: { money: 2000 } },
-  { id: 'farm_200',     label: '대지의 주인',   desc: '작물 200개 수확',          icon: '🏡', type: 'cropsHarvested', goal: 200,    reward: { money: 8000 } },
+  { id: 'farm_200',     label: '대지의 주인',   desc: '작물 200개 수확',          icon: '🏡', type: 'cropsHarvested', goal: 200,    reward: { money: 8000, potionInventory: { 채집강화포션: 2 } } },
   // Banking
   { id: 'bank_5000',    label: '저축 입문',     desc: '은행에 5,000G 예금',       icon: '🏦', type: 'totalDeposited', goal: 5000,   reward: { money: 500 } },
   { id: 'bank_50000',   label: '재산가',        desc: '은행에 50,000G 예금',      icon: '🏦', type: 'totalDeposited', goal: 50000,  reward: { money: 3000 } },
@@ -47,6 +47,15 @@ export const ACHIEVEMENTS = [
   // Login
   { id: 'login_7',      label: '성실한 어부',   desc: '7일 연속 접속',            icon: '📅', type: 'loginStreak',   goal: 7,      reward: { money: 2000 } },
   { id: 'login_30',     label: '낚시 마니아',   desc: '30일 연속 접속',           icon: '📅', type: 'loginStreak',   goal: 30,     reward: { money: 10000 } },
+  // NPC Affinity
+  { id: 'npc_first20',  label: '첫 인연',       desc: 'NPC 1명과 친밀도 20 달성', icon: '🤝', type: 'npcAt20',       goal: 1,      reward: { money: 300 } },
+  { id: 'npc_three50',  label: '마을 친구',     desc: 'NPC 3명과 친밀도 50 달성', icon: '👫', type: 'npcAt50',       goal: 3,      reward: { money: 2000 } },
+  { id: 'npc_all50',    label: '인기인',        desc: '모든 NPC와 친밀도 50 달성',icon: '🌟', type: 'npcAt50',       goal: 5,      reward: { money: 5000 } },
+  { id: 'npc_first80',  label: '절친',          desc: 'NPC 1명과 친밀도 80 달성', icon: '💖', type: 'npcAt80',       goal: 1,      reward: { money: 3000 } },
+  { id: 'npc_all80',    label: '마을 영웅',     desc: '모든 NPC와 친밀도 80 달성',icon: '👑', type: 'npcAt80',       goal: 5,      reward: { money: 20000 } },
+  // Exploration
+  { id: 'explore_1',    label: '탐험가',        desc: '탐험 구역 1곳 발견',       icon: '🗺', type: 'zonesFound',    goal: 1,      reward: { money: 1000 } },
+  { id: 'explore_all',  label: '모험가',        desc: '모든 탐험 구역 발견',      icon: '🧭', type: 'zonesFound',    goal: 4,      reward: { money: 8000, potionInventory: { 희귀낚시포션: 1 } } },
 ];
 
 /** Check which new achievements were just unlocked.

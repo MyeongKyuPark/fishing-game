@@ -26,6 +26,24 @@ export const NPCS = {
       { at: 80, label: '특별손님', reward: '오프라인 수입 +50%' },
     ],
   },
+  채굴사: {
+    name: '철수 (채굴사)', icon: '⛏', color: '#aaccee',
+    desc: '광산 베테랑. 친해질수록 채굴 혜택!',
+    thresholds: [
+      { at: 20, label: '광부 견습', reward: '채굴 속도 +8%' },
+      { at: 50, label: '광부 동료', reward: '광석 대박 확률 +5%' },
+      { at: 80, label: '광산 친구', reward: '5층 채굴 능력치 제한 해제 + 특수 광석 확률↑' },
+    ],
+  },
+  은행원: {
+    name: '은행원', icon: '🏦', color: '#66ddbb',
+    desc: '은행 담당자. 친해질수록 금융 혜택!',
+    thresholds: [
+      { at: 20, label: '일반 고객', reward: '은행 이자율 +0.5%/시간' },
+      { at: 50, label: '우대 고객', reward: '이자율 추가 +0.5% (총 +1%)' },
+      { at: 80, label: 'VIP 고객',  reward: '오프라인 수입 최대 2배 증폭' },
+    ],
+  },
 };
 
 export function getAffinityLevel(affinity, npcKey) {

@@ -185,6 +185,137 @@ const TRACKS = {
     // Echo effect for cave
     echo: true,
   },
+
+  // ── Seasonal outdoor variants ─────────────────────────────────────────────
+  outdoor_spring: {
+    bpm: 88,
+    // D major, bright and flowing spring melody
+    melody: [
+      [N.D5, 0.5], [N.E5, 0.5], [N.Fs5, 1],
+      [N.A5, 0.5], [N.Fs5, 0.5], [N.E5, 1],
+      [N.D5, 1], [N.E5, 0.5], [N.D5, 0.5],
+      [N.B4, 2],
+      [N.E5, 0.5], [N.Fs5, 0.5], [N.A5, 1],
+      [N.G5, 0.5], [N.Fs5, 0.5], [N.E5, 1],
+      [N.D5, 0.5], [N.E5, 0.5], [N.Fs5, 0.5], [N.E5, 0.5],
+      [N.D5, 2],
+    ],
+    bass: [
+      [N.D3, 1], [N.A3, 1],
+      [N.G3, 1], [N.D3, 1],
+      [N.B3, 1], [N.Fs4, 1],
+      [N.A3, 2],
+      [N.D3, 1], [N.A3, 1],
+      [N.E3, 1], [N.B3, 1],
+      [N.G3, 1], [N.A3, 1],
+      [N.D3, 2],
+    ],
+    bassVol: 0.08, melVol: 0.12,
+  },
+
+  outdoor_summer: {
+    bpm: 100,
+    // C major, upbeat energetic summer
+    melody: [
+      [N.C5, 0.5], [N.D5, 0.5], [N.E5, 0.5], [N.G5, 0.5],
+      [N.E5, 1], [N.D5, 1],
+      [N.G5, 0.5], [N.E5, 0.5], [N.D5, 0.5], [N.C5, 0.5],
+      [N.D5, 2],
+      [N.E5, 0.5], [N.G5, 0.5], [N.A5, 1],
+      [N.G5, 0.5], [N.E5, 0.5], [N.D5, 1],
+      [N.C5, 0.5], [N.D5, 0.5], [N.E5, 0.5], [N.D5, 0.5],
+      [N.C5, 2],
+    ],
+    bass: [
+      [N.C3, 1], [N.G3, 1],
+      [N.A3, 1], [N.E3, 1],
+      [N.F3, 1], [N.C3, 1],
+      [N.G3, 2],
+      [N.C3, 1], [N.G3, 1],
+      [N.A3, 1], [N.F3, 1],
+      [N.G3, 1], [N.C4, 1],
+      [N.G3, 2],
+    ],
+    bassVol: 0.08, melVol: 0.12,
+  },
+
+  outdoor_fall: {
+    bpm: 68,
+    // E minor, warm melancholic autumn
+    melody: [
+      [N.E4, 1.5], [N.D4, 0.5], [N.B3, 2],
+      [N.G4, 1], [N.Fs4, 1], [N.E4, 2],
+      [N.A4, 1.5], [N.G4, 0.5], [N.E4, 2],
+      [N.D4, 3], [null, 1],
+      [N.B4, 1.5], [N.A4, 0.5], [N.G4, 2],
+      [N.Fs4, 1], [N.E4, 1], [N.D4, 2],
+      [N.G4, 1], [N.A4, 1], [N.B4, 1], [N.A4, 1],
+      [N.E4, 3], [null, 1],
+    ],
+    bass: [
+      [N.E3, 2], [N.B3, 2],
+      [N.G3, 2], [N.D3, 2],
+      [N.A3, 2], [N.E3, 2],
+      [N.B3, 4],
+      [N.E3, 2], [N.A3, 2],
+      [N.D3, 2], [N.G3, 2],
+      [N.C4, 2], [N.B3, 2],
+      [N.E3, 4],
+    ],
+    bassVol: 0.09, melVol: 0.10,
+  },
+
+  outdoor_winter: {
+    bpm: 54,
+    // C major, quiet sparse winter
+    melody: [
+      [N.C5, 2], [null, 1], [N.E5, 1],
+      [N.G5, 1.5], [N.F5, 0.5], [N.E5, 2],
+      [N.D5, 2], [null, 2],
+      [N.C5, 1], [N.E5, 1], [N.G5, 2],
+      [N.A5, 1.5], [N.G5, 0.5], [N.E5, 2],
+      [N.F5, 1], [N.E5, 1], [N.D5, 1], [null, 1],
+      [N.G4, 1.5], [N.A4, 0.5], [N.C5, 2],
+      [N.G4, 3], [null, 1],
+    ],
+    bass: [
+      [N.C3, 2], [N.G3, 2],
+      [N.E3, 2], [N.C3, 2],
+      [N.G3, 4],
+      [N.C3, 2], [N.E3, 2],
+      [N.F3, 2], [N.C3, 2],
+      [N.G3, 2], [N.D3, 2],
+      [N.A3, 2], [N.E3, 2],
+      [N.C3, 4],
+    ],
+    bassVol: 0.07, melVol: 0.09,
+  },
+
+  outdoor_rain: {
+    bpm: 60,
+    // F major, soft gentle rain
+    melody: [
+      [N.F4, 1], [N.A4, 1], [N.C5, 2],
+      [N.D5, 1.5], [N.C5, 0.5], [N.A4, 2],
+      [N.G4, 1], [N.A4, 1], [N.C5, 1], [N.A4, 1],
+      [N.F4, 3], [null, 1],
+      [N.A4, 1], [N.C5, 1], [N.D5, 2],
+      [N.C5, 1.5], [N.A4, 0.5], [N.G4, 2],
+      [N.F4, 1], [N.G4, 1], [N.A4, 1], [N.G4, 1],
+      [N.F4, 3], [null, 1],
+    ],
+    bass: [
+      [N.F3, 2], [N.C3, 2],
+      [N.D3, 2], [N.A3, 2],
+      [N.G3, 2], [N.C3, 2],
+      [N.F3, 4],
+      [N.A3, 2], [N.F3, 2],
+      [N.G3, 2], [N.C3, 2],
+      [N.D3, 2], [N.F3, 2],
+      [N.C4, 4],
+    ],
+    bassVol: 0.07, melVol: 0.09,
+  },
 };
 
 function scheduleTrack(trackId, startTime) {

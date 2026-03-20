@@ -24,9 +24,16 @@ export const TITLES = [
   { label: '대부호',        color: '#ffd700', condition: (gs)  => (gs.money ?? 0) >= 100000 },
   { label: '낚시 명인',     color: '#0055ff', condition: (gs)  => abilVal(gs, '낚시') >= 80 },
   { label: '전설의 용사',   color: '#ff44ff', condition: (gs)  => totalAbil(gs) >= 350 },
-  { label: '박물학자',      color: '#44ffaa', condition: (gs)  => (gs.caughtSpecies?.length ?? 0) >= 22 },
+  { label: '박물학자',      color: '#44ffaa', condition: (gs)  => (gs.caughtSpecies?.length ?? 0) >= 20 },
   { label: '부호',          color: '#ffdd00', condition: (gs)  => (gs.money ?? 0) >= 1000000 },
   { label: '낚시의 신',     color: '#ff4444', condition: (gs)  => abilVal(gs, '낚시') >= 99 },
+  { label: '마을 친구',     color: '#ffaacc', condition: (gs)  => Object.values(gs.npcAffinity ?? {}).filter(v => v >= 50).length >= 3 },
+  { label: '광산 정복자',   color: '#bb8844', condition: (gs)  => abilVal(gs, '채굴') >= 80 },
+  { label: '세계 탐험가',   color: '#44ff88', condition: (gs)  => (gs.exploredZones ?? []).length >= 4 },
+  { label: '전설 탐험가',   color: '#00ffcc', condition: (gs)  => (gs.exploredZones ?? []).length >= 5 },
+  { label: '마을 영웅',     color: '#ff88ff', condition: (gs)  => Object.values(gs.npcAffinity ?? {}).filter(v => v >= 80).length >= 5 },
+  { label: '바다의 주인',   color: '#00ccff', condition: (gs)  => (gs.caughtSpecies?.length ?? 0) >= 30 },
+  { label: '신화 소환사',   color: '#ff00ff', condition: (gs)  => (gs.achStats?.mythicCount ?? 0) >= 10 },
 ];
 
 export function getTitle(gs) {

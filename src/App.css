@@ -1005,3 +1005,143 @@ html, body {
   from { opacity: 0; transform: translateY(-8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Grade-up full-screen celebration */
+.gradeup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(255,220,80,0.12) 0%, transparent 70%);
+  animation: gradeupFade 0.5s ease, gradeupFadeOut 0.6s ease 2.4s forwards;
+}
+@keyframes gradeupFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes gradeupFadeOut {
+  to { opacity: 0; }
+}
+.gradeup-burst {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(160deg, rgba(20,10,50,0.96), rgba(40,20,70,0.96));
+  border: 3px solid var(--gc, #ffcc44);
+  border-radius: 20px;
+  padding: 28px 48px;
+  box-shadow: 0 0 60px color-mix(in srgb, var(--gc, #ffcc44) 50%, transparent),
+              0 0 120px color-mix(in srgb, var(--gc, #ffcc44) 20%, transparent);
+  animation: gradeupBounce 0.55s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes gradeupBounce {
+  from { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+  to   { transform: scale(1)   rotate(0deg);  opacity: 1; }
+}
+.gradeup-icon { font-size: 52px; line-height: 1; animation: gradeupSpin 0.6s ease; }
+@keyframes gradeupSpin {
+  from { transform: rotate(-30deg) scale(0.5); }
+  to   { transform: rotate(0deg)   scale(1);   }
+}
+.gradeup-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffcc44;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.gradeup-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+}
+.gradeup-grade {
+  font-size: 28px;
+  font-weight: 800;
+}
+.gradeup-bonus {
+  font-size: 14px;
+  color: rgba(255,255,255,0.7);
+}
+
+/* Achievement popup */
+.ach-popup-bar {
+  position: fixed;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9000;
+  pointer-events: none;
+  animation: achPopIn 0.45s cubic-bezier(0.34,1.56,0.64,1), achPopOut 0.35s ease 2.45s forwards;
+}
+@keyframes achPopIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(30px) scale(0.75); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1);    }
+}
+@keyframes achPopOut {
+  from { opacity: 1; transform: translateX(-50%) translateY(0)     scale(1);    }
+  to   { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(0.9); }
+}
+.ach-popup-inner {
+  background: linear-gradient(135deg, rgba(25,15,55,0.97), rgba(55,30,90,0.97));
+  border: 2px solid #ffcc44;
+  border-radius: 14px;
+  padding: 14px 28px;
+  text-align: center;
+  box-shadow: 0 0 30px rgba(255,200,50,0.45), 0 4px 16px rgba(0,0,0,0.6);
+  min-width: 180px;
+}
+.ach-popup-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffcc44;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.ach-popup-icon { font-size: 28px; line-height: 1.2; }
+.ach-popup-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-top: 4px;
+}
+.ach-popup-reward {
+  font-size: 13px;
+  color: #ffd700;
+  font-weight: 600;
+  margin-top: 3px;
+}
+
+/* Minimap */
+.minimap-wrap {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  z-index: 200;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px;
+  padding: 4px 6px 6px;
+  pointer-events: none;
+  user-select: none;
+}
+.minimap-title {
+  font-size: 10px;
+  color: rgba(255,255,255,0.6);
+  text-align: center;
+  margin-bottom: 3px;
+  letter-spacing: 1px;
+}
+.minimap-canvas {
+  display: block;
+  border-radius: 3px;
+  image-rendering: pixelated;
+}
+@media (max-width: 600px) {
+  .minimap-wrap { display: none; }
+}

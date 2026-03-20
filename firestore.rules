@@ -1,0 +1,180 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper functions ──────────────────────────────────────────────────────
+    function isValidNickname(nick) {
+      return nick is string && nick.size() >= 2 && nick.size() <= 12;
+    }
+
+    // ── Player presence (실시간 위치 동기화) ──────────────────────────────────
+    match /players/{docId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['nickname', 'roomId', 'x', 'y', 'state', 'updatedAt'])
+                  && isValidNickname(request.resource.data.nickname)
+                  && request.resource.data.x is number
+                  && request.resource.data.y is number;
+      allow delete: if true;
+    }
+
+    // ── Fish records (per-species leaderboard) ────────────────────────────────
+    match /fish_records/{fishName}/top/{nickname} {
+      allow read: if true;
+      allow write: if isValidNickname(nickname)
+                  && request.resource.data.keys().hasAll(['nickname', 'size'])
+                  && request.resource.data.size is number
+                  && request.resource.data.size > 0
+                  && request.resource.data.size <= 10000;
+    }
+
+    // ── Best catches (overall leaderboard) ────────────────────────────────────
+    match /best_catches/{docId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['nickname', 'fishName', 'size'])
+                  && isValidNickname(request.resource.data.nickname)
+                  && request.resource.data.size is number
+                  && request.resource.data.size > 0;
+    }
+
+    // ── Title records ─────────────────────────────────────────────────────────
+    match /title_records/{nickname} {
+      allow read: if true;
+      allow write: if isValidNickname(nickname)
+                  && request.resource.data.keys().hasAll(['nickname', 'titleLabel', 'titleIndex'])
+                  && request.resource.data.titleIndex is number;
+    }
+
+    // ── Gold records ──────────────────────────────────────────────────────────
+    match /gold_records/{nickname} {
+      allow read: if true;
+      allow write: if isValidNickname(nickname)
+                  && request.resource.data.keys().hasAll(['nickname', 'money'])
+                  && request.resource.data.money is number
+                  && request.resource.data.money >= 0;
+    }
+
+    // ── Ability records ───────────────────────────────────────────────────────
+    match /ability_records/{nickname} {
+      allow read: if true;
+      allow write: if isValidNickname(nickname)
+                  && request.resource.data.keys().hasAll(['nickname', 'totalAbility'])
+                  && request.resource.data.totalAbility is number;
+    }
+
+    // ── Achievement records ───────────────────────────────────────────────────
+    match /achievement_records/{nickname} {
+      allow read: if true;
+      allow write: if isValidNickname(nickname)
+                  && request.resource.data.keys().hasAll(['nickname', 'achievementCount'])
+                  && request.resource.data.achievementCount is number
+                  && request.resource.data.achievementCount >= 0;
+    }
+
+    // ── Announcements (server-wide broadcast) ─────────────────────────────────
+    match /announcements/{docId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['message', 'type', 'createdAt'])
+                   && request.resource.data.message is string
+                   && request.resource.data.message.size() <= 200;
+    }
+
+    // ── Server stats (read-only for clients; write only for specific fields) ──
+    match /server_stats/{docId} {
+      allow read: if true;
+      allow write: if docId == 'global';
+    }
+
+    // ── Server events (admin-created, read-only for clients) ──────────────────
+    match /server_events/{docId} {
+      allow read: if true;
+      allow write: if false; // admin only via Firebase console/admin SDK
+    }
+
+    // ── Party system ──────────────────────────────────────────────────────────
+    match /party_invites/{nickname} {
+      allow read: if true;
+      allow write: if isValidNickname(nickname);
+      allow delete: if true;
+    }
+
+    match /party_members/{docId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['partyId', 'nickname', 'roomId'])
+                  && isValidNickname(request.resource.data.nickname);
+      allow delete: if true;
+    }
+
+    match /party_chat/{docId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['partyId', 'nickname', 'message', 'createdAt'])
+                   && isValidNickname(request.resource.data.nickname)
+                   && request.resource.data.message is string
+                   && request.resource.data.message.size() <= 300;
+    }
+
+    // ── Weekly tournament ─────────────────────────────────────────────────────
+    match /tournament_entries/{docId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['nickname', 'score', 'week'])
+                  && isValidNickname(request.resource.data.nickname)
+                  && request.resource.data.score is number
+                  && request.resource.data.score >= 0;
+    }
+
+    // ── Server quests (공동 퀘스트) ───────────────────────────────────────────
+    match /server_quests/{docId} {
+      allow read: if true;
+      allow write: if docId == 'global';
+    }
+
+    // ── Guild system ──────────────────────────────────────────────────────────
+    match /guilds/{guildId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['name', 'master', 'createdAt'])
+                   && request.resource.data.name is string
+                   && request.resource.data.name.size() >= 2
+                   && request.resource.data.name.size() <= 16
+                   && isValidNickname(request.resource.data.master);
+      allow update: if request.resource.data.master == resource.data.master;
+    }
+
+    match /guild_members/{docId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['guildId', 'nickname'])
+                  && isValidNickname(request.resource.data.nickname);
+      allow delete: if true;
+    }
+
+    match /guild_chat/{docId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['guildId', 'nickname', 'message', 'createdAt'])
+                   && isValidNickname(request.resource.data.nickname)
+                   && request.resource.data.message is string
+                   && request.resource.data.message.size() <= 300;
+    }
+
+    match /guild_quests/{docId} {
+      allow read: if true;
+      allow write: if true; // guild members can update shared quest progress
+    }
+
+    // ── Marketplace ────────────────────────────────────────────────────────────
+    match /marketplace/{docId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['seller', 'itemType', 'itemName', 'qty', 'price', 'createdAt'])
+                   && isValidNickname(request.resource.data.seller)
+                   && request.resource.data.price is number
+                   && request.resource.data.price > 0
+                   && request.resource.data.price <= 10000000
+                   && request.resource.data.qty is number
+                   && request.resource.data.qty >= 1;
+      allow delete: if true; // buy or cancel deletes the listing
+    }
+
+    // ── Server Boss ─────────────────────────────────────────────────────────────
+    match /server_boss/{docId} {
+      allow read: if true;
+      allow write: if true; // admin spawns, players deal damage via transaction
+    }
+  }
+}

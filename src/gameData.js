@@ -49,17 +49,33 @@ export const FISH = {
   // Ability 70+
   용고기:     { minSz: 50, maxSz: 150, price: 1800, rarity: '신화' },
   고대어:     { minSz: 30, maxSz: 80,  price: 3000, rarity: '신화' },
+  // Ability 10~19 (추가)
+  피라미:     { minSz: 6,  maxSz: 18,  price: 12,   rarity: '흔함' },
+  // Ability 20~29 (추가)
+  도미:       { minSz: 30, maxSz: 65,  price: 160,  rarity: '보통' },
+  // Ability 30~39 (추가)
+  해마:       { minSz: 5,  maxSz: 20,  price: 420,  rarity: '희귀' },
+  // Ability 40~49 (추가)
+  전갱이:     { minSz: 20, maxSz: 50,  price: 480,  rarity: '희귀' },
+  // Ability 50~59 (추가)
+  부시리:     { minSz: 60, maxSz: 150, price: 820,  rarity: '전설' },
+  // Ability 60~69 (추가)
+  개복치:     { minSz: 80, maxSz: 300, price: 950,  rarity: '전설' },
+  // Ability 70+ (추가)
+  빙어:       { minSz: 8,  maxSz: 25,  price: 220,  rarity: '보통', season: '겨울얼음낚시' }, // 겨울 전용
+  불사조고기: { minSz: 40, maxSz: 120, price: 5000, rarity: '신화' },
 };
 
 // ── Ability-gated fish tables (낚시 ability determines available fish pool) ──
 export const ABILITY_FISH = [
   { minAbil:  0, table: [{ f:'붕어',w:35},{f:'잉어',w:30},{f:'미꾸라지',w:25},{f:'메기',w:10}] },
-  { minAbil: 10, table: [{ f:'붕어',w:18},{f:'잉어',w:18},{f:'멸치',w:22},{f:'배스',w:22},{f:'송어',w:20}] },
-  { minAbil: 20, table: [{ f:'꽁치',w:25},{f:'강꼬치고기',w:22},{f:'황다랑어',w:20},{f:'금눈돔',w:18},{f:'배스',w:15}] },
-  { minAbil: 30, table: [{ f:'연어',w:22},{f:'황금붕어',w:18},{f:'오징어',w:22},{f:'낙지',w:20},{f:'금눈돔',w:18}] },
-  { minAbil: 40, table: [{ f:'참치',w:25},{f:'광어',w:28},{f:'감성돔',w:22},{f:'황금붕어',w:15},{f:'연어',w:10}] },
-  { minAbil: 50, table: [{ f:'우럭',w:28},{f:'뱀장어',w:25},{f:'황새치',w:20},{f:'참치',w:15},{f:'감성돔',w:12}] },
-  { minAbil: 70, table: [{ f:'황새치',w:22},{f:'용고기',w:25},{f:'고대어',w:20},{f:'우럭',w:18},{f:'뱀장어',w:15}] },
+  { minAbil: 10, table: [{ f:'붕어',w:16},{f:'잉어',w:16},{f:'멸치',w:20},{f:'배스',w:20},{f:'송어',w:18},{f:'피라미',w:10}] },
+  { minAbil: 20, table: [{ f:'꽁치',w:22},{f:'강꼬치고기',w:20},{f:'황다랑어',w:18},{f:'금눈돔',w:16},{f:'배스',w:12},{f:'도미',w:12}] },
+  { minAbil: 30, table: [{ f:'연어',w:20},{f:'황금붕어',w:16},{f:'오징어',w:20},{f:'낙지',w:18},{f:'금눈돔',w:16},{f:'해마',w:10}] },
+  { minAbil: 40, table: [{ f:'참치',w:22},{f:'광어',w:24},{f:'감성돔',w:20},{f:'황금붕어',w:12},{f:'연어',w:10},{f:'전갱이',w:12}] },
+  { minAbil: 50, table: [{ f:'우럭',w:22},{f:'뱀장어',w:20},{f:'황새치',w:18},{f:'참치',w:14},{f:'감성돔',w:12},{f:'부시리',w:14}] },
+  { minAbil: 65, table: [{ f:'우럭',w:18},{f:'황새치',w:16},{f:'뱀장어',w:16},{f:'부시리',w:15},{f:'개복치',w:15},{f:'참치',w:20}] },
+  { minAbil: 70, table: [{ f:'황새치',w:18},{f:'용고기',w:22},{f:'고대어',w:18},{f:'우럭',w:14},{f:'뱀장어',w:12},{f:'불사조고기',w:8},{f:'개복치',w:8}] },
 ];
 
 /** Get fish table matching current 낚시 ability value */
@@ -343,8 +359,16 @@ export const SEEDS = {
   밀씨앗:    { name: '밀 씨앗',     price: 60,   growMs: 3 * 60 * 1000,  yield: { item: '밀',      qty: [3, 6], sellPrice: 40  } },
   약초씨앗:  { name: '약초 씨앗',   price: 300,  growMs: 15 * 60 * 1000, yield: { item: '치유초',  qty: [1, 2], sellPrice: 350 } },
   황금씨앗:  { name: '황금 씨앗',   price: 1200, growMs: 30 * 60 * 1000, yield: { item: '황금사과', qty: [1, 2], sellPrice: 1500 } },
+  // Seasonal seeds (특수 계절 씨앗)
+  봄씨앗:    { name: '봄 씨앗',     price: 400,  growMs: 6 * 60 * 1000,  yield: { item: '벚꽃잎',  qty: [3, 6], sellPrice: 180 }, reqSeason: '봄꽃축제',    seasonDesc: '봄(3~4월)에만 심을 수 있습니다' },
+  여름씨앗:  { name: '여름 씨앗',   price: 600,  growMs: 10 * 60 * 1000, yield: { item: '열대과일', qty: [2, 4], sellPrice: 320 }, reqSeason: '여름낚시대회', seasonDesc: '여름(6~8월)에만 심을 수 있습니다' },
+  가을씨앗:  { name: '가을 씨앗',   price: 500,  growMs: 8 * 60 * 1000,  yield: { item: '단풍잎',  qty: [4, 7], sellPrice: 200 }, reqSeason: '추수감사절',  seasonDesc: '가을(9~11월)에만 심을 수 있습니다' },
+  겨울씨앗:  { name: '겨울 씨앗',   price: 800,  growMs: 20 * 60 * 1000, yield: { item: '빙정초',  qty: [1, 3], sellPrice: 600 }, reqSeason: '겨울얼음낚시', seasonDesc: '겨울(12~2월)에만 심을 수 있습니다' },
 };
 export const MAX_FARM_PLOTS = 6;
+export const FARM_EXPANSION_PRICE = 3000;  // 농장 확장권 가격
+export const FARM_EXPANSION_SLOTS = 3;     // 확장당 추가 칸 수
+export const FARM_MAX_EXPANSIONS = 3;      // 최대 확장 횟수 (최대 6+9=15칸)
 
 // ── Zone-specific fish tables ────────────────────────────────────────────────
 export const ZONE_FISH = {
@@ -383,6 +407,84 @@ export const FISHING_ZONES = {
   바다: { name: '바다 낚시터', icon: '⚓', desc: '바다 물고기, 판매가 ×1.5', reqAbil: 20, color: '#0088ff', seaBonus: 1.5 },
   심해: { name: '심해 낚시터', icon: '🐙', desc: '희귀 물고기만 출현 (스쿠버 필요)', reqAbil: 50, reqGear: '스쿠버다이빙세트', color: '#0044aa', seaBonus: 2.0 },
   황금연못: { name: '황금 연못', icon: '✨', desc: '황금 물고기 전용', reqGrade: 1, color: '#ffd700', seaBonus: 1.2 },
+};
+
+// ── Hats (모자 아이템) ────────────────────────────────────────────────────────
+export const HATS = {
+  밀짚모자: {
+    name: '밀짚모자', icon: '🎩', price: 300, color: '#c8a84a',
+    desc: '낚시 속도 +5%',
+    bonus: { fishTimeMult: 0.95 },
+  },
+  낚시캡: {
+    name: '낚시캡', icon: '🧢', price: 800, color: '#4488cc',
+    desc: '낚시 속도 +10%, 희귀도 +5%',
+    bonus: { fishTimeMult: 0.90, rareBonus: 0.05 },
+    upgradeMats: { 철광석: 2 },
+  },
+  광부헬멧: {
+    name: '광부 헬멧', icon: '⛑', price: 600, color: '#ffcc44',
+    desc: '채굴 속도 +10%',
+    bonus: { mineTimeMult: 0.90 },
+    upgradeMats: { 철광석: 3 },
+  },
+  왕관: {
+    name: '왕관', icon: '👑', price: 5000, color: '#ffd700',
+    desc: '판매가 +10%, 낚시 속도 +5%',
+    bonus: { sellBonus: 0.10, fishTimeMult: 0.95 },
+    upgradeMats: { 황금괴: 2, 수정: 3 },
+  },
+};
+
+// ── Fishing outfits (낚시복) ──────────────────────────────────────────────────
+export const FISHING_OUTFITS = {
+  기본낚시복: {
+    name: '기본 낚시복', icon: '🎽', price: 0, color: '#aaaaaa',
+    desc: '기본 의상',
+    bonus: {},
+  },
+  어부의의상: {
+    name: '어부의 의상', icon: '🧥', price: 1200, color: '#4488cc',
+    desc: '낚시 속도 +8%, 낚시 어빌리티 경험치 +15%',
+    bonus: { fishTimeMult: 0.92, fishAbilGain: 1.15 },
+    upgradeMats: { 구리광석: 2 },
+  },
+  광부의작업복: {
+    name: '광부 작업복', icon: '🦺', price: 1500, color: '#cc8844',
+    desc: '채굴 속도 +10%, 대박 확률 +3%',
+    bonus: { mineTimeMult: 0.90, windfallBonus: 0.03 },
+    upgradeMats: { 철광석: 3 },
+  },
+  요리사유니폼: {
+    name: '요리사 유니폼', icon: '👨‍🍳', price: 1800, color: '#ffffff',
+    desc: '요리 배율 +0.3배, 요리 속도 +10%',
+    bonus: { cookPriceMult: 0.30, cookTimeMult: 0.90 },
+    upgradeMats: { 구리광석: 2, 들풀: 3 },
+  },
+  황금낚시복: {
+    name: '황금 낚시복', icon: '✨', price: 8000, color: '#ffd700',
+    desc: '낚시 속도 +15%, 희귀도 +10%, 판매가 +8%',
+    bonus: { fishTimeMult: 0.85, rareBonus: 0.10, sellBonus: 0.08 },
+    upgradeMats: { 황금괴: 3, 수정: 2 },
+  },
+};
+
+// ── Rod skins (낚싯대 스킨) ───────────────────────────────────────────────────
+export const ROD_SKINS = {
+  기본스킨: { name: '기본 스킨', color: '#8b6914', desc: '기본 낚싯대 외형', price: 0 },
+  황금스킨: { name: '황금 스킨', color: '#ffd700', desc: '황금빛 낚싯대 외형', price: 2000, upgradeMats: { 황금괴: 1 } },
+  수정스킨: { name: '수정 스킨', color: '#88ccff', desc: '수정색 낚싯대 외형', price: 1500, upgradeMats: { 정제수정: 2 } },
+  불꽃스킨: { name: '불꽃 스킨', color: '#ff4444', desc: '불꽃 낚싯대 외형', price: 3000, upgradeMats: { 폭풍석: 3 } },
+  용의가호스킨: { name: '용의 가호 스킨', color: '#ff88ff', desc: '용고기를 5마리 잡으면 해금', price: 0, reqMythic: '용고기', reqCount: 5 },
+};
+
+// ── Fishing spot decorations (낚시터 꾸미기) ──────────────────────────────────
+export const SPOT_DECOS = {
+  기본의자: { name: '기본 의자', icon: '🪑', price: 0, desc: '기본 낚시 의자' },
+  파라솔: { name: '파라솔', icon: '⛱', price: 800, desc: '파라솔 설치 (낚시 속도 +3%, 폭풍 저항)', bonus: { fishTimeMult: 0.97 } },
+  이름표: { name: '이름표', icon: '🪧', price: 300, desc: '자리에 이름표 설치 (닉네임 표시)' },
+  낚시의자: { name: '낚시 의자', icon: '🎪', price: 1200, desc: '고급 낚시 의자 (낚시 속도 +5%)', bonus: { fishTimeMult: 0.95 }, upgradeMats: { 정제철: 2 } },
+  미끼통: { name: '미끼통', icon: '🪣', price: 500, desc: '미끼 효율 +15%', bonus: { baitEfficiency: 1.15 } },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -120,6 +120,26 @@ const ROOMS = {
     exitTx: 5, exitTy: 9,
     entryTx: 5, entryTy: 7,
   },
+  guild: {
+    label: '🏰 길드 회관',
+    w: 12, h: 10,
+    tiles: [
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','T','T','F','F','F','T','T','F','F','W'],
+      ['W','F','T','T','F','F','F','T','T','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','R','R','R','R','R','R','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','S','S','S','F','F','F','S','S','S','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','W','W','W','W','D','W','W','W','W','W','W'],
+    ],
+    floor: '#8a6a4a', wall: '#4a3020', rug: '#cc8822', table: '#7a5230', shelf: '#6a4a2a',
+    npcs: [],
+    exitTx: 5, exitTy: 9,
+    entryTx: 5, entryTy: 7,
+  },
 };
 
 function isWalkable(tile) {

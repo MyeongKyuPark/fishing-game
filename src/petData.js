@@ -23,6 +23,24 @@ export const PETS = {
     eggPrice: 8000, hatchMs: 60 * 60 * 1000,
     bonus: { abilGainMult: 1.20, rareBonus: 0.05 },
   },
+  봉황: {
+    name: '봉황', icon: '🦅', rarity: '희귀',
+    desc: '채집 속도 +20%',
+    eggPrice: 5000, hatchMs: 45 * 60 * 1000,
+    bonus: { gatherTimeMult: 0.80 },
+  },
+  황금두더지: {
+    name: '황금 두더지', icon: '🦔', rarity: '희귀',
+    desc: '채굴 속도 +25%, 광석 대박 +12%',
+    eggPrice: 6000, hatchMs: 60 * 60 * 1000,
+    bonus: { mineTimeMult: 0.75, windfallBonus: 0.12 },
+  },
+  별빛고양이: {
+    name: '별빛 고양이', icon: '😸', rarity: '전설',
+    desc: '판매 가격 +15%, 희귀 낚시 +8%',
+    eggPrice: 15000, hatchMs: 120 * 60 * 1000,
+    bonus: { sellBonus: 0.15, rareBonus: 0.08 },
+  },
 };
 
 export const PET_RARITY_COLOR = { '보통': '#44aaff', '희귀': '#aa44ff', '전설': '#ffaa00' };

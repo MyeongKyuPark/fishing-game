@@ -92,6 +92,14 @@ function buildMap() {
   t[17][4] = TILE.PATH;
   t[17][5] = TILE.PATH;
 
+  // ── Guild Hall building: cols 11-19, rows 14-17 ────────────────────────────
+  for (let r = 14; r <= 17; r++)
+    for (let c = 11; c <= 19; c++)
+      t[r][c] = TILE.BUILDING;
+  // Guild hall entrance path
+  t[17][14] = TILE.PATH;
+  t[17][15] = TILE.PATH;
+
   // ── Sand beach: rows 18-20, cols 0-44 ─────────────────────────────────────
   for (let r = 18; r <= 20; r++)
     for (let c = 0; c <= 44; c++)
@@ -215,6 +223,13 @@ export const DOOR_TRIGGERS = [
     wx: 4.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
     range: 1.8 * TILE_SIZE,
     exitWx: 4.5 * TILE_SIZE, exitWy: 19 * TILE_SIZE,
+  },
+  {
+    id: 'guild',
+    label: '🏰 길드 회관 입장',
+    wx: 14.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
+    range: 1.8 * TILE_SIZE,
+    exitWx: 14.5 * TILE_SIZE, exitWy: 19 * TILE_SIZE,
   },
 ];
 

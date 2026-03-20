@@ -1,0 +1,2706 @@
+import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
+  SMELT_RECIPES, JEWELRY_RECIPES, POTION_RECIPES, DISH_RECIPES, SEEDS, MAX_FARM_PLOTS,
+  FARM_EXPANSION_PRICE, FARM_EXPANSION_SLOTS, FARM_MAX_EXPANSIONS,
+  getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
+  pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS } from '../gameData';
+import { DEFAULT_ABILITIES, ABILITY_DEFS, doGradeUp, gradeRareBonus,
+  SELL_ABILITY_PER_100G } from '../abilityData';
+import { getTitle, TITLES } from '../titleData';
+import { PETS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from '../petData';
+import { NPCS, getAffinityLevel, getShopDiscount } from '../npcData';
+import { EXPLORE_ZONES, checkZoneUnlock } from '../explorationData';
+import { ACHIEVEMENTS } from '../achievementData';
+import { SEASONS, getCurrentSeason } from '../seasonData';
+import { JOBS, getAvailableJobs } from '../jobData';
+import { NPC_QUESTS } from '../npcQuestData';
+import { createGuild, joinGuild, leaveGuild, sendGuildChat } from '../guildData';
+import { listItem, buyItem, cancelListing } from '../marketData';
+import Leaderboard from '../Leaderboard';
+import { rarityColor, SKIN_PRESETS } from '../hooks/useGameState';
+
+// eslint-disable-next-line no-unused-vars
+export default function Sidebar(props) {
+  const {
+    gs, setGs, nickname,
+    addMsg, handleCommand, grantAbility, advanceQuest, gainNpcAffinity, checkAndGrantAchievements,
+    sellAll, sellOne, equipBait, totalFishVal,
+    showInv, setShowInv,
+    showShop, setShowShop, sellQty, setSellQty,
+    showStats, setShowStats, statsTab, setStatsTab,
+    showRank, setShowRank,
+    showQuest, setShowQuest,
+    showDex, setShowDex,
+    showBank, setShowBank, bankInput, setBankInput,
+    showAppearance, setShowAppearance, appearanceDraft, setAppearanceDraft,
+    inspectPlayer, setInspectPlayer,
+    showTournament, setShowTournament, tournamentRanking,
+    serverQuest, serverBoss, serverStats, serverAnnouncements,
+    showGuild, setShowGuild, guildTab, setGuildTab,
+    myGuildId, setMyGuildId,
+    guildInfo, guildMembers, guildList, guildChat, guildQuest, guildCompetition,
+    guildChatInput, setGuildChatInput, guildCreateName, setGuildCreateName,
+    guildJoinId, setGuildJoinId,
+    showMarket, setShowMarket, marketListings, myListings, marketTab, setMarketTab,
+    marketListForm, setMarketListForm,
+    partyMessages, partyId,
+    checkNpcQuest,
+    resistanceGame, setResistanceGame,
+    miningMinigame, setMiningMinigame,
+  } = props;
+
+  return (
+    <>
+      {/* Inventory modal */}
+      {showInv && (() => {
+        const RARITY_ORDER = { 신화: 5, 전설: 4, 희귀: 3, 보통: 2, 흔함: 1 };
+        const groups = {};
+        for (const f of gs.fishInventory) {
+          if (!groups[f.name]) groups[f.name] = [];
+          groups[f.name].push(f);
+        }
+        const sortedGroups = Object.entries(groups).sort(([a], [b]) =>
+          (RARITY_ORDER[FISH[b]?.rarity] ?? 0) - (RARITY_ORDER[FISH[a]?.rarity] ?? 0)
+        );
+        const sellSpecies = (name) => {
+          const total = groups[name].reduce((s, f) => s + f.price, 0);
+          setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: prev.fishInventory.filter(f => f.name !== name) }));
+          addMsg(`💰 ${name} ${groups[name].length}마리 판매 +${total}G`, 'catch');
+          grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
+        };
+        return (
+          <div className="overlay" onClick={() => setShowInv(false)}>
+            <div className="panel" onClick={e => e.stopPropagation()}>
+              <div className="panel-head">
+                <span>🎒 인벤토리</span>
+                <button tabIndex={-1} onClick={() => setShowInv(false)}>✕</button>
+              </div>
+
+              <div className="section">
+                <div className="section-title">물고기 ({gs.fishInventory.length}마리)</div>
+                {gs.fishInventory.length === 0
+                  ? <div className="empty">물고기가 없습니다.</div>
+                  : <>
+                      <button tabIndex={-1} className="sell-all-btn" onClick={sellAll}>
+                        전체 판매 ({totalFishVal}G)
+                      </button>
+                      <div className="fish-list">
+                        {sortedGroups.map(([species, fishes]) => {
+                          const fd = FISH[species];
+                          const rc = rarityColor(fd?.rarity);
+                          const speciesVal = fishes.reduce((s, f) => s + f.price, 0);
+                          const sorted = [...fishes].sort((a, b) => b.size - a.size);
+                          return (
+                            <div key={species} className="species-group">
+                              <div className="species-header">
+                                <span className="species-rarity" style={{ color: rc }}>[{fd?.rarity}]</span>
+                                <span className="species-name" style={{ color: rc }}>{species}</span>
+                                <span className="species-count">{fishes.length}마리</span>
+                                <span className="species-val">{speciesVal}G</span>
+                                <button tabIndex={-1} className="sell-btn" onClick={() => sellSpecies(species)}>전체판매</button>
+                              </div>
+                              <div className="species-fish-list">
+                                {sorted.map(f => (
+                                  <div key={f.id} className="fish-row fish-row-compact">
+                                    <span className="grow">{f.size.toFixed(1)}cm{f.cooked ? ' 🍳' : ''}</span>
+                                    <span className="gold">{f.price}G</span>
+                                    <button tabIndex={-1} className="sell-btn" onClick={() => sellOne(f.id)}>판매</button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                }
+              </div>
+
+              <div className="section">
+                <div className="section-title">광물</div>
+                {Object.entries(gs.oreInventory).map(([ore, cnt]) => (
+                  <div key={ore} className="ore-row">
+                    <span className="grow">{ore}</span>
+                    <span className="dim">{cnt}개</span>
+                    <span className="gold">{(ORES[ore]?.price ?? 0) * cnt}G 상당</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="section">
+                <div className="section-title">허브</div>
+                {Object.keys(gs.herbInventory ?? {}).filter(k => (gs.herbInventory[k] ?? 0) > 0).length === 0
+                  ? <div className="empty">허브 없음 (숲에서 채집)</div>
+                  : Object.entries(gs.herbInventory ?? {}).filter(([, n]) => n > 0).map(([herb, cnt]) => (
+                    <div key={herb} className="ore-row">
+                      <span className="grow" style={{ color: HERBS[herb]?.color ?? '#8c4' }}>🌿 {herb}</span>
+                      <span className="dim">{cnt}개</span>
+                      <span className="gold">{(HERBS[herb]?.price ?? 0) * cnt}G 상당</span>
+                    </div>
+                  ))
+                }
+              </div>
+
+              <div className="section">
+                <div className="section-title">미끼</div>
+                {Object.entries(BAIT).map(([key, bait]) => {
+                  const owned = bait.type === 'permanent' ? (gs.ownedBait ?? []).includes(key) : ((gs.baitInventory ?? {})[key] ?? 0) > 0;
+                  if (!owned) return null;
+                  const equipped = gs.equippedBait === key;
+                  return (
+                    <div key={key} className="fish-row">
+                      <span style={{ color: bait.color }}>🪝 {bait.name}</span>
+                      {bait.type === 'once' && <span className="dim">{(gs.baitInventory ?? {})[key] ?? 0}개</span>}
+                      <span className="grow" />
+                      <button tabIndex={-1} className={equipped ? 'btn-eq' : 'sell-btn'} onClick={() => equipBait(key)}>
+                        {equipped ? '장착중' : '장착'}
+                      </button>
+                    </div>
+                  );
+                })}
+                {!Object.values(BAIT).some((b, i) => {
+                  const key = Object.keys(BAIT)[i];
+                  return b.type === 'permanent' ? (gs.ownedBait ?? []).includes(key) : ((gs.baitInventory ?? {})[key] ?? 0) > 0;
+                }) && <div className="empty">미끼 없음 (상점에서 구매)</div>}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Status modal (장비 + 어빌리티 tabs) */}
+      {showStats && (
+        <div className="overlay" onClick={() => setShowStats(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>📊 상태창</span>
+              <button tabIndex={-1} onClick={() => setShowStats(false)}>✕</button>
+            </div>
+
+            {/* Tabs */}
+            <div className="stats-tabs">
+              {['장비', '어빌리티', '제련/제작', '업적', '펫', '관계도', '탐험', '농장', '박제실'].map(tab => (
+                <button key={tab} tabIndex={-1}
+                  className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''}`}
+                  onClick={() => setStatsTab(tab)}>{tab}</button>
+              ))}
+            </div>
+
+            {/* ── 장비 tab ── */}
+            {statsTab === '장비' && (() => {
+              const rodData   = RODS[gs.rod];
+              const bootData  = BOOTS[gs.boots];
+              const baitData  = gs.equippedBait ? BAIT[gs.equippedBait] : null;
+              const cwData    = gs.cookware ? COOKWARE[gs.cookware] : null;
+              const enhLv     = gs.rodEnhance?.[gs.rod] ?? 0;
+
+              // Slot renderer
+              const Slot = ({ icon, label, color, sub, locked }) => (
+                <div className={`doll-slot ${locked ? 'doll-slot-locked' : label ? 'doll-slot-filled' : 'doll-slot-empty'}`}>
+                  <div className="doll-slot-icon">{icon}</div>
+                  {label
+                    ? <div className="doll-slot-name" style={{ color: color ?? '#ccc' }}>{label}</div>
+                    : <div className="doll-slot-name doll-slot-none">{locked ? '준비 중' : '없음'}</div>
+                  }
+                  {sub && <div className="doll-slot-sub">{sub}</div>}
+                </div>
+              );
+
+              return (
+                <div className="doll-wrap">
+                  {/* Left column — body slots */}
+                  <div className="doll-col doll-col-left">
+                    <Slot icon="🎩"
+                      label={gs.hat ? HATS[gs.hat]?.name : null}
+                      color={gs.hat ? HATS[gs.hat]?.color : undefined}
+                      sub={gs.hat ? HATS[gs.hat]?.desc : null}
+                    />
+                    <Slot icon="🧥"
+                      label={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.name : null}
+                      color={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.color : undefined}
+                      sub={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.desc : null}
+                    />
+                    <Slot icon="💍"
+                      label={gs.equippedJewelry?.ring ?? null}
+                      color={JEWELRY_RECIPES[gs.equippedJewelry?.ring]?.color}
+                      sub={gs.equippedJewelry?.ring ? JEWELRY_RECIPES[gs.equippedJewelry.ring]?.desc : null}
+                    />
+                    <Slot icon="🎣"
+                      label={gs.activeRodSkin !== '기본스킨' ? ROD_SKINS[gs.activeRodSkin]?.name : null}
+                      color={gs.activeRodSkin !== '기본스킨' ? ROD_SKINS[gs.activeRodSkin]?.color : undefined}
+                    />
+                    <Slot icon="📿"
+                      label={gs.equippedJewelry?.necklace ?? null}
+                      color={JEWELRY_RECIPES[gs.equippedJewelry?.necklace]?.color}
+                      sub={gs.equippedJewelry?.necklace ? JEWELRY_RECIPES[gs.equippedJewelry.necklace]?.desc : null}
+                    />
+                    <Slot icon="👟"
+                      label={bootData?.name ?? gs.boots}
+                      color={bootData?.color}
+                      sub={bootData?.speedBonus > 0 ? `+${bootData.speedBonus} 속도` : null}
+                    />
+                  </div>
+
+                  {/* Center — character silhouette */}
+                  <div className="doll-center">
+                    <div className="doll-char">
+                      <div className="doll-char-head">
+                        <div className="doll-char-face" />
+                      </div>
+                      <div className="doll-char-body" />
+                      <div className="doll-char-legs" />
+                    </div>
+                    <div className="doll-char-name" style={{ color: myTitle.color }}>[{myTitle.label}]</div>
+                    <div className="doll-char-nick">{nickname}</div>
+                    <div className="doll-char-money">💰 {gs.money.toLocaleString()}G</div>
+                  </div>
+
+                  {/* Right column — activity slots */}
+                  <div className="doll-col doll-col-right">
+                    <Slot icon="🎣"
+                      label={rodData?.name ?? gs.rod}
+                      color={rodData?.color}
+                      sub={enhLv > 0 ? `+${enhLv} 강화` : null}
+                    />
+                    <Slot icon="🪝"
+                      label={baitData?.name ?? null}
+                      color={baitData?.color}
+                    />
+                    <Slot icon="🍳"
+                      label={cwData?.name ?? null}
+                      color={cwData?.color}
+                      sub={cwData ? `×${cwData.mult} 요리` : null}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* ── 어빌리티 tab ── */}
+            {statsTab === '어빌리티' && (
+              <>
+                {(otherPlayersRef.current?.length ?? 0) > 0 && (
+                  <div className="party-banner">🎉 파티 중 — 어빌리티 획득 시 20% 확률로 2배!</div>
+                )}
+                <div className="section">
+                  <div className="skill-grid">
+                    {Object.entries(ABILITY_DEFS).map(([name, def]) => {
+                      const ab = gs.abilities?.[name] ?? { value: 0, grade: 0 };
+                      const pct = Math.min(100, ab.value);
+                      const canGrade = ab.value >= 100;
+                      return (
+                        <div key={name} className="skill-card">
+                          <div className="skill-top">
+                            <span className="skill-icon">{def.icon}</span>
+                            <span className="skill-name" style={{ color: def.color }}>{name}</span>
+                            <span className="skill-lv">{ab.value.toFixed(2)}</span>
+                            {ab.grade > 0 && <span className="grade-badge">G{ab.grade}</span>}
+                          </div>
+                          <div className="skill-bar-wrap">
+                            <div className="skill-bar-fill" style={{ width: `${pct}%`, background: def.color }} />
+                          </div>
+                          <div className="skill-exp-txt">{ab.value.toFixed(2)} / 100.00</div>
+                          <div className="skill-source">{def.desc}</div>
+                          {canGrade && (
+                            <button className="btn-buy grade-up-btn" onClick={() => {
+                              setGs(prev => ({
+                                ...prev,
+                                abilities: { ...(prev.abilities ?? DEFAULT_ABILITIES),
+                                  [name]: doGradeUp(prev.abilities?.[name] ?? { value: 100, grade: 0 }) },
+                              }));
+                              addMsg(`🌟 ${def.icon} ${name} 그레이드 ${ab.grade + 1} 달성! 희귀 보너스 +${((ab.grade + 1) * 10)}%`, 'catch');
+                              playLevelUp();
+                              if (gameRef.current) gameRef.current.gradeUpEffect = {
+                                age: 0,
+                                abilName: name,
+                                grade: ab.grade + 1,
+                                color: def.color,
+                                icon: def.icon,
+                              };
+                              setGradeUpCelebration({ abilName: name, grade: ab.grade + 1, color: def.color, icon: def.icon });
+                              setTimeout(() => setGradeUpCelebration(null), 3000);
+                            }}>
+                              ⬆️ 그레이드업 → G{ab.grade + 1}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* ── 직업 트리 ── */}
+                <div className="section">
+                  <div className="section-title">⚔️ 직업 트리 {gs.selectedJob ? `— 현재: ${JOBS[gs.selectedJob]?.icon} ${JOBS[gs.selectedJob]?.name}` : '(미선택)'}</div>
+                  {(() => {
+                    const availableJobKeys = getAvailableJobs(gs.abilities);
+                    if (availableJobKeys.length === 0) {
+                      return <div className="empty">어빌리티 그레이드 1을 달성하면 직업을 선택할 수 있습니다.<br/>낚시/채굴/요리/화술 중 하나를 100 달성 후 그레이드업 하세요!</div>;
+                    }
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        {Object.entries(JOBS).map(([key, job]) => {
+                          const available = availableJobKeys.includes(key);
+                          const selected = gs.selectedJob === key;
+                          return (
+                            <div key={key} className="rod-card" style={{
+                              borderColor: selected ? job.color : available ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
+                              opacity: available ? 1 : 0.5,
+                            }}>
+                              <div style={{ fontSize: 18, marginBottom: 4 }}>{job.icon} {job.name}</div>
+                              <div style={{ fontSize: 11, color: '#ccc', marginBottom: 6 }}>{job.desc}</div>
+                              <div style={{ fontSize: 10, color: '#aaa', marginBottom: 6 }}>{job.reqLabel}</div>
+                              {selected
+                                ? <div style={{ fontSize: 11, color: job.color, fontWeight: 700 }}>✅ 현재 직업</div>
+                                : available
+                                  ? <button className="btn-buy" style={{ fontSize: 11 }} onClick={() => {
+                                      setGs(prev => ({ ...prev, selectedJob: key }));
+                                      addMsg(`⚔️ 직업 선택: ${job.icon} ${job.name}! ${job.desc}`, 'catch');
+                                    }}>직업 선택</button>
+                                  : <div style={{ fontSize: 10, color: '#888' }}>🔒 {job.reqLabel}</div>
+                              }
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="section">
+                  <div className="section-title">🔨 낚싯대 강화</div>
+                  {gs.ownedRods.map(rodKey => {
+                    const rod = RODS[rodKey];
+                    const enhLv = gs.rodEnhance?.[rodKey] ?? 0;
+                    const cost = rodEnhanceCost(enhLv);
+                    const mats = rodEnhanceMatsNeeded(enhLv);
+                    const ganghwaAbil = gs.abilities?.강화?.value ?? 0;
+                    const rate = rodEnhanceSuccessRate(enhLv, ganghwaAbil);
+                    const canAfford = gs.money >= cost;
+                    const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
+                    const matsStr = Object.entries(mats).map(([k, n]) => `${k}×${n}`).join(' ');
+                    const eff = rodEnhanceEffect(enhLv);
+                    return (
+                      <div key={rodKey} className="rod-card">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          <span style={{ color: rod.color, fontWeight: 700 }}>🎣 {rod.name}</span>
+                          <span className="badge" style={{ background: enhLv >= 80 ? '#ff4400' : enhLv >= 50 ? '#ffaa00' : '#446688' }}>
+                            +{enhLv}
+                          </span>
+                        </div>
+                        <div className="rod-meta">효과: 낚시 -{(eff.timeReduction*100).toFixed(0)}% · 판매 +{(eff.priceBonus*100).toFixed(0)}%</div>
+                        <div className="rod-meta">강화비: {cost}G{matsStr ? ` + ${matsStr}` : ''} · 성공률 {(rate*100).toFixed(0)}%</div>
+                        <div className="rod-meta" style={{ color: canAfford && hasMats ? '#88ff88' : '#ff8888' }}>
+                          보유: {gs.money.toLocaleString()}G
+                          {Object.entries(mats).map(([ore, n]) => (
+                            <span key={ore} style={{ marginLeft: 6, color: (gs.oreInventory[ore] || 0) >= n ? '#88ff88' : '#ff8888' }}>
+                              · {ore} {gs.oreInventory[ore] || 0}/{n}
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          className={canAfford && hasMats ? 'btn-buy' : 'btn-dis'}
+                          disabled={!canAfford || !hasMats || enhLv >= 100}
+                          onClick={() => {
+                            if (enhLv >= 100) return;
+                            const success = Math.random() < rodEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0);
+                            setGs(prev => {
+                              const ores = { ...prev.oreInventory };
+                              for (const [ore, n] of Object.entries(mats)) ores[ore] = Math.max(0, (ores[ore] || 0) - n);
+                              return { ...prev, money: prev.money - cost, oreInventory: ores,
+                                rodEnhance: { ...(prev.rodEnhance ?? {}), [rodKey]: success ? enhLv + 1 : enhLv } };
+                            });
+                            if (success) {
+                              addMsg(`🔨 ${rod.name} +${enhLv + 1} 강화 성공!`, 'catch');
+                              grantAbility('강화', ENHANCE_ABILITY_GAIN);
+                              setGs(prev2 => {
+                                const ps = prev2.achStats ?? {};
+                                const us = { ...ps, enhanceCount: (ps.enhanceCount ?? 0) + 1 };
+                                setTimeout(() => checkAndGrantAchievements(us), 0);
+                                return { ...prev2, achStats: us };
+                              });
+                            } else addMsg(`🔨 강화 실패... (${rod.name} +${enhLv} 유지)`, 'error');
+                          }}
+                        >
+                          {enhLv >= 100 ? '최대 강화' : `강화 (+${enhLv} → +${enhLv + 1})`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* ── Pickaxe enhancement ── */}
+                <div className="section">
+                  <div className="section-title">⛏ 곡괭이 강화</div>
+                  {(gs.ownedPickaxes ?? ['나무곡괭이']).map(pxKey => {
+                    const px = PICKAXES[pxKey];
+                    const enhLv = gs.pickaxeEnhance?.[pxKey] ?? 0;
+                    const cost = pickaxeEnhanceCost(enhLv);
+                    const mats = pickaxeEnhanceMatsNeeded(enhLv);
+                    const ganghwaAbil = gs.abilities?.강화?.value ?? 0;
+                    const rate = pickaxeEnhanceSuccessRate(enhLv, ganghwaAbil);
+                    const canAfford = gs.money >= cost;
+                    const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
+                    const matsStr = Object.entries(mats).map(([k, n]) => `${k}×${n}`).join(' ');
+                    const eff = pickaxeEnhanceEffect(enhLv);
+                    return (
+                      <div key={pxKey} className="rod-card">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                          <span style={{ color: px.color, fontWeight: 700 }}>⛏ {px.name}</span>
+                          <span className="badge" style={{ background: enhLv >= 80 ? '#ff4400' : enhLv >= 50 ? '#ffaa00' : '#446688' }}>
+                            +{enhLv}
+                          </span>
+                        </div>
+                        <div className="rod-meta">효과: 채굴 -{(eff.timeReduction * 100).toFixed(0)}%</div>
+                        <div className="rod-meta">강화비: {cost}G{matsStr ? ` + ${matsStr}` : ''} · 성공률 {(rate * 100).toFixed(0)}%</div>
+                        <div className="rod-meta" style={{ color: canAfford && hasMats ? '#88ff88' : '#ff8888' }}>
+                          보유: {gs.money.toLocaleString()}G
+                          {Object.entries(mats).map(([ore, n]) => (
+                            <span key={ore} style={{ marginLeft: 6, color: (gs.oreInventory[ore] || 0) >= n ? '#88ff88' : '#ff8888' }}>
+                              · {ore} {gs.oreInventory[ore] || 0}/{n}
+                            </span>
+                          ))}
+                        </div>
+                        <button
+                          className={canAfford && hasMats ? 'btn-buy' : 'btn-dis'}
+                          disabled={!canAfford || !hasMats || enhLv >= 100}
+                          onClick={() => {
+                            if (enhLv >= 100) return;
+                            const success = Math.random() < pickaxeEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0);
+                            setGs(prev => {
+                              const ores = { ...prev.oreInventory };
+                              for (const [ore, n] of Object.entries(mats)) ores[ore] = Math.max(0, (ores[ore] || 0) - n);
+                              return { ...prev, money: prev.money - cost, oreInventory: ores,
+                                pickaxeEnhance: { ...(prev.pickaxeEnhance ?? {}), [pxKey]: success ? enhLv + 1 : enhLv } };
+                            });
+                            if (success) { addMsg(`⛏ ${px.name} +${enhLv + 1} 강화 성공!`, 'catch'); grantAbility('강화', ENHANCE_ABILITY_GAIN); }
+                            else addMsg(`⛏ 강화 실패... (+${enhLv} 유지)`, 'error');
+                          }}
+                        >
+                          {enhLv >= 100 ? '최대 강화' : `강화 (+${enhLv} → +${enhLv + 1})`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {/* ── 제련/제작 tab ── */}
+            {statsTab === '제련/제작' && (() => {
+              const smeltAbil = gs.abilities?.제련?.value ?? 0;
+              const successBonus = smeltAbil * 0.005; // up to +50% at 100
+              return (
+                <>
+                  {/* Smelting */}
+                  <div className="section">
+                    <div className="section-title">🔥 광물 제련 (제련 어빌 {smeltAbil.toFixed(0)})</div>
+                    {Object.entries(SMELT_RECIPES).map(([key, recipe]) => {
+                      const hasMats = Object.entries(recipe.input).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
+                      const baseRate = 0.60 + successBonus;
+                      const rate = Math.min(0.98, baseRate);
+                      return (
+                        <div key={key} className="rod-card">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                            <span style={{ color: recipe.color, fontWeight: 700 }}>🔥 {recipe.name}</span>
+                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>성공률 {(rate * 100).toFixed(0)}%</span>
+                          </div>
+                          <div className="rod-meta">{recipe.desc}</div>
+                          <div className="rod-meta" style={{ color: hasMats ? '#88ff88' : '#ff8888' }}>
+                            재료: {Object.entries(recipe.input).map(([ore, n]) => (
+                              <span key={ore} style={{ marginRight: 6, color: (gs.oreInventory[ore] || 0) >= n ? '#88ff88' : '#ff8888' }}>
+                                {ore} {gs.oreInventory[ore] || 0}/{n}
+                              </span>
+                            ))}
+                          </div>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 4 }}>
+                            보유: {gs.processedOreInventory?.[key] ?? 0}개
+                          </div>
+                          <button className={hasMats ? 'btn-buy' : 'btn-dis'} disabled={!hasMats} onClick={() => {
+                            const success = Math.random() < rate;
+                            setGs(prev => {
+                              const ores = { ...prev.oreInventory };
+                              for (const [ore, n] of Object.entries(recipe.input)) ores[ore] = Math.max(0, (ores[ore] || 0) - n);
+                              const proc = { ...(prev.processedOreInventory ?? {}) };
+                              if (success) proc[key] = (proc[key] ?? 0) + 1;
+                              return { ...prev, oreInventory: ores, processedOreInventory: proc };
+                            });
+                            grantAbility('제련', 2);
+                            if (success) {
+                              addMsg(`🔥 ${recipe.name} 제련 성공!`, 'catch');
+                              setGs(prev2 => {
+                                const ps = prev2.achStats ?? {};
+                                const us = { ...ps, smeltCount: (ps.smeltCount ?? 0) + 1 };
+                                setTimeout(() => checkAndGrantAchievements(us), 0);
+                                return { ...prev2, achStats: us };
+                              });
+                            } else addMsg(`🔥 제련 실패… 재료 소모됨`, 'error');
+                          }}>제련하기</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Jewelry crafting */}
+                  <div className="section">
+                    <div className="section-title">💍 장신구 제작</div>
+                    {Object.entries(JEWELRY_RECIPES).map(([key, recipe]) => {
+                      const hasMats = Object.entries(recipe.input).every(([mat, n]) => (gs.processedOreInventory?.[mat] || 0) >= n);
+                      const smeltRate = Math.min(0.98, 0.50 + successBonus);
+                      const equipped = gs.equippedJewelry?.[recipe.slot] === key;
+                      const owned = (gs.jewelryInventory ?? []).some(j => j.name === key);
+                      return (
+                        <div key={key} className="rod-card" style={equipped ? { borderColor: 'rgba(255,215,0,0.4)' } : {}}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                            <span style={{ color: recipe.color, fontWeight: 700 }}>{recipe.icon} {recipe.name}</span>
+                            {equipped && <span className="badge">장착됨</span>}
+                            {owned && !equipped && <span className="badge owned">보유</span>}
+                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>성공률 {(smeltRate * 100).toFixed(0)}%</span>
+                          </div>
+                          <div className="rod-meta">{recipe.desc}</div>
+                          <div className="rod-meta" style={{ color: hasMats ? '#88ff88' : '#ff8888' }}>
+                            재료: {Object.entries(recipe.input).map(([mat, n]) => (
+                              <span key={mat} style={{ marginRight: 6, color: (gs.processedOreInventory?.[mat] || 0) >= n ? '#88ff88' : '#ff8888' }}>
+                                {mat} {gs.processedOreInventory?.[mat] || 0}/{n}
+                              </span>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                            <button className={hasMats ? 'btn-buy' : 'btn-dis'} disabled={!hasMats} onClick={() => {
+                              const success = Math.random() < smeltRate;
+                              setGs(prev => {
+                                const proc = { ...(prev.processedOreInventory ?? {}) };
+                                for (const [mat, n] of Object.entries(recipe.input)) proc[mat] = Math.max(0, (proc[mat] || 0) - n);
+                                const jewelry = success ? [...(prev.jewelryInventory ?? []), { id: Date.now(), name: key, ...recipe }] : (prev.jewelryInventory ?? []);
+                                return { ...prev, processedOreInventory: proc, jewelryInventory: jewelry };
+                              });
+                              grantAbility('제련', 5);
+                              if (success) addMsg(`${recipe.icon} ${recipe.name} 제작 성공!`, 'catch');
+                              else addMsg(`제작 실패… 재료 소모됨`, 'error');
+                            }}>제작</button>
+                            {owned && (
+                              <button className={equipped ? 'btn-dis' : 'btn-eq'} disabled={equipped} onClick={() => {
+                                setGs(prev => ({ ...prev, equippedJewelry: { ...(prev.equippedJewelry ?? {}), [recipe.slot]: equipped ? null : key } }));
+                                addMsg(`${recipe.icon} ${recipe.name} ${equipped ? '해제' : '장착'}`);
+                              }}>{equipped ? '해제' : '장착'}</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Potion crafting */}
+                  <div className="section">
+                    <div className="section-title">🧪 포션 제작</div>
+                    {Object.entries(POTION_RECIPES).map(([key, recipe]) => {
+                      const herbOk = Object.entries(recipe.input ?? {}).every(([h, n]) => (gs.herbInventory?.[h] || 0) >= n);
+                      const cropOk = Object.entries(recipe.cropInput ?? {}).every(([c, n]) => (gs.cropInventory?.[c] || 0) >= n);
+                      const hasMats = herbOk && cropOk;
+                      const stock = gs.potionInventory?.[key] ?? 0;
+                      const isActive = gs.activePotion?.type === key;
+                      return (
+                        <div key={key} className="rod-card" style={isActive ? { borderColor: 'rgba(100,200,255,0.4)' } : {}}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                            <span style={{ color: recipe.color, fontWeight: 700 }}>{recipe.icon} {recipe.name}</span>
+                            {stock > 0 && <span className="badge owned">×{stock}</span>}
+                            {isActive && <span className="badge" style={{ background: '#1a88cc' }}>효과 중</span>}
+                          </div>
+                          <div className="rod-meta">{recipe.desc}</div>
+                          <div className="rod-meta">
+                            재료:{' '}
+                            {Object.entries(recipe.input ?? {}).map(([herb, n]) => (
+                              <span key={herb} style={{ marginRight: 6, color: (gs.herbInventory?.[herb] || 0) >= n ? '#88ff88' : '#ff8888' }}>
+                                {herb} {gs.herbInventory?.[herb] || 0}/{n}
+                              </span>
+                            ))}
+                            {Object.entries(recipe.cropInput ?? {}).map(([crop, n]) => (
+                              <span key={crop} style={{ marginRight: 6, color: (gs.cropInventory?.[crop] || 0) >= n ? '#88ff88' : '#ff8888' }}>
+                                🌾{crop} {gs.cropInventory?.[crop] || 0}/{n}
+                              </span>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                            <button className={hasMats ? 'btn-buy' : 'btn-dis'} disabled={!hasMats} onClick={() => {
+                              setGs(prev => {
+                                const herbs = { ...(prev.herbInventory ?? {}) };
+                                for (const [herb, n] of Object.entries(recipe.input ?? {})) herbs[herb] = Math.max(0, (herbs[herb] || 0) - n);
+                                const crops = { ...(prev.cropInventory ?? {}) };
+                                for (const [crop, n] of Object.entries(recipe.cropInput ?? {})) crops[crop] = Math.max(0, (crops[crop] || 0) - n);
+                                const pots = { ...(prev.potionInventory ?? {}), [key]: (prev.potionInventory?.[key] ?? 0) + 1 };
+                                return { ...prev, herbInventory: herbs, cropInventory: crops, potionInventory: pots };
+                              });
+                              addMsg(`${recipe.icon} ${recipe.name} 제조 완료!`, 'catch');
+                            }}>제조</button>
+                            {stock > 0 && !isActive && (
+                              <button className="btn-eq" onClick={() => {
+                                const expiresAt = Date.now() + recipe.effect.duration;
+                                setGs(prev => ({
+                                  ...prev,
+                                  potionInventory: { ...(prev.potionInventory ?? {}), [key]: prev.potionInventory[key] - 1 },
+                                  activePotion: { type: key, effect: recipe.effect, expiresAt },
+                                }));
+                                addMsg(`${recipe.icon} ${recipe.name} 사용! (${recipe.effect.duration / 1000}초)`, 'catch');
+                              }}>사용</button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Dish recipes */}
+                  <div className="section">
+                    <div className="section-title">🍽 특별 요리 레시피</div>
+                    <div className="rod-meta" style={{ marginBottom: 8, color: 'rgba(255,255,255,0.45)' }}>요리소 근처에서 !요리 [요리명] 또는 버튼 클릭</div>
+                    {Object.entries(DISH_RECIPES).map(([key, recipe]) => {
+                      // Check NPC affinity lock
+                      const npcLocked = recipe.reqNpc && Object.entries(recipe.reqNpc).some(
+                        ([npc, reqLv]) => (gs.npcAffinity?.[npc] ?? 0) < reqLv
+                      );
+                      const cropOk = !npcLocked && Object.entries(recipe.crops ?? {}).every(([c, n]) => (gs.cropInventory?.[c] ?? 0) >= n);
+                      const fishNeeded = recipe.fish;
+                      const fishOk = !fishNeeded || (!npcLocked && (() => {
+                        const inv = gs.fishInventory ?? [];
+                        return fishNeeded.name
+                          ? inv.some(f => f.name === fishNeeded.name)
+                          : inv.some(f => FISH[f.name]?.rarity === fishNeeded.rarity);
+                      })());
+                      const canCook = !npcLocked && cropOk && fishOk;
+                      return (
+                        <div key={key} className="rod-card" style={npcLocked ? { opacity: 0.55 } : {}}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                            <span style={{ fontSize: 18 }}>{npcLocked ? '🔒' : recipe.icon}</span>
+                            <span style={{ fontWeight: 700, color: npcLocked ? '#888' : '#ffe0a0' }}>{recipe.name}</span>
+                            <span style={{ color: '#ffcc44', fontSize: 12 }}>+{recipe.price}G</span>
+                          </div>
+                          <div className="rod-meta">{recipe.desc}</div>
+                          {npcLocked && (
+                            <div className="rod-meta" style={{ color: '#ff8888' }}>
+                              🔒 {Object.entries(recipe.reqNpc).map(([npc, lv]) => `${npc} 관계 ${lv} 필요`).join(', ')}
+                            </div>
+                          )}
+                          {!npcLocked && (
+                            <div className="rod-meta" style={{ marginTop: 3 }}>
+                              {Object.entries(recipe.crops ?? {}).map(([c, n]) => (
+                                <span key={c} style={{ marginRight: 6, color: (gs.cropInventory?.[c] ?? 0) >= n ? '#88ff88' : '#ff8888' }}>
+                                  🌾{c} {gs.cropInventory?.[c] ?? 0}/{n}
+                                </span>
+                              ))}
+                              {fishNeeded && (
+                                <span style={{ color: fishOk ? '#88ff88' : '#ff8888' }}>
+                                  🐟{fishNeeded.name ?? fishNeeded.rarity + ' 생선'} {fishOk ? '✓' : '✗'}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <button tabIndex={-1} className={canCook ? 'btn-buy' : 'btn-dis'}
+                            style={{ marginTop: 6, fontSize: 11 }} disabled={!canCook}
+                            onClick={() => handleCommand(`!요리 ${key}`)}>
+                            {npcLocked ? '🔒 잠금됨' : `요리하기 (+${recipe.price}G)`}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* ── 업적 tab ── */}
+            {statsTab === '업적' && (
+              <div className="section">
+                <div className="section-title">업적 ({(gs.achievements ?? []).length} / {ACHIEVEMENTS.length})</div>
+                {ACHIEVEMENTS.map(ach => {
+                  const val = gs.achStats?.[ach.type] ?? 0;
+                  const done = (gs.achievements ?? []).includes(ach.id);
+                  const pct = Math.min(100, Math.round((val / ach.goal) * 100));
+                  return (
+                    <div key={ach.id} className="rod-card" style={{ opacity: done ? 0.6 : 1, borderColor: done ? 'rgba(255,215,0,0.3)' : undefined }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontSize: 18 }}>{ach.icon}</span>
+                        <span style={{ fontWeight: 700, color: done ? '#ffdd44' : '#ffe0a0' }}>{ach.label}</span>
+                        {done && <span className="badge" style={{ background: '#886600' }}>완료</span>}
+                      </div>
+                      <div className="rod-meta">{ach.desc}</div>
+                      <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 6, overflow: 'hidden', margin: '4px 0' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', background: done ? '#886600' : '#4488ff', borderRadius: 4, transition: 'width 0.3s' }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: '#aaa' }}>{Math.min(val, ach.goal)} / {ach.goal} · 보상 {ach.reward.money}G</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── 펫 tab ── */}
+            {statsTab === '펫' && (() => {
+              const now = Date.now();
+              const petLevels = gs.petLevels ?? {};
+              const petExp = gs.petExp ?? {};
+              const innBuff = gs.innBuff;
+              const innBuffActive = innBuff && now < innBuff.expiresAt;
+              return (
+                <>
+                  {innBuffActive && (
+                    <div className="section">
+                      <div className="rod-card" style={{ borderColor: 'rgba(100,200,255,0.5)', background: 'rgba(0,100,200,0.15)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 20 }}>💤</span>
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#88ccff' }}>여관 휴식 버프 활성</div>
+                            <div className="rod-meta">낚시 속도 +20% · {Math.ceil((innBuff.expiresAt - now) / 60000)}분 남음</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {gs.activePet && (() => {
+                    const pet = PETS[gs.activePet];
+                    const level = petLevels[gs.activePet] ?? 1;
+                    const exp = petExp[gs.activePet] ?? 0;
+                    const nextThresh = level < PET_MAX_LEVEL ? PET_EXP_THRESHOLDS[level - 1] : null;
+                    const mult = PET_LEVEL_MULT[level - 1] ?? 1.0;
+                    return (
+                      <div className="section">
+                        <div className="section-title">활성 펫</div>
+                        <div className="rod-card" style={{ borderColor: 'rgba(255,170,0,0.4)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 24 }}>{pet?.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: PET_RARITY_COLOR[pet?.rarity] ?? '#fff' }}>
+                                {pet?.name} <span style={{ color: '#ffcc44', fontSize: 12 }}>Lv.{level}</span>
+                                {level >= PET_MAX_LEVEL && <span style={{ color: '#ff8844', fontSize: 11, marginLeft: 4 }}>MAX</span>}
+                              </div>
+                              <div className="rod-meta">{pet?.desc} · 보너스 ×{mult.toFixed(2)}</div>
+                              {level < PET_MAX_LEVEL && (
+                                <div style={{ marginTop: 4 }}>
+                                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginBottom: 2 }}>
+                                    EXP {exp} / {nextThresh} (Lv.{level + 1}까지)
+                                  </div>
+                                  <div style={{ height: 4, background: 'rgba(255,255,255,0.15)', borderRadius: 2 }}>
+                                    <div style={{ width: `${Math.min(100, (exp / nextThresh) * 100)}%`, height: '100%', background: '#ffcc44', borderRadius: 2 }} />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            <button className="btn-dis" style={{ fontSize: 11 }}
+                              onClick={() => { setGs(prev => ({ ...prev, activePet: null })); addMsg('펫 해제됨', 'system'); }}>
+                              해제
+                            </button>
+                          </div>
+                          {level < PET_MAX_LEVEL && (
+                            <div style={{ marginTop: 8 }}>
+                              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 4 }}>
+                                물고기로 먹이주기 (!펫먹이 [물고기명]):
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                                {[...new Set(gs.fishInventory ?? [])].slice(0, 6).map(fname => (
+                                  <button key={fname} className="btn-eq" style={{ fontSize: 11, padding: '2px 6px' }}
+                                    onClick={() => handleCommand(`!펫먹이 ${fname}`)}>
+                                    {fname} (+{Math.max(1, Math.ceil((FISH[fname]?.price ?? 20) / 40))}exp)
+                                  </button>
+                                ))}
+                                {(gs.fishInventory?.length ?? 0) === 0 && (
+                                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)' }}>인벤토리에 물고기 없음</span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <div className="section">
+                    <div className="section-title">내 펫 / 알</div>
+                    {Object.keys(PETS).every(k => !(gs.petEggs ?? {})[k]) && !gs.activePet
+                      ? <div className="empty">보유한 펫 또는 알이 없습니다. 상점에서 구매하세요.</div>
+                      : Object.entries(PETS).map(([key, pet]) => {
+                          const egg = (gs.petEggs ?? {})[key];
+                          if (!egg) return null;
+                          const hatched = now >= egg.hatchAt;
+                          const isActive = gs.activePet === key;
+                          const remainMs = Math.max(0, egg.hatchAt - now);
+                          const remainMin = Math.ceil(remainMs / 60000);
+                          const level = petLevels[key] ?? 1;
+                          return (
+                            <div key={key} className="rod-card">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ fontSize: 22 }}>{hatched ? pet.icon : '🥚'}</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: 700, color: PET_RARITY_COLOR[pet.rarity] ?? '#fff' }}>
+                                    {hatched ? pet.name : `${pet.name} 알`}
+                                    {hatched && <span style={{ color: '#ffcc44', fontSize: 11, marginLeft: 4 }}>Lv.{level}</span>}
+                                  </div>
+                                  <div className="rod-meta">
+                                    {hatched ? pet.desc : `부화까지 ${remainMin}분 남음`}
+                                  </div>
+                                </div>
+                                {hatched && !isActive && (
+                                  <button className="btn-eq" onClick={() => {
+                                    setGs(prev => ({ ...prev, activePet: key }));
+                                    addMsg(`${pet.icon} ${pet.name} 장착!`, 'catch');
+                                  }}>장착</button>
+                                )}
+                                {isActive && <span className="badge">장착됨</span>}
+                              </div>
+                            </div>
+                          );
+                        })
+                    }
+                  </div>
+                  <div className="section">
+                    <div className="section-title" style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11 }}>펫 레벨업 안내</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
+                      물고기를 먹이면 EXP를 얻어 레벨이 오릅니다.<br/>
+                      레벨이 높을수록 보너스 효과가 증가합니다.<br/>
+                      Lv.2: ×1.25 / Lv.3: ×1.5 / Lv.4: ×1.75 / Lv.5: ×2.0
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* ── 관계도 tab ── */}
+            {statsTab === '관계도' && (
+              <div className="section">
+                <div className="section-title">NPC 관계도</div>
+                {Object.entries(NPCS).map(([npcKey, npc]) => {
+                  const affinity = gs.npcAffinity?.[npcKey] ?? 0;
+                  const level = getAffinityLevel(affinity, npcKey);
+                  const next = npc.thresholds.find(t => affinity < t.at);
+                  return (
+                    <div key={npcKey} className="rod-card">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 22 }}>{npc.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: npc.color }}>{npc.name}</div>
+                          <div className="rod-meta">{npc.desc}</div>
+                        </div>
+                        <div style={{ textAlign: 'right', fontSize: 12 }}>
+                          <div style={{ color: level ? npc.color : '#888', fontWeight: 700 }}>
+                            {level ? `[${level.label}]` : '[일반]'}
+                          </div>
+                          <div style={{ color: '#ffcc44' }}>{affinity} / 100</div>
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 8, overflow: 'hidden', marginBottom: 4 }}>
+                        <div style={{ width: `${affinity}%`, height: '100%', background: npc.color, borderRadius: 4, transition: 'width 0.3s' }} />
+                      </div>
+                      {npc.thresholds.filter(t => affinity >= t.at).map(t => (
+                        <div key={t.at} style={{ fontSize: 11, color: '#88ff88', marginBottom: 1 }}>✓ [{t.label}] {t.reward}</div>
+                      ))}
+                      {next && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>다음: [{next.label}] 호감도 {next.at} — {next.reward}</div>}
+                      {!next && affinity >= 80 && <div style={{ fontSize: 11, color: npc.color, marginTop: 2 }}>최고 관계 달성!</div>}
+                      {(() => {
+                        const npcQuests = NPC_QUESTS[npcKey];
+                        if (!npcQuests) return null;
+                        const step = gs.npcQuestStep?.[npcKey] ?? 0;
+                        if (step >= npcQuests.length) return (
+                          <div style={{ fontSize: 11, color: '#88ff88', marginTop: 4 }}>📜 모든 의뢰 완수!</div>
+                        );
+                        const q = npcQuests[step];
+                        return (
+                          <div style={{ marginTop: 6, padding: '5px 8px', background: 'rgba(255,200,50,0.08)', borderRadius: 6, borderLeft: '2px solid #ffcc44' }}>
+                            <div style={{ fontSize: 11, color: '#ffcc44', fontWeight: 700 }}>📜 의뢰 {step + 1}/{npcQuests.length}: {q.title}</div>
+                            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>{q.hint(gs)}</div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  );
+                })}
+                {(() => {
+                  const discount = getShopDiscount(gs.npcAffinity);
+                  if (discount > 0) return (
+                    <div style={{ padding: '8px 0', fontSize: 12, color: '#ffcc44' }}>
+                      현재 상점 할인: {Math.round(discount * 100)}%
+                    </div>
+                  );
+                  return null;
+                })()}
+
+                {/* Cosmetic rewards from NPC quests */}
+                {((gs.rodSkins ?? []).length > 0 || (gs.ownedCostumes ?? []).length > 0) && (
+                  <div style={{ marginTop: 10, padding: '8px', background: 'rgba(255,200,100,0.07)', borderRadius: 8, border: '1px solid rgba(255,200,100,0.2)' }}>
+                    <div style={{ fontSize: 12, color: '#ffcc44', fontWeight: 700, marginBottom: 6 }}>🎁 의뢰 보상 컬렉션</div>
+                    {(gs.rodSkins ?? []).length > 0 && (
+                      <div style={{ marginBottom: 4 }}>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>낚싯대 스킨</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {(gs.rodSkins ?? []).map(skin => (
+                            <span key={skin} style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(100,200,255,0.15)', borderRadius: 10, border: '1px solid rgba(100,200,255,0.3)', color: '#88ccff' }}>🎣 {skin}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {(gs.ownedCostumes ?? []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 3 }}>코스튬</div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {(gs.ownedCostumes ?? []).map(costume => (
+                            <span key={costume} style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(200,100,255,0.15)', borderRadius: 10, border: '1px solid rgba(200,100,255,0.3)', color: '#cc88ff' }}>👘 {costume}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── 탐험 tab ── */}
+            {statsTab === '탐험' && (
+              <div className="section">
+                <div className="section-title">탐험 구역 ({(gs.exploredZones ?? []).length} / {EXPLORE_ZONES.length} 발견)</div>
+                {EXPLORE_ZONES.map(zone => {
+                  const unlocked = (gs.exploredZones ?? []).includes(zone.id);
+                  const canUnlock = Object.entries(zone.reqAbil).every(([abil, req]) => (gs.abilities?.[abil]?.value ?? 0) >= req);
+                  return (
+                    <div key={zone.id} className="rod-card" style={{ opacity: unlocked ? 1 : 0.7, borderColor: unlocked ? 'rgba(100,220,100,0.3)' : undefined }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 22 }}>{zone.icon}</span>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 700, color: unlocked ? '#88ff88' : '#ffe0a0' }}>
+                            {unlocked ? '✓ ' : '🔒 '}{zone.name}
+                          </div>
+                          <div className="rod-meta">{zone.desc}</div>
+                        </div>
+                        {unlocked && <span className="badge" style={{ background: '#1a7a1a' }}>발견됨</span>}
+                      </div>
+                      {unlocked
+                        ? <div style={{ fontSize: 11, color: '#88ff88' }}>혜택: {zone.benefit}</div>
+                        : <>
+                            <div style={{ fontSize: 11, color: canUnlock ? '#ffcc44' : '#888' }}>
+                              조건: {zone.reqLabel}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#aaa', marginTop: 2 }}>
+                              {Object.entries(zone.reqAbil).map(([abil, req]) => {
+                                const cur = gs.abilities?.[abil]?.value ?? 0;
+                                return (
+                                  <span key={abil} style={{ marginRight: 8, color: cur >= req ? '#88ff88' : '#ff8888' }}>
+                                    {abil} {cur.toFixed(0)}/{req}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </>
+                      }
+                    </div>
+                  );
+                })}
+                <div style={{ marginTop: 8 }}>
+                  <button className="btn-buy" onClick={() => handleCommand('!탐험')}>
+                    🗺 탐험 실행 (!탐험)
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ── 농장 tab ── */}
+            {statsTab === '농장' && (() => {
+              const now = Date.now();
+              const plots = gs.farmPlots ?? [];
+              const cropInv = gs.cropInventory ?? {};
+              const cropEntries = Object.entries(cropInv).filter(([, n]) => n > 0);
+              const expCount = gs.farmExpansionCount ?? 0;
+              const currentMaxPlots = MAX_FARM_PLOTS + expCount * FARM_EXPANSION_SLOTS;
+              const canExpand = expCount < FARM_MAX_EXPANSIONS;
+              // Find sellPrice for a crop from SEEDS
+              const getCropSellPrice = (itemName) => {
+                for (const sd of Object.values(SEEDS)) {
+                  if (sd.yield.item === itemName) return sd.yield.sellPrice;
+                }
+                return 0;
+              };
+              return (
+                <>
+                  <div className="section">
+                    <div className="section-title">🌱 농장 현황 ({plots.length}/{currentMaxPlots}칸)</div>
+                    {plots.length === 0 && (
+                      <div className="empty">심은 작물이 없습니다. !심기 [씨앗명] 으로 씨앗을 심으세요.</div>
+                    )}
+                    {plots.map(plot => {
+                      const sd = SEEDS[plot.seed];
+                      if (!sd) return null;
+                      const isReady = now >= plot.harvestAt;
+                      const elapsed = now - plot.plantedAt;
+                      const total = plot.harvestAt - plot.plantedAt;
+                      const pct = Math.min(100, Math.round((elapsed / total) * 100));
+                      const remainMs = Math.max(0, plot.harvestAt - now);
+                      const remainMin = Math.ceil(remainMs / 60000);
+                      return (
+                        <div key={plot.id} className="rod-card" style={{ borderColor: isReady ? 'rgba(100,220,100,0.4)' : undefined }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 18 }}>🌱</span>
+                            <span style={{ fontWeight: 700, color: isReady ? '#88ff88' : '#ffe0a0' }}>{sd.name}</span>
+                            {isReady && <span className="badge" style={{ background: '#1a7a1a' }}>수확 가능!</span>}
+                            {!isReady && plot.watered && <span className="badge" style={{ background: '#1a4a8a' }}>💧 물줌</span>}
+                          </div>
+                          <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 8, overflow: 'hidden', marginBottom: 4 }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: isReady ? '#44ff88' : plot.watered ? '#44aaff' : '#4488ff', borderRadius: 4 }} />
+                          </div>
+                          <div style={{ fontSize: 11, color: '#aaa' }}>
+                            {isReady ? `✅ 수확 준비 완료! (수확: ${sd.yield.item})` : `⏳ ${remainMin}분 남음 (${pct}%)${plot.watered ? ' · 물 줌 ✓' : ''}`}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                      {plots.some(p => now >= p.harvestAt) && (
+                        <button className="btn-buy" onClick={() => handleCommand('!수확')}>
+                          🌾 전체 수확
+                        </button>
+                      )}
+                      {plots.some(p => !p.watered && now < p.harvestAt) && (
+                        <button className="btn-eq" onClick={() => handleCommand('!물주기')}>
+                          💧 물 주기 (성장 25%↑)
+                        </button>
+                      )}
+                    </div>
+                    {plots.length < currentMaxPlots && (() => {
+                      const curSeason = getCurrentSeason();
+                      return (
+                        <div style={{ marginTop: 8 }}>
+                          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>씨앗 심기 (농장 근처에서):</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {Object.entries(SEEDS).map(([key, sd]) => {
+                              const seasonOk = !sd.reqSeason || sd.reqSeason === curSeason?.id;
+                              const canAfford = gs.money >= sd.price;
+                              const ok = canAfford && seasonOk;
+                              return (
+                                <button key={key} className={ok ? 'btn-buy' : 'btn-dis'}
+                                  style={{ fontSize: 11 }}
+                                  disabled={!ok}
+                                  title={sd.seasonDesc ?? ''}
+                                  onClick={() => handleCommand(`!심기 ${key}`)}>
+                                  🌱 {sd.name} ({sd.price}G){sd.reqSeason ? (seasonOk ? ' 🌟' : ' ❌') : ''}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    {canExpand && (
+                      <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(255,200,50,0.1)', borderRadius: 6, border: '1px solid rgba(255,200,50,0.3)' }}>
+                        <div style={{ fontSize: 12, color: '#ffcc66', marginBottom: 4 }}>
+                          🌾 농장 확장 ({expCount}/{FARM_MAX_EXPANSIONS}회 완료) — +{FARM_EXPANSION_SLOTS}칸 추가
+                        </div>
+                        <button
+                          className={gs.money >= FARM_EXPANSION_PRICE ? 'btn-buy' : 'btn-dis'}
+                          style={{ fontSize: 12 }}
+                          disabled={gs.money < FARM_EXPANSION_PRICE}
+                          onClick={() => {
+                            if ((gs.farmExpansionCount ?? 0) >= FARM_MAX_EXPANSIONS) { addMsg('🌾 농장을 더 이상 확장할 수 없습니다. (최대 확장 완료)'); return; }
+                            if (gs.money < FARM_EXPANSION_PRICE) { addMsg(`💰 골드 부족 (${FARM_EXPANSION_PRICE}G 필요)`); return; }
+                            setGs(prev => ({ ...prev, money: prev.money - FARM_EXPANSION_PRICE, farmExpansionCount: (prev.farmExpansionCount ?? 0) + 1 }));
+                            addMsg(`🌾 농장 확장 완료! 이제 ${currentMaxPlots + FARM_EXPANSION_SLOTS}칸 사용 가능`, 'catch');
+                          }}>
+                          🌾 농장 확장 ({FARM_EXPANSION_PRICE}G)
+                        </button>
+                      </div>
+                    )}
+                    {!canExpand && <div style={{ marginTop: 8, fontSize: 11, color: '#aaa' }}>🌾 최대 농장 확장 완료 ({currentMaxPlots}칸)</div>}
+                  </div>
+
+                  <div className="section">
+                    <div className="section-title">🌾 수확물 창고</div>
+                    {cropEntries.length === 0
+                      ? <div className="empty">수확한 작물이 없습니다.</div>
+                      : cropEntries.map(([itemName, count]) => {
+                          const sp = getCropSellPrice(itemName);
+                          const total = sp * count;
+                          return (
+                            <div key={itemName} className="rod-card">
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <span style={{ fontWeight: 700, color: '#88ff88' }}>🌾 {itemName} ×{count}</span>
+                                <span style={{ color: '#ffcc44', fontSize: 12 }}>{sp}G/개 (총 {total}G)</span>
+                              </div>
+                              <button className="btn-buy" style={{ fontSize: 11 }} onClick={() => {
+                                setGs(prev => {
+                                  const newCrop = { ...(prev.cropInventory ?? {}), [itemName]: 0 };
+                                  return { ...prev, money: prev.money + total, cropInventory: newCrop };
+                                });
+                                addMsg(`💰 ${itemName} ${count}개 판매 +${total}G`, 'catch');
+                                advanceQuest('sell', total);
+                              }}>
+                                전체 판매 ({total}G)
+                              </button>
+                            </div>
+                          );
+                        })
+                    }
+                  </div>
+                </>
+              );
+            })()}
+
+            {/* ── 박제실 tab ── */}
+            {statsTab === '박제실' && (() => {
+              const trophies = gs.trophyFish ?? [];
+              return (
+                <div className="section">
+                  <div className="section-title">🏆 희귀어 박제실</div>
+                  <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>
+                    전설/신화 어종 포획 시 자동 등록 (최대 20개)
+                  </div>
+                  {trophies.length === 0
+                    ? <div className="empty">아직 전설급 이상 물고기를 낚지 못했습니다.</div>
+                    : trophies.map((t, i) => {
+                        const rColor = t.rarity === '신화' ? '#ff88ff' : '#ffdd44';
+                        const rIcon  = t.rarity === '신화' ? '🌟' : '⭐';
+                        const date   = new Date(t.caughtAt).toLocaleDateString('ko-KR');
+                        return (
+                          <div key={i} style={{
+                            display: 'flex', alignItems: 'center', gap: 10,
+                            background: `rgba(${t.rarity === '신화' ? '120,0,120' : '100,80,0'},0.2)`,
+                            border: `1px solid ${rColor}55`,
+                            borderRadius: 8, padding: '8px 12px', marginBottom: 6,
+                          }}>
+                            <div style={{ fontSize: 20 }}>{rIcon}</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ color: rColor, fontWeight: 700, fontSize: 14 }}>{t.name}</div>
+                              <div style={{ fontSize: 12, color: '#ccc' }}>{t.size}cm · {date}</div>
+                            </div>
+                            <div style={{ fontSize: 11, color: rColor, background: `${rColor}22`, borderRadius: 4, padding: '2px 6px' }}>
+                              {t.rarity}
+                            </div>
+                          </div>
+                        );
+                      })
+                  }
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* 광석 정밀 채굴 미니게임 */}
+      {miningMinigame && <MiningMinigame
+        oreName={miningMinigame.oreName}
+        onFinish={(score) => {
+          setMiningMinigame(null);
+          if (score > 0) {
+            setGs(prev => ({
+              ...prev,
+              oreInventory: { ...prev.oreInventory, [miningMinigame.oreName]: (prev.oreInventory[miningMinigame.oreName] || 0) + score },
+            }));
+            addMsg(`⛏ 정밀 채굴 성공! ${miningMinigame.oreName} +${score}개 추가!`, 'catch');
+          } else {
+            addMsg('⛏ 정밀 채굴 — 이번엔 놓쳤어요.', 'mine');
+          }
+        }}
+      />}
+
+      {/* 대어 저항 미니게임 */}
+      {resistanceGame?.active && <ResistanceMinigame
+        fishName={resistanceGame.name}
+        rarity={resistanceGame.fd?.rarity}
+        size={resistanceGame.size}
+        onSuccess={onResistanceSuccess}
+        onFail={onResistanceFail}
+      />}
+
+      {/* Ranking modal */}
+      {showRank && <Leaderboard onClose={() => setShowRank(false)} myNickname={nickname} />}
+
+      {/* Player inspect modal */}
+      {inspectPlayer && (
+        <div className="overlay" onClick={() => setInspectPlayer(null)}>
+          <div className="panel inspect-panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>👤 플레이어 정보</span>
+              <button tabIndex={-1} onClick={() => setInspectPlayer(null)}>✕</button>
+            </div>
+            <div className="inspect-header">
+              <div className="inspect-title" style={{ color: inspectPlayer.titleColor ?? '#aaa' }}>
+                [{inspectPlayer.title ?? '신입'}]
+              </div>
+              <div className="inspect-name">{inspectPlayer.nickname}</div>
+              <div className="inspect-sub">🐟 {inspectPlayer.fishCaught ?? 0}마리 낚음</div>
+            </div>
+            <div className="section">
+              <div className="section-title">장비</div>
+              <div className="inspect-equip-row">
+                <span style={{ color: RODS[inspectPlayer.rod]?.color ?? '#fff' }}>
+                  🎣 {RODS[inspectPlayer.rod]?.name ?? inspectPlayer.rod}
+                </span>
+              </div>
+              <div className="inspect-equip-row">
+                <span style={{ color: BOOTS[inspectPlayer.boots]?.color ?? '#aaa' }}>
+                  👟 {BOOTS[inspectPlayer.boots]?.name ?? inspectPlayer.boots ?? '기본 신발'}
+                </span>
+              </div>
+            </div>
+            <div className="section">
+              <div className="section-title">어빌리티</div>
+              <div className="inspect-skill-list">
+                {Object.entries(ABILITY_DEFS).map(([name, def]) => {
+                  const val = inspectPlayer.abilityVals?.[name] ?? 0;
+                  const grade = inspectPlayer.abilityGrades?.[name] ?? 0;
+                  return (
+                    <div key={name} className="inspect-skill-row">
+                      <span className="inspect-skill-icon">{def.icon}</span>
+                      <span className="inspect-skill-name" style={{ color: def.color }}>{name}</span>
+                      <div className="inspect-skill-bar-wrap">
+                        <div className="inspect-skill-bar-fill"
+                          style={{ width: `${Math.min(100, val)}%`, background: def.color }} />
+                      </div>
+                      <span className="inspect-skill-lv">{val.toFixed(1)}{grade > 0 ? ` G${grade}` : ''}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quest modal */}
+      {showQuest && (
+        <div className="overlay" onClick={() => setShowQuest(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>📋 오늘의 퀘스트</span>
+              <button tabIndex={-1} onClick={() => setShowQuest(false)}>✕</button>
+            </div>
+            {currentSeason && (
+              <div className="section">
+                <div className="rod-card" style={{ borderColor: `${currentSeason.color}66`, background: `${currentSeason.color}18` }}>
+                  <div style={{ fontWeight: 700, color: currentSeason.color, marginBottom: 4 }}>
+                    {currentSeason.icon} {currentSeason.name} 이벤트 진행 중!
+                  </div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>{currentSeason.desc}</div>
+                </div>
+              </div>
+            )}
+            <div className="section">
+              {(gs.dailyQuests ?? []).map(q => {
+                const cur = Math.min(q.goal, (gs.questProgress ?? {})[q.id] ?? 0);
+                const done = cur >= q.goal;
+                const claimed = !!(gs.questClaimed ?? {})[q.id];
+                const pct = Math.round((cur / q.goal) * 100);
+                return (
+                  <div key={q.id} className="quest-card" style={{ opacity: claimed ? 0.45 : 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, color: claimed ? '#aaa' : done ? '#88ff88' : '#ffe0a0' }}>
+                        {claimed ? '☑ ' : done ? '✅ ' : ''}{q.label}
+                      </span>
+                      <span style={{ color: '#ffcc44', fontSize: 12 }}>+{q.reward}G</span>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 8, overflow: 'hidden', marginBottom: 4 }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: claimed ? '#666' : done ? '#44ff88' : '#4488ff', borderRadius: 4, transition: 'width 0.3s' }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#aaa' }}>{cur} / {q.goal}</span>
+                      {done && !claimed && (
+                        <button
+                          style={{ background: 'rgba(255,220,50,0.25)', color: '#ffdd44', border: '1px solid rgba(255,220,50,0.5)', borderRadius: 6, padding: '3px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}
+                          onClick={() => {
+                            setGs(prev => ({
+                              ...prev,
+                              money: prev.money + q.reward,
+                              questClaimed: { ...(prev.questClaimed ?? {}), [q.id]: true },
+                            }));
+                            addMsg(`🎁 퀘스트 보상 수령: +${q.reward}G!`, 'catch');
+                            if (gameRef.current) gameRef.current.questCompleteEffect = { age: 0 };
+                          }}
+                        >
+                          🎁 수령
+                        </button>
+                      )}
+                      {claimed && <span style={{ fontSize: 11, color: '#888' }}>수령 완료</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ padding: '8px 16px', fontSize: 11, color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>
+              퀘스트는 매일 자정에 초기화됩니다
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fish encyclopedia modal */}
+      {showDex && (
+        <div className="overlay" onClick={() => setShowDex(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>📖 물고기 도감</span>
+              <button tabIndex={-1} onClick={() => setShowDex(false)}>✕</button>
+            </div>
+            <div style={{ padding: '0 16px 8px' }}>
+              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 6 }}>
+                수집: {(gs.caughtSpecies ?? []).length} / {Object.keys(FISH).length}
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 6, marginBottom: 12 }}>
+                <div style={{ width: `${((gs.caughtSpecies?.length ?? 0) / Object.keys(FISH).length) * 100}%`, height: '100%', background: '#44ffaa', borderRadius: 4 }} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {(() => {
+                  const FISH_HINT = {
+                    붕어: '낚시 0+ · 부두에서 낚시', 잉어: '낚시 0+ · 부두에서 낚시',
+                    미꾸라지: '낚시 0+ · 부두에서 낚시', 메기: '낚시 0+ · 부두에서 낚시',
+                    멸치: '낚시 10+ · 부두 낚시', 배스: '낚시 10+ · 부두 낚시',
+                    송어: '낚시 10+ · 부두 낚시',
+                    꽁치: '낚시 20+ · 미끼 추천', 강꼬치고기: '낚시 20+ · 미끼 추천',
+                    황다랑어: '낚시 20+ · 미끼 추천', 금눈돔: '낚시 20+ · 미끼 추천',
+                    연어: '낚시 30+ · 심해 부두 추천', 황금붕어: '낚시 30+ · 황금 미끼',
+                    오징어: '낚시 30+ · 심해 부두', 낙지: '낚시 30+ · 심해 부두',
+                    참치: '낚시 40+ · 바다 낚시', 광어: '낚시 40+ · 바다 낚시',
+                    감성돔: '낚시 40+ · 전설 미끼',
+                    우럭: '낚시 50+ · 바다·전설 미끼', 뱀장어: '낚시 50+ · 바다 낚시',
+                    황새치: '낚시 50+ · 신화 미끼 추천',
+                    용고기: '낚시 70+ · 바다·신화 미끼', 고대어: '낚시 70+ · 신화 미끼 필수',
+                  };
+                  return Object.entries(FISH).map(([fishName, fd]) => {
+                    const caught = (gs.caughtSpecies ?? []).includes(fishName);
+                    const record = (gs.fishRecords ?? {})[fishName];
+                    const isMaxSize = record && record.size >= fd.maxSz * 0.97;
+                    return (
+                      <div key={fishName} style={{
+                        background: caught ? (isMaxSize ? 'rgba(255,200,0,0.12)' : 'rgba(68,255,170,0.1)') : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${caught ? (isMaxSize ? 'rgba(255,200,0,0.5)' : 'rgba(68,255,170,0.3)') : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: 6, padding: '6px 10px',
+                        opacity: caught ? 1 : 0.65,
+                      }}>
+                        <div style={{ fontWeight: 700, fontSize: 12, color: caught ? (isMaxSize ? '#ffcc44' : '#44ffaa') : '#aaa' }}>
+                          {caught ? (isMaxSize ? '🏆 ' : '✓ ') : '🔍 '}{fishName}
+                        </div>
+                        {caught
+                          ? <>
+                              <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~</div>
+                              {record && (
+                                <div style={{ fontSize: 10, color: isMaxSize ? '#ffcc44' : '#aaa' }}>
+                                  최대: {record.size}cm {isMaxSize ? '(최고 크기!)' : `/ ${fd.maxSz}cm`}
+                                </div>
+                              )}
+                            </>
+                          : <div style={{ fontSize: 10, color: '#7ab' }}>{FISH_HINT[fishName] ?? '낚시 중 발견 가능'}</div>
+                        }
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shop modal */}
+      {showShop && (
+        <div className="overlay" onClick={() => setShowShop(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>🏪 상점</span>
+              <button tabIndex={-1} onClick={() => setShowShop(false)}>✕</button>
+            </div>
+            <div className="shop-money">보유: {gs.money.toLocaleString()}G
+              {getShopDiscount(gs.npcAffinity) > 0 && (
+                <span style={{ marginLeft: 10, color: '#88ff88', fontSize: 12 }}>
+                  🧑‍💼 상인 할인 -{Math.round(getShopDiscount(gs.npcAffinity) * 100)}%
+                </span>
+              )}
+            </div>
+
+            {/* ── Rods ── */}
+            <div className="section">
+              <div className="section-title">낚시대</div>
+              {Object.entries(RODS).map(([key, rod]) => {
+                const owned = gs.ownedRods.includes(key);
+                const equipped = gs.rod === key;
+                const needMoney = rod.price > 0;
+                const canAfford = !needMoney || gs.money >= rod.price;
+                const hasMats = rod.upgradeMats
+                  ? Object.entries(rod.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const matsStr = rod.upgradeMats
+                  ? Object.entries(rod.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ')
+                  : null;
+                const canBuy = canAfford && hasMats;
+                const [tMin, tMax] = rod.catchTimeRange;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: rod.color, fontWeight: 700 }}>🎣 {rod.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {needMoney ? `${rod.price}G` : '무료'}
+                      {matsStr ? ` + 재료: ${matsStr}` : ''}
+                      {' · '}낚시 {tMin/1000}~{tMax/1000}초
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipRod(key)}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyRod(key)} disabled={!canBuy}>
+                            {canBuy ? (needMoney ? `${rod.price}G + 재료` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Boots ── */}
+            <div className="section">
+              <div className="section-title">신발 (이동속도)</div>
+              {Object.entries(BOOTS).map(([key, boot]) => {
+                const owned = (gs.ownedBoots ?? ['기본신발']).includes(key);
+                const equipped = gs.boots === key;
+                const canAfford = gs.money >= boot.price;
+                const hasMats = boot.upgradeMats
+                  ? Object.entries(boot.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = boot.upgradeMats ? Object.entries(boot.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: boot.color, fontWeight: 700 }}>👟 {boot.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {boot.price > 0 ? `${boot.price}G` : '무료'}
+                      {matsStr ? ` + 재료: ${matsStr}` : ''}
+                      {' · '}속도 +{boot.speedBonus > 0 ? `${Math.round(boot.speedBonus / 3.5 * 100)}%` : '기본'}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipBoots(key)}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyBoots(key)} disabled={!canBuy}>
+                            {canBuy ? (boot.price > 0 ? `${boot.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Bait ── */}
+            <div className="section">
+              <div className="section-title">미끼</div>
+              {Object.entries(BAIT).map(([key, bait]) => {
+                const isPerm = bait.type === 'permanent';
+                const owned = isPerm ? (gs.ownedBait ?? []).includes(key) : false;
+                const equipped = gs.equippedBait === key;
+                const stock = (gs.baitInventory ?? {})[key] ?? 0;
+                const canAfford = gs.money >= bait.price;
+                return (
+                  <div key={key} className="rod-card" style={equipped ? { borderColor: 'rgba(170,68,255,0.4)', background: 'rgba(170,68,255,0.07)' } : {}}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ color: bait.color, fontWeight: 700 }}>🪝 {bait.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {isPerm && owned && !equipped && <span className="badge owned">보유</span>}
+                      {!isPerm && stock > 0 && <span className="badge owned">×{stock}</span>}
+                    </div>
+                    <div className="rod-meta">{bait.price}G · {bait.desc}</div>
+                    <div style={{ marginTop: 5, display: 'flex', gap: 6 }}>
+                      {isPerm && owned
+                        ? <button tabIndex={-1} className={equipped ? 'btn-dis' : 'btn-eq'} onClick={() => equipBait(key)} disabled={equipped}>
+                            {equipped ? '장착중' : '장착'}
+                          </button>
+                        : <button tabIndex={-1} className={canAfford ? 'btn-buy' : 'btn-dis'} onClick={() => buyBait(key)} disabled={!canAfford}>
+                            {canAfford ? `${bait.price}G 구매` : '💰 부족'}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Cookware ── */}
+            <div className="section">
+              <div className="section-title">요리 도구</div>
+              {Object.entries(COOKWARE).map(([key, cw]) => {
+                const owned = (gs.ownedCookware ?? []).includes(key);
+                const equipped = gs.cookware === key;
+                const canAfford = gs.money >= cw.price;
+                const hasMats = cw.upgradeMats ? Object.entries(cw.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
+                const matsStr = cw.upgradeMats ? Object.entries(cw.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                const canBuy = canAfford && hasMats;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ color: cw.color, fontWeight: 700 }}>🍳 {cw.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {cw.price}G{matsStr ? ` + ${matsStr}` : ''} · {cw.desc}
+                    </div>
+                    <div style={{ marginTop: 5 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipCookware(key)}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyCookware(key)} disabled={!canBuy}>
+                            {canBuy ? `${cw.price}G 구매` : (!canAfford ? '💰 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Marine Gear ── */}
+            <div className="section">
+              <div className="section-title">🌊 해양 장비 (바다 낚시)</div>
+              {Object.entries(MARINE_GEAR).map(([key, gear]) => {
+                const owned = (gs.ownedMarineGear ?? []).includes(key);
+                const equipped = gs.marineGear === key;
+                const canAfford = gs.money >= gear.price;
+                const hasMats = gear.upgradeMats
+                  ? Object.entries(gear.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = gear.upgradeMats ? Object.entries(gear.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: gear.color, fontWeight: 700 }}>🌊 {gear.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {gear.price}G{matsStr ? ` + 재료: ${matsStr}` : ''} · {gear.desc}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? <button tabIndex={-1} className={equipped ? 'btn-dis' : 'btn-eq'} onClick={() => equipMarineGear(key)}>
+                            {equipped ? '해제' : '장착'}
+                          </button>
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyMarineGear(key)} disabled={!canBuy}>
+                            {canBuy ? `${gear.price}G 구매` : (!canAfford ? '💰 골드 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Pickaxes ── */}
+            <div className="section">
+              <div className="section-title">⛏ 곡괭이 (채굴 도구)</div>
+              {Object.entries(PICKAXES).map(([key, px]) => {
+                const owned = (gs.ownedPickaxes ?? ['나무곡괭이']).includes(key);
+                const equipped = gs.pickaxe === key;
+                const canAfford = gs.money >= px.price;
+                const hasMats = px.upgradeMats
+                  ? Object.entries(px.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = px.upgradeMats ? Object.entries(px.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: px.color, fontWeight: 700 }}>⛏ {px.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {px.price > 0 ? `${px.price}G` : '무료'}
+                      {matsStr ? ` + 재료: ${matsStr}` : ''}
+                      {' · '}{px.desc}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipPickaxe(key)}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyPickaxe(key)} disabled={!canBuy}>
+                            {canBuy ? (px.price > 0 ? `${px.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Gather tools ── */}
+            <div className="section">
+              <div className="section-title">🌿 채집 도구</div>
+              {Object.entries(GATHER_TOOLS).map(([key, gt]) => {
+                const owned = (gs.ownedGatherTools ?? ['맨손']).includes(key);
+                const equipped = gs.gatherTool === key;
+                const canAfford = gs.money >= gt.price;
+                const hasMats = gt.upgradeMats
+                  ? Object.entries(gt.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = gt.upgradeMats ? Object.entries(gt.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: gt.color, fontWeight: 700 }}>🌿 {gt.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {gt.price > 0 ? `${gt.price}G` : '무료'}
+                      {matsStr ? ` + 재료: ${matsStr}` : ''}
+                      {' · '}{gt.desc}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipGatherTool(key)}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyGatherTool(key)} disabled={!canBuy}>
+                            {canBuy ? (gt.price > 0 ? `${gt.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Hats ── */}
+            <div className="section">
+              <div className="section-title">🎩 모자</div>
+              {Object.entries(HATS).map(([key, hat]) => {
+                const owned = (gs.ownedHats ?? []).includes(key);
+                const equipped = gs.hat === key;
+                const discount = 1 - getShopDiscount(gs.npcAffinity);
+                const price = Math.floor(hat.price * discount);
+                const canAfford = gs.money >= price;
+                const hasMats = hat.upgradeMats
+                  ? Object.entries(hat.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: hat.color, fontWeight: 700 }}>{hat.icon} {hat.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">{price > 0 ? `${price}G` : '무료'} · {hat.desc}</div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => setGs(prev => ({ ...prev, hat: key }))}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                            onClick={() => {
+                              if (!canBuy) return;
+                              const newOre = { ...gs.oreInventory };
+                              if (hat.upgradeMats) Object.entries(hat.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
+                              setGs(prev => ({ ...prev, money: prev.money - price, ownedHats: [...(prev.ownedHats ?? []), key], hat: key, oreInventory: newOre }));
+                              gainNpcAffinity('상인', 1);
+                              addMsg(`🎩 ${hat.name} 구매!`, 'catch');
+                            }}>
+                            {canBuy ? `${price}G` : (!canAfford ? '💰 부족' : '재료 부족')}
+                          </button>
+                      }
+                      {owned && equipped && <button tabIndex={-1} className="btn-eq" style={{ opacity: 0.5 }} onClick={() => setGs(prev => ({ ...prev, hat: null }))}>탈착</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Fishing Outfits ── */}
+            <div className="section">
+              <div className="section-title">🧥 낚시복</div>
+              {Object.entries(FISHING_OUTFITS).map(([key, outfit]) => {
+                const owned = (gs.ownedOutfits ?? ['기본낚시복']).includes(key);
+                const equipped = gs.outfit === key;
+                const discount = 1 - getShopDiscount(gs.npcAffinity);
+                const price = Math.floor(outfit.price * discount);
+                const canAfford = gs.money >= price;
+                const hasMats = outfit.upgradeMats
+                  ? Object.entries(outfit.upgradeMats).every(([k, n]) => {
+                      if (HERBS[k]) return (gs.herbInventory?.[k] || 0) >= n;
+                      return (gs.oreInventory[k] || 0) >= n;
+                    })
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = outfit.upgradeMats
+                  ? Object.entries(outfit.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ')
+                  : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: outfit.color === '#ffffff' ? '#ddd' : outfit.color, fontWeight: 700 }}>{outfit.icon} {outfit.name}</span>
+                      {equipped && <span className="badge">착용됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">{price > 0 ? `${price}G` : '무료'}{matsStr ? ` + ${matsStr}` : ''} · {outfit.desc}</div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => setGs(prev => ({ ...prev, outfit: key }))}>착용</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                            onClick={() => {
+                              if (!canBuy) return;
+                              const newOre = { ...gs.oreInventory };
+                              const newHerb = { ...(gs.herbInventory ?? {}) };
+                              if (outfit.upgradeMats) Object.entries(outfit.upgradeMats).forEach(([k, n]) => {
+                                if (HERBS[k]) newHerb[k] = (newHerb[k] || 0) - n;
+                                else newOre[k] = (newOre[k] || 0) - n;
+                              });
+                              setGs(prev => ({ ...prev, money: prev.money - price, ownedOutfits: [...(prev.ownedOutfits ?? []), key], outfit: key, oreInventory: newOre, herbInventory: newHerb }));
+                              gainNpcAffinity('상인', 1);
+                              addMsg(`🧥 ${outfit.name} 구매!`, 'catch');
+                            }}>
+                            {canBuy ? `${price}G` : (!canAfford ? '💰 부족' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Rod Skins ── */}
+            <div className="section">
+              <div className="section-title">🎨 낚싯대 스킨</div>
+              {Object.entries(ROD_SKINS).map(([key, skin]) => {
+                const owned = (gs.ownedRodSkins ?? ['기본스킨']).includes(key);
+                const equipped = gs.activeRodSkin === key;
+                const canAfford = gs.money >= skin.price;
+                const hasMats = skin.upgradeMats
+                  ? Object.entries(skin.upgradeMats).every(([k, n]) => (gs.processedOreInventory?.[k] || 0) >= n)
+                  : true;
+                const reqMythicMet = skin.reqMythic
+                  ? (gs.trophyFish ?? []).filter(t => t.name === skin.reqMythic && t.rarity === '신화').length >= (skin.reqCount ?? 1)
+                  : true;
+                const canUnlock = (skin.price === 0 ? hasMats && reqMythicMet : canAfford && hasMats);
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: skin.color, fontWeight: 700 }}>🎣 {skin.name}</span>
+                      {equipped && <span className="badge">적용됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">
+                      {skin.price > 0 ? `${skin.price}G` : '무료'}
+                      {skin.upgradeMats ? ` + 재료: ${Object.entries(skin.upgradeMats).map(([k,n])=>`${k}×${n}`).join(', ')}` : ''}
+                      {skin.reqMythic ? ` (${skin.reqMythic} 신화 ${skin.reqCount}마리 포획 조건)` : ''}
+                      {' · '}{skin.desc}
+                    </div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => setGs(prev => ({ ...prev, activeRodSkin: key }))}>적용</button>)
+                        : <button tabIndex={-1} className={canUnlock ? 'btn-buy' : 'btn-dis'} disabled={!canUnlock}
+                            onClick={() => {
+                              if (!canUnlock) return;
+                              const newOre = { ...gs.processedOreInventory };
+                              if (skin.upgradeMats) Object.entries(skin.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
+                              setGs(prev => ({ ...prev, money: prev.money - skin.price, ownedRodSkins: [...(prev.ownedRodSkins ?? []), key], activeRodSkin: key, processedOreInventory: newOre }));
+                              addMsg(`🎨 ${skin.name} 획득!`, 'catch');
+                            }}>
+                            {canUnlock ? (skin.price > 0 ? `${skin.price}G` : '해금') : (skin.reqMythic && !reqMythicMet ? '조건 미달' : '재료 부족')}
+                          </button>
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Spot Decorations ── */}
+            <div className="section">
+              <div className="section-title">🪑 낚시터 꾸미기</div>
+              {Object.entries(SPOT_DECOS).map(([key, deco]) => {
+                const owned = (gs.spotDecos ?? []).includes(key) || key === '기본의자';
+                const canAfford = gs.money >= deco.price;
+                const hasMats = deco.upgradeMats
+                  ? Object.entries(deco.upgradeMats).every(([k, n]) => (gs.processedOreInventory?.[k] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats && !owned;
+                return (
+                  <div key={key} className="rod-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700 }}>{deco.icon} {deco.name}</span>
+                      {owned && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">{deco.price > 0 ? `${deco.price}G` : '기본 제공'} · {deco.desc}</div>
+                    {!owned && (
+                      <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                        onClick={() => {
+                          if (!canBuy) return;
+                          setGs(prev => ({ ...prev, money: prev.money - deco.price, spotDecos: [...(prev.spotDecos ?? []), key] }));
+                          addMsg(`${deco.icon} ${deco.name} 설치!`, 'catch');
+                        }}>
+                        {canBuy ? `${deco.price}G` : (!canAfford ? '💰 부족' : '이미 보유')}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Pet eggs ── */}
+            <div className="section">
+              <div className="section-title">🥚 펫 에그</div>
+              {Object.entries(PETS).map(([key, pet]) => {
+                const egg = (gs.petEggs ?? {})[key];
+                const canAfford = gs.money >= pet.eggPrice;
+                const hatchMs = pet.hatchMs;
+                const hatchMin = Math.round(hatchMs / 60000);
+                return (
+                  <div key={key} className="rod-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontSize: 20 }}>{pet.icon}</span>
+                      <span style={{ fontWeight: 700, color: PET_RARITY_COLOR[pet.rarity] ?? '#fff' }}>{pet.name}</span>
+                      <span style={{ fontSize: 11, color: PET_RARITY_COLOR[pet.rarity] ?? '#aaa' }}>[{pet.rarity}]</span>
+                      {egg && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">{pet.desc}</div>
+                    <div className="rod-meta">{pet.eggPrice}G · 부화 {hatchMin}분</div>
+                    <div style={{ marginTop: 5 }}>
+                      {egg ? (
+                        <span style={{ fontSize: 11, color: '#aaa' }}>
+                          {Date.now() >= egg.hatchAt ? '부화 완료! 스탯창 펫 탭에서 확인' : `부화까지 ${Math.ceil((egg.hatchAt - Date.now()) / 60000)}분`}
+                        </span>
+                      ) : (
+                        <button tabIndex={-1} className={canAfford ? 'btn-buy' : 'btn-dis'} disabled={!canAfford}
+                          onClick={() => {
+                            if (gs.money < pet.eggPrice) { addMsg('💰 골드 부족', 'error'); return; }
+                            const boughtAt = Date.now();
+                            const hatchAt = boughtAt + pet.hatchMs;
+                            setGs(prev => ({
+                              ...prev,
+                              money: prev.money - pet.eggPrice,
+                              petEggs: { ...(prev.petEggs ?? {}), [key]: { boughtAt, hatchAt } },
+                            }));
+                            addMsg(`🥚 ${pet.name} 알 구매! ${hatchMin}분 후 부화됩니다.`, 'catch');
+                          }}>
+                          {canAfford ? `${pet.eggPrice}G 구매` : '💰 골드 부족'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Sell ore ── */}
+            <div className="section">
+              <div className="section-title">광석 판매</div>
+              {Object.entries(gs.oreInventory ?? {}).every(([, n]) => n === 0)
+                ? <div className="empty">판매할 광석 없음</div>
+                : <div>
+                    {Object.entries(gs.oreInventory ?? {}).filter(([, n]) => n > 0).map(([ore, count]) => {
+                      const oreColors = { 철광석: '#cc8844', 구리광석: '#44ccaa', 수정: '#aa66ff', 금광석: '#ffd700' };
+                      const petSell = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
+                      const speechMult = 1 + (gs.abilities?.화술?.value ?? 0) * 0.005;
+                      const price = Math.round((ORES[ore]?.price ?? 100) * petSell * speechMult);
+                      const qtyKey = `ore_${ore}`;
+                      const qty = Math.min(count, Math.max(1, parseInt(sellQty[qtyKey] ?? count) || count));
+                      const total = price * qty;
+                      return (
+                        <div key={ore} className="rod-card">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ color: oreColors[ore] ?? '#fff', fontWeight: 700 }}>⛏ {ore} ×{count}</span>
+                            <span style={{ color: '#ffcc44', fontSize: 12 }}>{price}G/개</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input type="number" min={1} max={count} value={sellQty[qtyKey] ?? count}
+                              onChange={e => setSellQty(prev => ({ ...prev, [qtyKey]: e.target.value }))}
+                              style={{ width: 60, padding: '3px 6px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }} />
+                            <span style={{ color: '#ffcc44', fontSize: 12, flex: 1 }}>{total.toLocaleString()}G</span>
+                            <button tabIndex={-1} className="btn-eq" style={{ fontSize: 11 }} onClick={() => setSellQty(prev => ({ ...prev, [qtyKey]: count }))}>전체</button>
+                            <button tabIndex={-1} className="btn-buy" onClick={() => {
+                              setGs(prev => ({ ...prev, money: prev.money + total, oreInventory: { ...prev.oreInventory, [ore]: count - qty } }));
+                              addMsg(`💰 ${ore} ${qty}개 → ${total}G!`, 'catch');
+                              advanceQuest('sell', total);
+                              setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
+                            }}>판매</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+              }
+            </div>
+
+            {/* ── Sell herbs ── */}
+            <div className="section">
+              <div className="section-title">허브 판매</div>
+              {Object.keys(gs.herbInventory ?? {}).filter(k => (gs.herbInventory[k] ?? 0) > 0).length === 0
+                ? <div className="empty">판매할 허브 없음</div>
+                : <div>
+                    {Object.entries(gs.herbInventory ?? {}).filter(([, n]) => n > 0).map(([herb, count]) => {
+                      const petSellH = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
+                      const speechMultH = 1 + (gs.abilities?.화술?.value ?? 0) * 0.005;
+                      const price = Math.round((HERBS[herb]?.price ?? 0) * petSellH * speechMultH);
+                      const qtyKey = `herb_${herb}`;
+                      const qty = Math.min(count, Math.max(1, parseInt(sellQty[qtyKey] ?? count) || count));
+                      const total = price * qty;
+                      return (
+                        <div key={herb} className="rod-card">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ color: HERBS[herb]?.color ?? '#8c4', fontWeight: 700 }}>🌿 {herb} ×{count}</span>
+                            <span style={{ color: '#ffcc44', fontSize: 12 }}>{price}G/개</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input type="number" min={1} max={count} value={sellQty[qtyKey] ?? count}
+                              onChange={e => setSellQty(prev => ({ ...prev, [qtyKey]: e.target.value }))}
+                              style={{ width: 60, padding: '3px 6px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }} />
+                            <span style={{ color: '#ffcc44', fontSize: 12, flex: 1 }}>{total.toLocaleString()}G</span>
+                            <button tabIndex={-1} className="btn-eq" style={{ fontSize: 11 }} onClick={() => setSellQty(prev => ({ ...prev, [qtyKey]: count }))}>전체</button>
+                            <button tabIndex={-1} className="btn-buy" onClick={() => {
+                              setGs(prev => ({ ...prev, money: prev.money + total, herbInventory: { ...(prev.herbInventory ?? {}), [herb]: count - qty } }));
+                              addMsg(`💰 ${herb} ${qty}개 → ${total}G!`, 'catch');
+                              advanceQuest('sell', total);
+                              setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
+                            }}>판매</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+              }
+            </div>
+
+            {/* ── Sell fish ── */}
+            <div className="section">
+              <div className="section-title">물고기 판매</div>
+              {gs.fishInventory.length === 0
+                ? <div className="empty">판매할 물고기 없음</div>
+                : <>
+                    <button tabIndex={-1} className="sell-all-btn" onClick={() => { sellAll(); }}>
+                      전체 판매 ({totalFishVal}G)
+                    </button>
+                    {/* Group by species */}
+                    {Object.entries(
+                      gs.fishInventory.reduce((acc, f) => {
+                        if (!acc[f.name]) acc[f.name] = { items: [], totalPrice: 0 };
+                        acc[f.name].items.push(f);
+                        acc[f.name].totalPrice += f.price;
+                        return acc;
+                      }, {})
+                    ).map(([species, { items, totalPrice }]) => {
+                      const fd = FISH[species];
+                      const rarityColors = { 흔함: '#909090', 보통: '#44aaff', 희귀: '#aa44ff', 전설: '#ffaa00', 신화: '#ff44ff' };
+                      const qtyKey = `fish_${species}`;
+                      const count = items.length;
+                      const qty = Math.min(count, Math.max(1, parseInt(sellQty[qtyKey] ?? count) || count));
+                      const unitPrice = Math.round(totalPrice / count);
+                      const sellTotal = items.slice(0, qty).reduce((s, f) => s + f.price, 0);
+                      return (
+                        <div key={species} className="rod-card">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ color: rarityColors[fd?.rarity] ?? '#fff', fontWeight: 700 }}>🐟 {species} ×{count}</span>
+                            <span style={{ color: '#ffcc44', fontSize: 12 }}>~{unitPrice}G/개</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input type="number" min={1} max={count} value={sellQty[qtyKey] ?? count}
+                              onChange={e => setSellQty(prev => ({ ...prev, [qtyKey]: e.target.value }))}
+                              style={{ width: 60, padding: '3px 6px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }} />
+                            <span style={{ color: '#ffcc44', fontSize: 12, flex: 1 }}>{sellTotal.toLocaleString()}G</span>
+                            <button tabIndex={-1} className="btn-eq" style={{ fontSize: 11 }} onClick={() => setSellQty(prev => ({ ...prev, [qtyKey]: count }))}>전체</button>
+                            <button tabIndex={-1} className="btn-buy" onClick={() => {
+                              const toSell = items.slice(0, qty);
+                              const ids = new Set(toSell.map(f => f.id));
+                              const earned = toSell.reduce((s, f) => s + f.price, 0);
+                              setGs(prev => ({ ...prev, money: prev.money + earned, fishInventory: prev.fishInventory.filter(f => !ids.has(f.id)) }));
+                              addMsg(`💰 ${species} ${qty}마리 → ${earned}G!`, 'catch');
+                              advanceQuest('sell', earned);
+                              playSellSound(earned);
+                              setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
+                            }}>판매</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+              }
+            </div>
+
+            {/* ── Buy seeds ── */}
+            <div className="section">
+              <div className="section-title">🌱 씨앗 구매</div>
+              {Object.entries(SEEDS).map(([key, sd]) => {
+                const discount = getShopDiscount(gs.npcAffinity);
+                const discPrice = Math.round(sd.price * (1 - discount));
+                const canBuy = gs.money >= discPrice;
+                return (
+                  <div key={key} className="rod-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontSize: 16 }}>🌱</span>
+                      <span style={{ fontWeight: 700, color: '#88ff88' }}>{sd.name}</span>
+                      <span style={{ fontSize: 11, color: '#ffcc44', marginLeft: 'auto' }}>{discPrice}G</span>
+                    </div>
+                    <div className="rod-meta">
+                      {sd.yield.item} {sd.yield.qty[0]}~{sd.yield.qty[1]}개 수확 · 성장 {Math.round(sd.growMs / 60000)}분
+                    </div>
+                    <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                      style={{ marginTop: 4, fontSize: 11 }}
+                      onClick={() => {
+                        if (!canBuy) return;
+                        // Find an empty plot and plant directly
+                        const plots = stateRef.current?.farmPlots ?? [];
+                        const emptyIdx = Array.from({ length: MAX_FARM_PLOTS }, (_, i) => i).find(i => !plots.some(p => p.id === i && !p.harvested));
+                        if (emptyIdx === undefined) {
+                          addMsg('🌱 빈 농장 자리가 없습니다!', 'error'); return;
+                        }
+                        const now = Date.now();
+                        const newPlot = { id: emptyIdx, seed: key, plantedAt: now, harvestAt: now + sd.growMs, watered: false, harvested: false };
+                        setGs(prev => ({ ...prev, money: prev.money - discPrice, farmPlots: [...(prev.farmPlots ?? []).filter(p => p.id !== emptyIdx || p.harvested), newPlot] }));
+                        addMsg(`🌱 ${sd.name} 구매 & 심기 완료! (-${discPrice}G)`, 'catch');
+                        gainNpcAffinity('상인', 1);
+                      }}>
+                      {canBuy ? `${discPrice}G 구매 & 심기` : '💰 골드 부족'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Pet food ── */}
+            <div className="section">
+              <div className="section-title">🍖 펫 간식</div>
+              {!gs.activePet ? (
+                <div className="empty">활성 펫이 없습니다. 펫을 장착하세요.</div>
+              ) : (() => {
+                const petKey = gs.activePet;
+                const pet = PETS[petKey];
+                const level = (gs.petLevels ?? {})[petKey] ?? 1;
+                const exp = (gs.petExp ?? {})[petKey] ?? 0;
+                if (level >= PET_MAX_LEVEL) {
+                  return <div className="empty">{pet?.icon} {pet?.name}은 이미 최대 레벨입니다!</div>;
+                }
+                const foodItems = [
+                  { name: '작은 간식', price: 300, exp: 5, desc: 'EXP +5' },
+                  { name: '특별 간식', price: 800, exp: 15, desc: 'EXP +15' },
+                  { name: '전설 간식', price: 2500, exp: 50, desc: 'EXP +50' },
+                ];
+                return foodItems.map(food => {
+                  const canBuy = gs.money >= food.price;
+                  return (
+                    <div key={food.name} className="rod-card">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>🍖</span>
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontWeight: 700 }}>{food.name}</span>
+                          <span style={{ fontSize: 11, color: '#aaa', marginLeft: 6 }}>{food.desc}</span>
+                        </div>
+                        <span style={{ color: '#ffcc44', fontSize: 12 }}>{food.price}G</span>
+                      </div>
+                      <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                        style={{ marginTop: 4, fontSize: 11, width: '100%' }}
+                        onClick={() => {
+                          if (!canBuy) return;
+                          const newExp = exp + food.exp;
+                          let newLevel = level;
+                          for (let lv = level; lv < PET_MAX_LEVEL; lv++) {
+                            if (newExp >= PET_EXP_THRESHOLDS[lv - 1]) newLevel = lv + 1;
+                            else break;
+                          }
+                          setGs(prev => ({
+                            ...prev,
+                            money: prev.money - food.price,
+                            petExp: { ...prev.petExp, [petKey]: newExp },
+                            petLevels: { ...prev.petLevels, [petKey]: newLevel },
+                          }));
+                          addMsg(`${pet?.icon} ${pet?.name}에게 ${food.name}! EXP +${food.exp} (${newExp}/${PET_EXP_THRESHOLDS[newLevel - 1] ?? '최대'})`, 'catch');
+                          if (newLevel > level) addMsg(`🎉 ${pet?.name} Lv.${level} → Lv.${newLevel}! 보너스 강화!`, 'legend');
+                        }}>
+                        {canBuy ? `${food.price}G 구매` : '💰 골드 부족'}
+                      </button>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* ── Sell crops ── */}
+            <div className="section">
+              <div className="section-title">🌾 작물 판매</div>
+              {Object.entries(gs.cropInventory ?? {}).filter(([, n]) => n > 0).length === 0
+                ? <div className="empty">판매할 작물 없음 (농장에서 수확)</div>
+                : <div>
+                    {Object.entries(gs.cropInventory ?? {}).filter(([, n]) => n > 0).map(([itemName, count]) => {
+                      const baseSp = (() => {
+                        for (const sd of Object.values(SEEDS)) {
+                          if (sd.yield.item === itemName) return sd.yield.sellPrice;
+                        }
+                        return 0;
+                      })();
+                      const seasonCropPct = currentSeason?.cropPriceBonus ?? 0;
+                      const petSellC = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
+                      const speechMultC = 1 + (gs.abilities?.화술?.value ?? 0) * 0.005;
+                      const sp = Math.round(baseSp * (1 + seasonCropPct) * petSellC * speechMultC);
+                      const total = sp * count;
+                      return (
+                        <div key={itemName} className="rod-card">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <span style={{ color: '#88ff88', fontWeight: 700 }}>🌾 {itemName} ×{count}</span>
+                            <span style={{ color: '#ffcc44', fontSize: 12 }}>
+                              {sp}G/개{seasonCropPct > 0 && <span style={{ color: currentSeason.color, fontSize: 10 }}> {currentSeason.icon}+{Math.round(seasonCropPct * 100)}%</span>}
+                            </span>
+                          </div>
+                          <button tabIndex={-1} className="btn-buy" onClick={() => {
+                            setGs(prev => {
+                              const newCrop = { ...(prev.cropInventory ?? {}), [itemName]: 0 };
+                              return { ...prev, money: prev.money + total, cropInventory: newCrop };
+                            });
+                            addMsg(`💰 ${itemName} ${count}개 → ${total}G!`, 'catch');
+                            advanceQuest('sell', total);
+                          }}>전체 판매 ({total}G)</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+              }
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Appearance modal */}
+      {showAppearance && appearanceDraft && (
+        <div className="overlay" onClick={() => setShowAppearance(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 320 }}>
+            <div className="panel-head">
+              <span>✂ 외모 변경 (200G)</span>
+              <button tabIndex={-1} onClick={() => setShowAppearance(false)}>✕</button>
+            </div>
+            <div className="section">
+              <div className="section-title">피부색</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {['#f6cc88', '#e8a878', '#c68642', '#8d5524', '#ffdab9', '#ffe0bd'].map(c => (
+                  <div key={c} onClick={() => setAppearanceDraft(d => ({ ...d, skinColor: c }))}
+                    style={{ width: 32, height: 32, borderRadius: '50%', background: c, cursor: 'pointer',
+                      border: `3px solid ${appearanceDraft.skinColor === c ? '#fff' : 'transparent'}` }} />
+                ))}
+              </div>
+            </div>
+            <div className="section">
+              <div className="section-title">머리색</div>
+              <input type="color" value={appearanceDraft.hairColor}
+                onChange={e => setAppearanceDraft(d => ({ ...d, hairColor: e.target.value }))}
+                style={{ width: 48, height: 32, border: 'none', borderRadius: 6, cursor: 'pointer' }} />
+            </div>
+            <div className="section">
+              <div className="section-title">옷 색상</div>
+              <input type="color" value={appearanceDraft.bodyColor}
+                onChange={e => setAppearanceDraft(d => ({ ...d, bodyColor: e.target.value }))}
+                style={{ width: 48, height: 32, border: 'none', borderRadius: 6, cursor: 'pointer' }} />
+            </div>
+            <div style={{ padding: '0 16px 16px' }}>
+              <button className={gs.money >= 200 ? 'btn-buy' : 'btn-dis'} style={{ width: '100%' }}
+                disabled={gs.money < 200}
+                onClick={() => {
+                  if (gs.money < 200) { addMsg('💰 200G 필요', 'error'); return; }
+                  setGs(prev => ({
+                    ...prev,
+                    money: prev.money - 200,
+                    hairColor: appearanceDraft.hairColor,
+                    bodyColor: appearanceDraft.bodyColor,
+                    skinColor: appearanceDraft.skinColor,
+                  }));
+                  if (gameRef.current?.player) {
+                    gameRef.current.player.hairColor = appearanceDraft.hairColor;
+                    gameRef.current.player.bodyColor = appearanceDraft.bodyColor;
+                    gameRef.current.player.skinColor = appearanceDraft.skinColor;
+                  }
+                  addMsg('✂ 외모가 변경됐습니다! (-200G)', 'catch');
+                  gainNpcAffinity('여관주인', 1);
+                  setShowAppearance(false);
+                }}>
+                {gs.money >= 200 ? '200G 변경 완료' : '💰 골드 부족'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Marketplace modal */}
+      {showMarket && (
+        <div className="overlay" onClick={() => setShowMarket(false)}>
+          <div className="panel" style={{ maxWidth: 440, maxHeight: '82vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>🏪 경매장 (야시장)</span>
+              <button tabIndex={-1} onClick={() => setShowMarket(false)}>✕</button>
+            </div>
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 4, padding: '8px 12px 0', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              {['전체', '내 매물', '등록'].map(t => (
+                <button key={t} tabIndex={-1} onClick={() => setMarketTab(t)} style={{
+                  padding: '4px 12px', borderRadius: '6px 6px 0 0', border: 'none', cursor: 'pointer', fontSize: 12,
+                  background: marketTab === t ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  color: marketTab === t ? '#fff' : 'rgba(255,255,255,0.5)', fontWeight: marketTab === t ? 700 : 400,
+                }}>{t}</button>
+              ))}
+            </div>
+
+            {/* ── 전체 탭 ── */}
+            {marketTab === '전체' && (
+              <div className="section">
+                <div className="section-title">매물 목록 ({marketListings.length}개)</div>
+                {marketListings.length === 0
+                  ? <div className="empty">등록된 매물이 없습니다.</div>
+                  : marketListings.map(item => {
+                    const typeIcon = item.itemType === 'fish' ? '🐟' : item.itemType === 'ore' ? '⛏' : '🌿';
+                    const isMine = item.seller === nickname;
+                    return (
+                      <div key={item.id} className="rod-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{typeIcon} {item.itemName} ×{item.qty}</div>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>판매자: {item.seller}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ color: '#ffcc44', fontWeight: 700, marginBottom: 4 }}>{item.price.toLocaleString()}G</div>
+                          {!isMine && (
+                            <button tabIndex={-1} className="btn-buy" style={{ fontSize: 11 }} onClick={async () => {
+                              if ((gs.money ?? 0) < item.price) { addMsg('💰 골드 부족', 'error'); return; }
+                              const res = await buyItem(item.id, nickname);
+                              if (res.ok) {
+                                const { listing } = res;
+                                setGs(prev => {
+                                  let next = { ...prev, money: prev.money - listing.price };
+                                  if (listing.itemType === 'ore') {
+                                    next = { ...next, oreInventory: { ...next.oreInventory, [listing.itemName]: (next.oreInventory[listing.itemName] ?? 0) + listing.qty } };
+                                  } else if (listing.itemType === 'herb') {
+                                    next = { ...next, herbInventory: { ...next.herbInventory, [listing.itemName]: (next.herbInventory[listing.itemName] ?? 0) + listing.qty } };
+                                  }
+                                  return next;
+                                });
+                                addMsg(`🏪 ${item.itemName} ×${item.qty} 구매! (-${item.price.toLocaleString()}G)`, 'catch');
+                              } else addMsg(`구매 실패: ${res.err}`, 'error');
+                            }}>구매</button>
+                          )}
+                          {isMine && <span style={{ fontSize: 11, color: '#888' }}>내 매물</span>}
+                        </div>
+                      </div>
+                    );
+                  })
+                }
+              </div>
+            )}
+
+            {/* ── 내 매물 탭 ── */}
+            {marketTab === '내 매물' && (
+              <div className="section">
+                <div className="section-title">내 매물 ({myListings.length}개)</div>
+                {myListings.length === 0
+                  ? <div className="empty">등록한 매물이 없습니다.</div>
+                  : myListings.map(item => (
+                    <div key={item.id} className="rod-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{item.itemType === 'fish' ? '🐟' : item.itemType === 'ore' ? '⛏' : '🌿'} {item.itemName} ×{item.qty}</div>
+                        <div style={{ fontSize: 11, color: '#ffcc44' }}>{item.price.toLocaleString()}G</div>
+                      </div>
+                      <button tabIndex={-1} className="btn-dis" style={{ fontSize: 11 }} onClick={async () => {
+                        const res = await cancelListing(item.id, nickname);
+                        if (res.ok) {
+                          // Return item to inventory
+                          setGs(prev => {
+                            if (item.itemType === 'ore') {
+                              return { ...prev, oreInventory: { ...prev.oreInventory, [item.itemName]: (prev.oreInventory[item.itemName] ?? 0) + item.qty } };
+                            } else if (item.itemType === 'herb') {
+                              return { ...prev, herbInventory: { ...prev.herbInventory, [item.itemName]: (prev.herbInventory[item.itemName] ?? 0) + item.qty } };
+                            }
+                            return prev;
+                          });
+                          addMsg(`🏪 ${item.itemName} 매물 취소 완료`, 'system');
+                        } else addMsg(`취소 실패: ${res.err}`, 'error');
+                      }}>취소</button>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+
+            {/* ── 등록 탭 ── */}
+            {marketTab === '등록' && (
+              <div className="section">
+                <div className="section-title">매물 등록</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['ore', 'herb'].map(t => (
+                      <button key={t} tabIndex={-1} onClick={() => setMarketListForm(f => ({ ...f, itemType: t, itemName: '' }))} style={{
+                        padding: '4px 12px', borderRadius: 6, border: `1px solid ${marketListForm.itemType === t ? '#88ccff' : 'rgba(255,255,255,0.2)'}`,
+                        background: marketListForm.itemType === t ? 'rgba(100,180,255,0.15)' : 'rgba(0,0,0,0.2)',
+                        color: marketListForm.itemType === t ? '#88ccff' : 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 12,
+                      }}>{t === 'ore' ? '⛏ 광석' : '🌿 허브'}</button>
+                    ))}
+                  </div>
+                  <select value={marketListForm.itemName}
+                    onChange={e => setMarketListForm(f => ({ ...f, itemName: e.target.value }))}
+                    style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.5)', color: '#fff', fontSize: 13 }}>
+                    <option value="">아이템 선택</option>
+                    {marketListForm.itemType === 'ore'
+                      ? Object.entries(gs.oreInventory ?? {}).filter(([, n]) => n > 0).map(([k]) => <option key={k} value={k}>{k}</option>)
+                      : Object.entries(gs.herbInventory ?? {}).filter(([, n]) => n > 0).map(([k]) => <option key={k} value={k}>{k}</option>)
+                    }
+                  </select>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input type="number" min={1} placeholder="수량" value={marketListForm.qty}
+                      onChange={e => setMarketListForm(f => ({ ...f, qty: Math.max(1, parseInt(e.target.value) || 1) }))}
+                      style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }} />
+                    <input type="number" min={1} placeholder="가격 (G)" value={marketListForm.price || ''}
+                      onChange={e => setMarketListForm(f => ({ ...f, price: Math.max(1, parseInt(e.target.value) || 0) }))}
+                      style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }} />
+                  </div>
+                  <button tabIndex={-1} className="btn-buy" onClick={async () => {
+                    const { itemType, itemName, qty, price } = marketListForm;
+                    if (!itemName) { addMsg('아이템을 선택하세요.', 'error'); return; }
+                    if (price <= 0) { addMsg('가격을 입력하세요.', 'error'); return; }
+                    // Deduct from inventory
+                    if (itemType === 'ore') {
+                      const have = gs.oreInventory[itemName] ?? 0;
+                      if (have < qty) { addMsg('보유 수량 부족', 'error'); return; }
+                      setGs(prev => ({ ...prev, oreInventory: { ...prev.oreInventory, [itemName]: (prev.oreInventory[itemName] ?? 0) - qty } }));
+                    } else {
+                      const have = gs.herbInventory[itemName] ?? 0;
+                      if (have < qty) { addMsg('보유 수량 부족', 'error'); return; }
+                      setGs(prev => ({ ...prev, herbInventory: { ...prev.herbInventory, [itemName]: (prev.herbInventory[itemName] ?? 0) - qty } }));
+                    }
+                    const res = await listItem(nickname, itemType, itemName, qty, price);
+                    if (res.ok) {
+                      addMsg(`🏪 ${itemName} ×${qty} 경매장 등록 완료! (${price.toLocaleString()}G)`, 'catch');
+                      setMarketListForm({ itemType: 'ore', itemName: '', qty: 1, price: 0 });
+                    } else {
+                      addMsg(`등록 실패: ${res.err}`, 'error');
+                    }
+                  }}>등록하기</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Guild modal */}
+      {showGuild && (
+        <div className="overlay" onClick={() => setShowGuild(false)}>
+          <div className="panel" style={{ maxWidth: 420, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>🏰 길드 시스템</span>
+              <button tabIndex={-1} onClick={() => setShowGuild(false)}>✕</button>
+            </div>
+
+            {/* Tab bar */}
+            <div style={{ display: 'flex', gap: 4, padding: '8px 12px 0', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+              {(myGuildId ? ['내 길드', '채팅', '퀘스트', '경쟁', '목록'] : ['목록', '창설']).map(t => (
+                <button key={t} tabIndex={-1} onClick={() => setGuildTab(t)} style={{
+                  padding: '4px 12px', borderRadius: '6px 6px 0 0', border: 'none', cursor: 'pointer', fontSize: 12,
+                  background: guildTab === t ? 'rgba(255,255,255,0.15)' : 'transparent',
+                  color: guildTab === t ? '#fff' : 'rgba(255,255,255,0.5)',
+                  fontWeight: guildTab === t ? 700 : 400,
+                }}>
+                  {t}
+                </button>
+              ))}
+            </div>
+
+            {/* ── 목록 탭 ── */}
+            {guildTab === '목록' && (
+              <div className="section">
+                <div className="section-title">길드 목록 (상위 20)</div>
+                {guildList.length === 0
+                  ? <div className="empty">등록된 길드가 없습니다.</div>
+                  : guildList.map(g => (
+                    <div key={g.guildId} className="rod-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: '#ffcc44' }}>🏰 {g.name}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>ID: {g.guildId} · 인원 {g.memberCount}/30</div>
+                        {g.notice && <div style={{ fontSize: 11, color: '#88ccff', marginTop: 2 }}>{g.notice}</div>}
+                      </div>
+                      {!myGuildId && (
+                        <button tabIndex={-1} className="btn-buy" style={{ fontSize: 11 }} onClick={async () => {
+                          const res = await joinGuild(g.guildId, nickname);
+                          if (res.ok) { setMyGuildId(g.guildId); setGuildTab('내 길드'); addMsg(`🏰 ${g.name} 길드에 가입했습니다!`, 'catch'); }
+                          else addMsg(`가입 실패: ${res.err}`, 'error');
+                        }}>가입</button>
+                      )}
+                      {myGuildId === g.guildId && (
+                        <span style={{ fontSize: 11, color: '#44ff88' }}>✓ 내 길드</span>
+                      )}
+                    </div>
+                  ))
+                }
+                {!myGuildId && (
+                  <div style={{ marginTop: 8 }}>
+                    <div className="section-title">길드 ID로 가입</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input value={guildJoinId} onChange={e => setGuildJoinId(e.target.value)}
+                        placeholder="길드 ID 입력"
+                        style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }} />
+                      <button tabIndex={-1} className="btn-buy" onClick={async () => {
+                        if (!guildJoinId.trim()) return;
+                        const res = await joinGuild(guildJoinId.trim(), nickname);
+                        if (res.ok) { setMyGuildId(guildJoinId.trim()); setGuildTab('내 길드'); addMsg(`🏰 길드에 가입했습니다!`, 'catch'); setGuildJoinId(''); }
+                        else addMsg(`가입 실패: ${res.err}`, 'error');
+                      }}>가입</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── 창설 탭 ── */}
+            {guildTab === '창설' && !myGuildId && (
+              <div className="section">
+                <div className="section-title">새 길드 창설</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
+                  길드 ID는 영문/숫자 조합으로 4~12자, 길드명은 최대 16자.
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input value={guildJoinId} onChange={e => setGuildJoinId(e.target.value)}
+                    placeholder="길드 ID (영문/숫자, 4~12자)"
+                    maxLength={12}
+                    style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }} />
+                  <input value={guildCreateName} onChange={e => setGuildCreateName(e.target.value)}
+                    placeholder="길드 이름 (최대 16자)"
+                    maxLength={16}
+                    style={{ padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }} />
+                  <button tabIndex={-1} className="btn-buy" onClick={async () => {
+                    const id = guildJoinId.trim();
+                    const nm = guildCreateName.trim();
+                    if (!id || id.length < 4) { addMsg('길드 ID는 4자 이상이어야 합니다.', 'error'); return; }
+                    if (!/^[a-zA-Z0-9]+$/.test(id)) { addMsg('길드 ID는 영문/숫자만 가능합니다.', 'error'); return; }
+                    if (!nm) { addMsg('길드 이름을 입력하세요.', 'error'); return; }
+                    const res = await createGuild(id, nm, nickname);
+                    if (res.ok) {
+                      setMyGuildId(id);
+                      setGuildTab('내 길드');
+                      addMsg(`🏰 길드 "${nm}" 창설 완료!`, 'catch');
+                      setGuildJoinId(''); setGuildCreateName('');
+                    } else addMsg(`창설 실패: ${res.err}`, 'error');
+                  }}>창설</button>
+                </div>
+              </div>
+            )}
+
+            {/* ── 내 길드 탭 ── */}
+            {guildTab === '내 길드' && myGuildId && (
+              <div className="section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#ffcc44' }}>🏰 {guildInfo?.name ?? myGuildId}</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>인원: {guildInfo?.memberCount ?? '?'}/30 · 마스터: {guildInfo?.master ?? '?'}</div>
+                    {guildInfo?.notice && <div style={{ fontSize: 12, color: '#88ccff', marginTop: 4 }}>📢 {guildInfo.notice}</div>}
+                  </div>
+                  <button tabIndex={-1} className="btn-dis" style={{ fontSize: 11 }} onClick={async () => {
+                    if (!window.confirm('길드를 탈퇴하시겠습니까?')) return;
+                    await leaveGuild(myGuildId, nickname);
+                    setMyGuildId(null); setGuildInfo(null); setGuildMembers([]); setGuildChat([]); setGuildQuest({});
+                    addMsg('길드를 탈퇴했습니다.', 'system');
+                    setGuildTab('목록');
+                  }}>탈퇴</button>
+                </div>
+                <div className="section-title">길드원 ({guildMembers.length}명)</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {guildMembers.map(m => (
+                    <div key={m.nickname} style={{
+                      padding: '3px 10px', borderRadius: 12, fontSize: 12,
+                      background: m.role === 'master' ? 'rgba(255,200,0,0.2)' : 'rgba(255,255,255,0.08)',
+                      border: `1px solid ${m.role === 'master' ? '#ffcc44' : 'rgba(255,255,255,0.15)'}`,
+                      color: m.role === 'master' ? '#ffcc44' : '#fff',
+                    }}>
+                      {m.role === 'master' ? '👑' : '🧑'} {m.nickname}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── 채팅 탭 ── */}
+            {guildTab === '채팅' && myGuildId && (
+              <div className="section">
+                <div className="section-title">길드 채팅</div>
+                <div style={{ height: 200, overflowY: 'auto', background: 'rgba(0,0,0,0.3)', borderRadius: 8, padding: 8, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {guildChat.length === 0
+                    ? <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12 }}>메시지가 없습니다.</div>
+                    : guildChat.map((m, i) => (
+                      <div key={i} style={{ fontSize: 12 }}>
+                        <span style={{ color: m.nickname === nickname ? '#88ccff' : '#ffcc44', fontWeight: 700 }}>{m.nickname}: </span>
+                        <span style={{ color: '#ddd' }}>{m.message}</span>
+                      </div>
+                    ))
+                  }
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input value={guildChatInput} onChange={e => setGuildChatInput(e.target.value)}
+                    placeholder="메시지 입력..."
+                    onKeyDown={e => { if (e.key === 'Enter' && guildChatInput.trim()) { sendGuildChat(myGuildId, nickname, guildChatInput.trim()); setGuildChatInput(''); } }}
+                    style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }} />
+                  <button tabIndex={-1} className="btn-buy" onClick={() => {
+                    if (!guildChatInput.trim()) return;
+                    sendGuildChat(myGuildId, nickname, guildChatInput.trim());
+                    setGuildChatInput('');
+                  }}>전송</button>
+                </div>
+              </div>
+            )}
+
+            {/* ── 퀘스트 탭 ── */}
+            {guildTab === '퀘스트' && myGuildId && (() => {
+              const GUILD_QUESTS = [
+                { key: 'fishCaught', label: '물고기 포획', icon: '🐟', goals: [100, 500, 1000] },
+                { key: 'oreMined',   label: '광석 채굴',   icon: '⛏', goals: [50, 200, 500] },
+              ];
+              return (
+                <div className="section">
+                  <div className="section-title">길드 공동 퀘스트</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
+                    낚시/채굴 시 자동으로 길드 퀘스트 진행도가 올라갑니다.
+                  </div>
+                  {GUILD_QUESTS.map(q => {
+                    const curr = guildQuest[q.key] ?? 0;
+                    const nextGoal = q.goals.find(g => curr < g) ?? q.goals[q.goals.length - 1];
+                    const pct = Math.min(100, Math.round((curr / nextGoal) * 100));
+                    const done = curr >= q.goals[q.goals.length - 1];
+                    return (
+                      <div key={q.key} className="rod-card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontWeight: 700 }}>{q.icon} {q.label}</span>
+                          <span style={{ color: done ? '#44ff88' : '#ffcc44', fontSize: 12 }}>{curr.toLocaleString()} / {nextGoal.toLocaleString()}</span>
+                        </div>
+                        <div style={{ height: 8, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: done ? '#44ff88' : '#ffcc44', borderRadius: 4, transition: 'width 0.3s' }} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                          {q.goals.map(g => (
+                            <span key={g} style={{ fontSize: 10, color: curr >= g ? '#44ff88' : 'rgba(255,255,255,0.3)' }}>
+                              {curr >= g ? '✓' : '○'} {g.toLocaleString()}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* ── 경쟁 탭 ── */}
+            {guildTab === '경쟁' && myGuildId && (
+              <div className="section">
+                <div className="section-title">🏆 길드 주간 경쟁 랭킹</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
+                  이번 주 길드별 낚시/채굴 합산 점수. 매주 초기화됩니다.
+                </div>
+                {guildCompetition.length === 0
+                  ? <div className="empty">이번 주 기록이 없습니다.</div>
+                  : guildCompetition.map((entry, i) => (
+                    <div key={entry.guildId} className="rod-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 16, color: i === 0 ? '#ffcc44' : i === 1 ? '#cccccc' : i === 2 ? '#cc8844' : '#aaa' }}>
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}
+                        </span>
+                        <span style={{ fontWeight: entry.guildId === myGuildId ? 800 : 400, color: entry.guildId === myGuildId ? '#88ccff' : '#fff' }}>
+                          🏰 {entry.guildId}
+                        </span>
+                      </div>
+                      <span style={{ color: '#ffcc44', fontWeight: 700 }}>{entry.score.toLocaleString()}점</span>
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Bank modal */}
+      {showBank && (() => {
+        const bankNpcAff = gs.npcAffinity?.은행원 ?? 0;
+        const bankRate = 0.02 + (bankNpcAff >= 50 ? 0.01 : bankNpcAff >= 20 ? 0.005 : 0);
+        const bankDep = gs.bankDeposit ?? 0;
+        return (
+        <div className="overlay" onClick={() => setShowBank(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()}>
+            <div className="panel-head">
+              <span>🏦 은행</span>
+              <button tabIndex={-1} onClick={() => setShowBank(false)}>✕</button>
+            </div>
+            <div className="section">
+              <div className="section-title">예금 현황</div>
+              <div className="rod-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, color: '#ffcc44' }}>💰 지갑</span>
+                  <span style={{ color: '#ffcc44' }}>{gs.money.toLocaleString()}G</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, color: '#44ccff' }}>🏦 예금</span>
+                  <span style={{ color: '#44ccff' }}>{bankDep.toLocaleString()}G</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
+                  이자율: {(bankRate * 100).toFixed(1)}%/시간 (최대 24시간 소급 적용)
+                  {bankNpcAff >= 20 && <span style={{ color: '#66ddbb', marginLeft: 6 }}>+은행원 보너스</span>}
+                  {gs.bankLastInterest && (
+                    <span style={{ marginLeft: 8 }}>
+                      · 다음 이자: {Math.max(0, 60 - Math.floor((Date.now() - gs.bankLastInterest) / 60000))}분 후
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="section">
+              <div className="section-title">입금 / 출금</div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  type="number" min={1} placeholder="금액 입력"
+                  value={bankInput}
+                  onChange={e => setBankInput(e.target.value)}
+                  style={{ flex: 1, padding: '4px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(0,0,0,0.3)', color: '#fff', fontSize: 13 }}
+                />
+                <button tabIndex={-1} className="btn-buy" onClick={() => {
+                  const amt = Math.floor(Number(bankInput));
+                  if (!amt || amt <= 0) { addMsg('금액을 입력하세요.', 'error'); return; }
+                  if (amt > gs.money) { addMsg('💰 지갑 잔액 부족', 'error'); return; }
+                  const nowTs = Date.now();
+                  setGs(prev => {
+                    const prevStats = prev.achStats ?? {};
+                    const updatedStats = { ...prevStats, totalDeposited: (prevStats.totalDeposited ?? 0) + amt };
+                    setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                    return {
+                      ...prev,
+                      money: prev.money - amt,
+                      bankDeposit: (prev.bankDeposit ?? 0) + amt,
+                      bankLastInterest: prev.bankLastInterest ?? nowTs,
+                      achStats: updatedStats,
+                    };
+                  });
+                  advanceQuest('deposit', amt);
+                  addMsg(`🏦 ${amt.toLocaleString()}G 입금 완료!`, 'catch');
+                  setBankInput('');
+                }}>입금</button>
+                <button tabIndex={-1} className="btn-eq" onClick={() => {
+                  const amt = Math.floor(Number(bankInput));
+                  if (!amt || amt <= 0) { addMsg('금액을 입력하세요.', 'error'); return; }
+                  if (amt > (gs.bankDeposit ?? 0)) { addMsg('🏦 예금 잔액 부족', 'error'); return; }
+                  setGs(prev => ({
+                    ...prev,
+                    money: prev.money + amt,
+                    bankDeposit: (prev.bankDeposit ?? 0) - amt,
+                  }));
+                  addMsg(`🏦 ${amt.toLocaleString()}G 출금 완료!`, 'catch');
+                  setBankInput('');
+                }}>출금</button>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button tabIndex={-1} className="btn-dis" style={{ fontSize: 11 }}
+                  onClick={() => setBankInput(String(gs.money))}>전액 입금</button>
+                <button tabIndex={-1} className="btn-dis" style={{ fontSize: 11 }}
+                  onClick={() => setBankInput(String(gs.bankDeposit ?? 0))}>전액 출금</button>
+              </div>
+            </div>
+            {bankDep > 0 && (
+              <div className="section">
+                <div className="section-title">이자 계산</div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                  1시간 후 예상 이자: +{Math.floor(bankDep * bankRate)}G<br />
+                  24시간 후 누적 이자: +{Math.floor(bankDep * bankRate * 24)}G
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        );
+      })()}
+
+    </>
+  );
+}
