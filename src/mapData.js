@@ -215,21 +215,21 @@ export const DOOR_TRIGGERS = [
     label: '⛏ 광산 입장',
     wx: 47.5 * TILE_SIZE, wy: 8.5 * TILE_SIZE,
     range: 2.2 * TILE_SIZE,
-    exitWx: 47.5 * TILE_SIZE, exitWy: 10.5 * TILE_SIZE,
+    exitWx: 47.5 * TILE_SIZE, exitWy: 11 * TILE_SIZE,
   },
   {
     id: 'bank',
     label: '🏦 은행 입장',
     wx: 4.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
     range: 1.8 * TILE_SIZE,
-    exitWx: 4.5 * TILE_SIZE, exitWy: 19 * TILE_SIZE,
+    exitWx: 4.5 * TILE_SIZE, exitWy: 20 * TILE_SIZE,
   },
   {
     id: 'guild',
     label: '🏰 길드 회관 입장',
     wx: 14.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
     range: 1.8 * TILE_SIZE,
-    exitWx: 14.5 * TILE_SIZE, exitWy: 19 * TILE_SIZE,
+    exitWx: 14.5 * TILE_SIZE, exitWy: 20 * TILE_SIZE,
   },
 ];
 
