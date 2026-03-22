@@ -17,6 +17,8 @@ const COMMAND_SUGGESTIONS = [
   { cmd: '!판매', desc: '물고기 전체 판매' },
   { cmd: '!방류', desc: '물고기 전체 방류 (생태계 기여)' },
   { cmd: '!여관휴식', desc: '여관 특별 휴식 (500G)' },
+  { cmd: '!우편함', desc: '플레이어 우편함 열기' },
+  { cmd: '!시즌리그', desc: '이번 달 낚시 시즌 리그 순위' },
 ];
 
 const EMOJI_SUGGESTIONS = [
@@ -188,7 +190,7 @@ export default function Chat({ messages, onCommand }) {
       <div className="chat-header">채팅 / 명령어</div>
       <div className="chat-messages" ref={listRef}>
         {messages.map((msg, i) => (
-          <div key={i} className={`chat-msg chat-${msg.type}`}>{msg.text}</div>
+          <div key={i} className={`chat-msg chat-${msg.type}`}>{typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text)}</div>
         ))}
       </div>
 

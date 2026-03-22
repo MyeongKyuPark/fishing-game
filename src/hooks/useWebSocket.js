@@ -13,7 +13,7 @@ import { subscribeGuildList, subscribeGuildCompetition, subscribeGuild, subscrib
 import { subscribeMarket, subscribeMyListings } from '../marketData';
 import { subscribeAnnouncements, subscribeActiveServerEvent, subscribeServerStats,
   subscribeTournament, subscribeServerQuest, subscribeServerBoss,
-  savePlayerTitle, broadcastAnnouncement } from '../ranking';
+  savePlayerTitle, broadcastAnnouncement, subscribeSeasonRankings } from '../ranking';
 import { STORY_CHAPTERS } from './useGameState';
 
 export function useWebSocket(params) {
@@ -26,7 +26,7 @@ export function useWebSocket(params) {
     // setters
     setGuildList, setGuildCompetition, setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
     setMarketListings, setMyListings, setServerAnnouncements, setServerEvent, setServerQuest,
-    setServerBoss, setTournamentRanking, setServerStats, setFishSurgeEvent, setPartyMessages,
+    setServerBoss, setTournamentRanking, setSeasonRanking, setServerStats, setFishSurgeEvent, setPartyMessages,
     setPendingInvite, setGs, setWeather, setIsOnline, setShowAnnounce,
     // callbacks
     addMsg,
@@ -264,6 +264,12 @@ export function useWebSocket(params) {
   useEffect(() => {
     if (!nickname) return;
     return subscribeTournament(setTournamentRanking);
+  }, [nickname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Monthly season league ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!nickname) return;
+    return subscribeSeasonRankings(setSeasonRanking);
   }, [nickname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Server cooperative quest ──────────────────────────────────────────────

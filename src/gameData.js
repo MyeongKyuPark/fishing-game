@@ -64,6 +64,9 @@ export const FISH = {
   // Ability 70+ (추가)
   빙어:       { minSz: 8,  maxSz: 25,  price: 220,  rarity: '보통', reqSeason: '겨울얼음낚시' }, // 겨울 전용
   불사조고기: { minSz: 40, maxSz: 120, price: 5000, rarity: '신화' },
+  // 심해 원정대 전용 초전설 어종 (파티 3명+ 심해 입장 시 출현)
+  크라켄:     { minSz: 200, maxSz: 800, price: 50000, rarity: '신화', bossOnly: true },
+  해룡:       { minSz: 150, maxSz: 600, price: 80000, rarity: '신화', bossOnly: true },
   // 계절 한정 어종 (봄/여름/가을/겨울 전용 — 해당 시즌 외 미등장)
   벚꽃붕어:   { minSz: 12, maxSz: 40,  price: 520,  rarity: '희귀', reqSeason: '봄꽃축제' },
   불꽃송어:   { minSz: 35, maxSz: 90,  price: 1100, rarity: '전설', reqSeason: '여름낚시대회' },

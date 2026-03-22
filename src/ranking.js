@@ -245,6 +245,43 @@ export function subscribeTournament(callback) {
   }, () => callback([]));
 }
 
+// ── Season Rankings (낚시 시즌 리그) ──────────────────────────────────────────
+
+/** Returns "YYYY-MM" month key for the current season league */
+export function getSeasonKey(now = Date.now()) {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Submit or update a player's season score (total fish caught this month) */
+export async function submitSeasonScore(nickname, fishCaught) {
+  const season = getSeasonKey();
+  const docId = `${season}_${encodeURIComponent(nickname)}`;
+  try {
+    await runTransaction(db, async (tx) => {
+      const ref = doc(db, 'season_rankings', docId);
+      const snap = await tx.get(ref);
+      if (!snap.exists() || snap.data().fishCaught < fishCaught) {
+        tx.set(ref, { nickname, fishCaught, season, updatedAt: serverTimestamp() });
+      }
+    });
+  } catch (e) { console.warn('season score submit failed', e); }
+}
+
+/** Subscribe to top 20 season rankings for the current month */
+export function subscribeSeasonRankings(callback) {
+  const season = getSeasonKey();
+  const q = query(
+    collection(db, 'season_rankings'),
+    where('season', '==', season),
+    orderBy('fishCaught', 'desc'),
+    limit(20),
+  );
+  return onSnapshot(q, snap => {
+    callback(snap.docs.map(d => d.data()));
+  }, () => callback([]));
+}
+
 // ── Server Quest (공동 퀘스트) ────────────────────────────────────────────────
 
 /** Increment shared server quest progress */
@@ -320,6 +357,60 @@ export async function fetchCottage(nickname) {
     const snap = await getDoc(doc(db, 'cottages', encodeURIComponent(nickname)));
     return snap.exists() ? snap.data() : null;
   } catch (e) { console.warn('cottage fetch failed', e); return null; }
+}
+
+// ── Cottage Guestbook ─────────────────────────────────────────────────────────
+/** Add a guestbook entry to another player's cottage (max 20 entries, oldest removed) */
+export async function addGuestbookEntry(targetNickname, fromNickname, message) {
+  try {
+    const ref = doc(db, 'cottage_guestbooks', encodeURIComponent(targetNickname));
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const existing = snap.exists() ? (snap.data().entries ?? []) : [];
+      const newEntry = { from: fromNickname, message: message.slice(0, 100), createdAt: Date.now() };
+      // Keep max 20 entries (drop oldest)
+      const updated = [...existing, newEntry].slice(-20);
+      tx.set(ref, { entries: updated }, { merge: false });
+    });
+  } catch (e) { console.warn('guestbook add failed', e); }
+}
+
+/** Fetch guestbook entries for a player's cottage */
+export async function fetchGuestbook(nickname) {
+  try {
+    const snap = await getDoc(doc(db, 'cottage_guestbooks', encodeURIComponent(nickname)));
+    return snap.exists() ? (snap.data().entries ?? []) : [];
+  } catch (e) { console.warn('guestbook fetch failed', e); return []; }
+}
+
+// ── Player Mailbox ────────────────────────────────────────────────────────────
+/** Send a mail to another player (max 10 mails in inbox, oldest removed) */
+export async function sendPlayerMail(toNickname, fromNickname, message, gold = 0) {
+  try {
+    const ref = doc(db, 'player_mailbox', encodeURIComponent(toNickname));
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const existing = snap.exists() ? (snap.data().mails ?? []) : [];
+      const newMail = { from: fromNickname, message: message.slice(0, 200), gold, sentAt: Date.now(), read: false };
+      const updated = [...existing, newMail].slice(-10);
+      tx.set(ref, { mails: updated }, { merge: false });
+    });
+  } catch (e) { console.warn('send mail failed', e); }
+}
+
+/** Fetch mailbox for a player */
+export async function fetchMailbox(nickname) {
+  try {
+    const snap = await getDoc(doc(db, 'player_mailbox', encodeURIComponent(nickname)));
+    return snap.exists() ? (snap.data().mails ?? []) : [];
+  } catch (e) { console.warn('fetch mailbox failed', e); return []; }
+}
+
+/** Mark all mails as read / delete a specific mail */
+export async function clearMailbox(nickname) {
+  try {
+    await setDoc(doc(db, 'player_mailbox', encodeURIComponent(nickname)), { mails: [] }, { merge: false });
+  } catch (e) { console.warn('clear mailbox failed', e); }
 }
 
 /** Increment visit counter for a cottage */

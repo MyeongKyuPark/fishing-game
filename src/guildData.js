@@ -158,3 +158,89 @@ export function subscribeGuildCompetition(callback) {
     callback(snap.docs.map(d => d.data()));
   }, () => callback([]));
 }
+
+// ── Guild Level & Warehouse ────────────────────────────────────────────────────
+
+/**
+ * Guild level thresholds (cumulative XP needed to reach level N)
+ * Level 1: 0, Level 2: 100, Level 3: 300, Level 4: 700, Level 5: 1500
+ */
+export const GUILD_LEVEL_XP = [0, 100, 300, 700, 1500];
+
+/** Max warehouse slots per guild level (index = level - 1) */
+export const GUILD_WAREHOUSE_SLOTS = [4, 8, 12, 16, 20];
+
+/** Guild level bonuses per level (index = level - 1) */
+export const GUILD_LEVEL_BONUSES = [
+  { label: '창고 4슬롯' },
+  { label: '창고 8슬롯 + 판매가 +3%' },
+  { label: '창고 12슬롯 + 낚시 속도 +5%' },
+  { label: '창고 16슬롯 + 채굴 속도 +5%' },
+  { label: '창고 20슬롯 + 모든 보너스 +5% 추가' },
+];
+
+/** Contribute XP to guild (increments xp and auto-calculates level) */
+export async function contributeGuildXP(guildId, amount = 1) {
+  const ref = doc(db, 'guilds', guildId);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const newXP = (data.xp ?? 0) + amount;
+      let level = 1;
+      for (let i = GUILD_LEVEL_XP.length - 1; i >= 0; i--) {
+        if (newXP >= GUILD_LEVEL_XP[i]) { level = i + 1; break; }
+      }
+      tx.update(ref, { xp: newXP, level });
+    });
+  } catch (e) { console.warn('guild xp failed', e); }
+}
+
+/** Fetch guild warehouse items */
+export async function fetchGuildWarehouse(guildId) {
+  try {
+    const snap = await getDoc(doc(db, 'guild_warehouse', guildId));
+    return snap.exists() ? (snap.data().items ?? []) : [];
+  } catch (e) { console.warn('warehouse fetch failed', e); return []; }
+}
+
+/** Add item to guild warehouse (max slots based on guild level) */
+export async function addToGuildWarehouse(guildId, guildLevel, fromNickname, item) {
+  const maxSlots = GUILD_WAREHOUSE_SLOTS[Math.min(guildLevel - 1, GUILD_WAREHOUSE_SLOTS.length - 1)] ?? 4;
+  const ref = doc(db, 'guild_warehouse', guildId);
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      const existing = snap.exists() ? (snap.data().items ?? []) : [];
+      if (existing.length >= maxSlots) throw new Error('창고가 가득 찼습니다.');
+      const newItem = { ...item, addedBy: fromNickname, addedAt: Date.now() };
+      tx.set(ref, { items: [...existing, newItem] }, { merge: false });
+    });
+    return { ok: true };
+  } catch (e) { return { ok: false, err: e.message }; }
+}
+
+/** Remove item from guild warehouse by index (take item) */
+export async function removeFromGuildWarehouse(guildId, itemIndex) {
+  const ref = doc(db, 'guild_warehouse', guildId);
+  try {
+    let removed = null;
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      const items = [...(snap.data().items ?? [])];
+      if (itemIndex < 0 || itemIndex >= items.length) return;
+      [removed] = items.splice(itemIndex, 1);
+      tx.set(ref, { items }, { merge: false });
+    });
+    return { ok: true, item: removed };
+  } catch (e) { return { ok: false, err: e.message }; }
+}
+
+/** Subscribe to guild warehouse */
+export function subscribeGuildWarehouse(guildId, callback) {
+  return onSnapshot(doc(db, 'guild_warehouse', guildId), snap => {
+    callback(snap.exists() ? (snap.data().items ?? []) : []);
+  }, () => callback([]));
+}

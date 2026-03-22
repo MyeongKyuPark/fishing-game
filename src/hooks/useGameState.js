@@ -154,6 +154,8 @@ export const DEFAULT_STATE = {
   deliveryDate: '',     // last order generation date
   // Phase 8-2: 미끼 DIY
   diyBaitLog: {},       // { baitKey: n }
+  // Phase 8-2: 레시피 발견 시스템
+  discoveredRecipes: [], // [dishKey, ...] — 발견된 요리 레시피 목록
 };
 
 export const SAVE_VERSION = 2;
@@ -283,6 +285,7 @@ export function loadSave(nickname) {
       deliveryOrders: s.deliveryOrders ?? [],
       deliveryDate: s.deliveryDate ?? '',
       diyBaitLog: s.diyBaitLog ?? {},
+      discoveredRecipes: s.discoveredRecipes ?? [],
     };
   } catch { return DEFAULT_STATE; }
 }

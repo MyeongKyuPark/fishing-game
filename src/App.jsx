@@ -11,7 +11,7 @@ import RankSidebar from './RankSidebar';
 import ChannelLobby from './ChannelLobby';
 import { saveFishRecord, saveOverallFishRecord, broadcastAnnouncement, incrementServerStat,
   submitTournamentScore, incrementServerQuestProgress,
-  saveGoldRecord, saveAbilityRecord, saveAchievementRecord } from './ranking';
+  saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore } from './ranking';
 import { sendPartyInvite, joinParty, leaveParty, sendPartyMessage } from './multiplay';
 import { JOBS, getAvailableJobs } from './jobData';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
@@ -189,6 +189,7 @@ export default function App() {
   const [showTournament, setShowTournament] = useState(false);
   const [serverQuest, setServerQuest] = useState({});
   const tournamentScoreRef = useRef(0); // local fish count this week
+  const seasonScoreRef = useRef(0); // local fish count this month (season league)
   const [resistanceGame, setResistanceGame] = useState(null); // { active, name, fd, size, finalPrice, rodKey, seaMsg, id }
   const [miningMinigame, setMiningMinigame] = useState(null); // { oreName } — precision mining
 
@@ -246,6 +247,8 @@ export default function App() {
   const [showAppearance, setShowAppearance] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCottage, setShowCottage] = useState(false);
+  const [showMailbox, setShowMailbox] = useState(false);
+  const [showSeasonLeague, setShowSeasonLeague] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0); // 0=hidden, 1-4=steps
   const [catchPopup, setCatchPopup] = useState(null); // { name, size, price, rarity }
@@ -355,6 +358,28 @@ export default function App() {
     const t = setTimeout(() => setShowAnnounce(false), 5000);
     return () => clearTimeout(t);
   }, [serverAnnouncements]);
+
+  // Schedule midnight push notification while game is open
+  useEffect(() => {
+    if (!nickname) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const scheduleNext = () => {
+      const now = new Date();
+      const midnight = new Date(now);
+      midnight.setHours(24, 0, 5, 0); // next midnight + 5s
+      const msUntil = midnight - now;
+      return setTimeout(() => {
+        try {
+          new Notification('Tidehaven 🎣 일일 퀘스트 초기화!', {
+            body: '새로운 일일 퀘스트가 준비되었습니다. 지금 바로 확인해보세요!',
+            icon: '/vite.svg',
+          });
+        } catch { /* ignore */ }
+      }, msUntil);
+    };
+    const t = scheduleNext();
+    return () => clearTimeout(t);
+  }, [nickname]);
 
   // Save to localStorage keyed by nickname
   useEffect(() => {
@@ -665,6 +690,16 @@ export default function App() {
       table = applyBoosts(table, { 희귀: 1 + partyRareBoost, 전설: 1 + partyRareBoost * 1.5, 신화: 1 + partyRareBoost * 2 });
     }
 
+    // 심해 원정대: party 3+ in 심해 zone → add boss fish (크라켄/해룡)
+    if (zone === '심해' && partyCount >= 2) {
+      // partyCount is OTHER players, so total = partyCount + 1 (self)
+      const totalParty = partyCount + 1;
+      if (totalParty >= 3) {
+        const bossWeight = Math.min(5 + (totalParty - 3) * 3, 15); // 5 at 3p, 8 at 4p, 11+ at 5p+
+        table = [...table, { f: '크라켄', w: bossWeight }, { f: '해룡', w: Math.max(1, bossWeight - 2) }];
+      }
+    }
+
     // Weather fish multiplier embedded in weight boost
     const wMult = weatherRef.current?.fishMult ?? 1.0;
     if (wMult !== 1.0) table = table.map(e => ({ ...e, w: e.w * wMult }));
@@ -787,6 +822,14 @@ export default function App() {
         setTimeout(() => addMsgRef.current('💬 수연: "세상에... 용고기 요리는 신에게 바치는 음식이었다고 전해져요!"', 'catch'), 2200);
         setTimeout(() => addMsgRef.current('💬 미나: "전설에 의하면 용고기를 잡은 낚시꾼은 바다의 왕이 된다고 해요..."', 'catch'), 3800);
         setTimeout(() => addMsgRef.current('🌟 타이드헤이븐 역사에 길이 남을 전설의 순간입니다!', 'catch'), 5400);
+      } else if (name === '크라켄') {
+        setTimeout(() => addMsgRef.current('🦑 [심해 원정대] 크라켄!! 심해의 괴물이 원정대의 힘으로 포획되었습니다!', 'catch'), 600);
+        setTimeout(() => addMsgRef.current('💬 민준: "믿을 수 없어요... 파티의 힘이 심해 전설을 불렀군요!"', 'catch'), 2200);
+        setTimeout(() => addMsgRef.current('🌊 타이드헤이븐 역사상 최초의 크라켄 포획! 원정대의 위업입니다!', 'catch'), 3800);
+      } else if (name === '해룡') {
+        setTimeout(() => addMsgRef.current('🐲 [심해 원정대] 해룡!! 심해를 지배하는 전설의 존재와 원정대가 맞닥뜨렸습니다!', 'catch'), 600);
+        setTimeout(() => addMsgRef.current('💬 철수: "이건... 광산 벽화에서 본 해룡이에요! 실제로 존재했군요!"', 'catch'), 2200);
+        setTimeout(() => addMsgRef.current('🌟 원정대의 승리! 해룡이 낚싯줄에 굴복했습니다!', 'catch'), 3800);
       }
       setGs(prev => {
         const entry = { name, size, rarity: fd.rarity, caughtAt: Date.now() };
@@ -840,6 +883,8 @@ export default function App() {
       const rarityBonus = TOURNAMENT_RARITY_BONUS[fd.rarity] ?? 0;
       tournamentScoreRef.current = Math.round(tournamentScoreRef.current + size + rarityBonus);
       submitTournamentScore(nicknameRef.current, tournamentScoreRef.current);
+      seasonScoreRef.current += 1;
+      submitSeasonScore(nicknameRef.current, seasonScoreRef.current);
     }
     // Server cooperative quest: contribute fish caught
     incrementServerQuestProgress('fishCaught');
@@ -914,8 +959,15 @@ export default function App() {
     if (nicknameRef.current) { saveFishRecord(nicknameRef.current, name, size); saveOverallFishRecord(nicknameRef.current, name, size, fd.rarity); }
     broadcastAnnouncement(`${nicknameRef.current}님이 ${size}cm ${name}을(를) 낚았습니다! ${fd.rarity === '신화' ? '🌟 신화어 출현!' : '⭐ 전설어!'}`);
     if (gameRef.current) gameRef.current.rareEffect = { age: 0, color: fd.rarity === '신화' ? '#ff88ff' : '#ffdd44', rarity: fd.rarity, fishName: name, size };
+    if (name === '크라켄') {
+      setTimeout(() => addMsg('🦑 [심해 원정대] 크라켄!! 심해의 괴물이 원정대의 힘으로 포획되었습니다!', 'catch'), 600);
+      setTimeout(() => addMsg('🌊 타이드헤이븐 역사상 최초의 크라켄 포획! 원정대의 위업입니다!', 'catch'), 2200);
+    } else if (name === '해룡') {
+      setTimeout(() => addMsg('🐲 [심해 원정대] 해룡!! 심해를 지배하는 전설의 존재와 원정대가 맞닥뜨렸습니다!', 'catch'), 600);
+      setTimeout(() => addMsg('🌟 원정대의 승리! 해룡이 낚싯줄에 굴복했습니다!', 'catch'), 2200);
+    }
     incrementServerStat('totalFishCaught');
-    if (nicknameRef.current) { const rb = TOURNAMENT_RARITY_BONUS[fd.rarity] ?? 0; tournamentScoreRef.current = Math.round(tournamentScoreRef.current + size + rb); submitTournamentScore(nicknameRef.current, tournamentScoreRef.current); }
+    if (nicknameRef.current) { const rb = TOURNAMENT_RARITY_BONUS[fd.rarity] ?? 0; tournamentScoreRef.current = Math.round(tournamentScoreRef.current + size + rb); submitTournamentScore(nicknameRef.current, tournamentScoreRef.current); seasonScoreRef.current += 1; submitSeasonScore(nicknameRef.current, seasonScoreRef.current); }
     incrementServerQuestProgress('fishCaught');
     if (myGuildIdRef.current) {
       contributeGuildQuest(myGuildIdRef.current, 'fishCaught', 1);
@@ -1076,6 +1128,8 @@ export default function App() {
        '!상점  – 상점 열기 (상점 건물 근처)',
        '!판매  – 물고기 전체 판매 (상점 근처)',
        '!인벤  – 인벤토리 열기/닫기',
+       '!우편함 – 플레이어 우편함 열기',
+       '!시즌리그 – 이번 달 낚시 시즌 리그 순위 보기',
        '!랭킹  – 랭킹 보기',
        '!토너먼트 – 주간 낚시 토너먼트 순위 보기',
        '!스탯  – 캐릭터 스탯 보기',
@@ -1098,6 +1152,16 @@ export default function App() {
 
     if (cmd === '!인벤' || cmd === '!인벤토리') {
       setShowInv(v => !v);
+      return;
+    }
+
+    if (cmd === '!우편함') {
+      setShowMailbox(v => !v);
+      return;
+    }
+
+    if (cmd === '!시즌리그') {
+      setShowSeasonLeague(v => !v);
       return;
     }
 
@@ -1212,7 +1276,14 @@ export default function App() {
         player.activityDuration = randInt(mn, mx);
         player.activityProgress = 0;
         setActivity('fishing');
-        addMsg(`🌊 ${gear.name}으로 해상 낚시 시작! (희귀도 보너스 ×${gear.rareMult})`);
+        const fishZone = (s.marineGear === '스쿠버다이빙세트' && (s.abilities?.낚시?.value ?? 0) >= 50) ? '심해' : '바다';
+        const totalPartyNow = (partyMembersRef.current?.length ?? 0) + 1;
+        if (fishZone === '심해' && totalPartyNow >= 3) {
+          addMsg(`🦑 심해 원정대 발동! 파티 ${totalPartyNow}명이 심해에 입장합니다. 크라켄/해룡 출현 가능!`, 'catch');
+          broadcastAnnouncement(`${nicknameRef.current}의 파티 ${totalPartyNow}명이 심해 원정대를 시작했습니다! 🦑`);
+        } else {
+          addMsg(`🌊 ${gear.name}으로 해상 낚시 시작! (희귀도 보너스 ×${gear.rareMult})`);
+        }
         playFishingStart();
         return;
       }
@@ -1530,6 +1601,17 @@ export default function App() {
       const totalHarvested = Object.values(gained).reduce((s, n) => s + n, 0);
       const summary = Object.entries(gained).map(([k, v]) => `${k} ${v}개`).join(', ');
       addMsg(`🌾 수확 완료! ${summary}`, 'catch');
+      // Auto-match: notify if any crop delivery orders can now be fulfilled
+      const currentOrders = stateRef.current?.deliveryOrders ?? [];
+      const currentCrop = { ...(stateRef.current?.cropInventory ?? {}) };
+      for (const [item, qty] of Object.entries(gained)) currentCrop[item] = (currentCrop[item] ?? 0) + qty;
+      const matchedOrders = currentOrders.filter(o =>
+        !o.completed && o.itemType === 'crop' && (currentCrop[o.item] ?? 0) >= o.qty
+      );
+      if (matchedOrders.length > 0) {
+        const names = matchedOrders.map(o => `${o.npc}: ${o.item} ${o.qty}개`).join(', ');
+        addMsg(`📦 납품 가능: ${names} (상점→인벤 탭에서 납품)`, 'info');
+      }
       grantAbility('채집', 0.3 * ready.length);
       advanceQuest('farm', totalHarvested);
       setGs(prev => {
@@ -1545,11 +1627,42 @@ export default function App() {
     }
 
     if (cmd === '!요리책') {
-      const lines = Object.entries(DISH_RECIPES).map(([key, r]) =>
-        `${r.icon} ${r.name}: ${r.desc} → ${r.price}G`
-      );
-      addMsg('🍽 특별 요리 레시피 (!요리 [요리명]):');
-      lines.forEach(l => addMsg(l));
+      const discovered = stateRef.current?.discoveredRecipes ?? [];
+      if (discovered.length === 0) {
+        addMsg('📖 아직 발견한 레시피가 없습니다. !조합 [재료1] [재료2]... 으로 실험해보세요!', 'info');
+        return;
+      }
+      addMsg(`🍽 발견한 레시피 (${discovered.length}/${Object.keys(DISH_RECIPES).length}종):`);
+      discovered.forEach(key => {
+        const r = DISH_RECIPES[key];
+        if (r) addMsg(`${r.icon} ${r.name}: ${r.desc} → ${r.price}G`);
+      });
+      return;
+    }
+
+    if (input.trim().startsWith('!조합 ')) {
+      // Recipe discovery by ingredient experimentation
+      const ingredientStr = input.trim().slice(4).trim();
+      const ingredients = ingredientStr.split(/\s+/);
+      const discovered = stateRef.current?.discoveredRecipes ?? [];
+      // Find any undiscovered recipe whose required ingredients all appear in the provided list
+      const found = Object.entries(DISH_RECIPES).find(([key, r]) => {
+        if (discovered.includes(key)) return false;
+        const allCrops = Object.keys(r.crops ?? {});
+        const fishName = r.fish?.name ?? null;
+        const allRequired = [...allCrops, ...(fishName ? [fishName] : [])];
+        return allRequired.length > 0 && allRequired.every(ing => ingredients.includes(ing));
+      });
+      if (found) {
+        const [key, r] = found;
+        setGs(prev => ({
+          ...prev,
+          discoveredRecipes: prev.discoveredRecipes.includes(key) ? prev.discoveredRecipes : [...prev.discoveredRecipes, key],
+        }));
+        addMsg(`✨ 새 레시피 발견! ${r.icon} ${r.name} — ${r.desc}`, 'catch');
+      } else {
+        addMsg('🔍 조합에 맞는 레시피를 찾지 못했습니다. 다른 재료를 시도해보세요!', 'info');
+      }
       return;
     }
 
@@ -1605,7 +1718,10 @@ export default function App() {
         const dishSpecies = Object.keys(newDishLog).filter(k => newDishLog[k] > 0).length;
         const updatedStats = { ...prevStats, dishCooked: (prevStats.dishCooked ?? 0) + 1, cookCount: (prevStats.cookCount ?? 0) + 1, dishSpecies };
         setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
-        return { ...prev, cropInventory: newCrops, fishInventory: newFishInv, money: prev.money + dishEarned, achStats: updatedStats, dishLog: newDishLog };
+        const newDiscovered = (prev.discoveredRecipes ?? []).includes(dishKey)
+          ? prev.discoveredRecipes
+          : [...(prev.discoveredRecipes ?? []), dishKey];
+        return { ...prev, cropInventory: newCrops, fishInventory: newFishInv, money: prev.money + dishEarned, achStats: updatedStats, dishLog: newDishLog, discoveredRecipes: newDiscovered };
       });
       addMsg(`${recipe.icon} ${recipe.name} 완성! +${dishEarned}G${cookedDouble ? ' 🍽 제자 보너스 2배!' : ''}`, 'catch');
       grantAbility('요리', 5);
@@ -2165,14 +2281,14 @@ export default function App() {
 
   // ── Gold float effect on gold change ─────────────────────────────────────
   useEffect(() => {
-    if (prevGoldRef.current === null) { prevGoldRef.current = gs.gold; return; }
-    const diff = gs.gold - prevGoldRef.current;
-    prevGoldRef.current = gs.gold;
+    if (prevGoldRef.current === null) { prevGoldRef.current = gs.money; return; }
+    const diff = gs.money - prevGoldRef.current;
+    prevGoldRef.current = gs.money;
     if (diff === 0) return;
     const id = Date.now() + Math.random();
     setGoldFloats(prev => [...prev, { id, amount: diff }]);
     setTimeout(() => setGoldFloats(prev => prev.filter(f => f.id !== id)), 1400);
-  }, [gs.gold]);
+  }, [gs.money]);
 
 
   return (
@@ -2453,6 +2569,10 @@ export default function App() {
         setShowSettings={setShowSettings}
         showCottage={showCottage}
         setShowCottage={setShowCottage}
+        showMailbox={showMailbox}
+        setShowMailbox={setShowMailbox}
+        showSeasonLeague={showSeasonLeague}
+        setShowSeasonLeague={setShowSeasonLeague}
       />
     </div>
   );

@@ -11,6 +11,15 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
     const innAff = saved.npcAffinity?.여관주인 ?? 0;
     const quests = getDailyQuests(innAff >= 50 ? 1 : 0);
     const isNewDay = saved.questDate !== today;
+    // Push notification on new day (daily quest reset)
+    if (isNewDay && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification('Tidehaven 🎣 일일 퀘스트 초기화!', {
+          body: '새로운 일일 퀘스트가 준비되었습니다. 지금 바로 확인해보세요!',
+          icon: '/vite.svg',
+        });
+      } catch { /* ignore */ }
+    }
     const questProgress = isNewDay ? {} : (saved.questProgress ?? {});
     const questClaimed = isNewDay ? {} : (saved.questClaimed ?? {});
     const base = { ...saved, dailyQuests: quests, questProgress, questClaimed, questDate: today,

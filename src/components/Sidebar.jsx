@@ -15,11 +15,14 @@ import { ACHIEVEMENTS } from '../achievementData';
 import { SEASONS, getCurrentSeason } from '../seasonData';
 import { JOBS, getAvailableJobs } from '../jobData';
 import { NPC_QUESTS } from '../npcQuestData';
-import { createGuild, joinGuild, leaveGuild, sendGuildChat } from '../guildData';
+import { createGuild, joinGuild, leaveGuild, sendGuildChat,
+  GUILD_LEVEL_XP, GUILD_WAREHOUSE_SLOTS, GUILD_LEVEL_BONUSES,
+  contributeGuildXP, fetchGuildWarehouse, addToGuildWarehouse, removeFromGuildWarehouse } from '../guildData';
 import { listItem, buyItem, cancelListing } from '../marketData';
 import Leaderboard from '../Leaderboard';
 import { rarityColor, SKIN_PRESETS } from '../hooks/useGameState';
 import CottagePanel from './CottagePanel';
+import { sendPlayerMail, fetchMailbox, clearMailbox, subscribeSeasonRankings, getSeasonKey } from '../ranking';
 
 const TOURNAMENT_PRIZES = [2000, 1000, 500]; // 1위/2위/3위 주간 보상 골드
 import { useState } from 'react';
@@ -56,6 +59,8 @@ export default function Sidebar(props) {
     miningMinigame, setMiningMinigame,
     showSettings, setShowSettings,
     showCottage, setShowCottage,
+    showMailbox, setShowMailbox,
+    showSeasonLeague, setShowSeasonLeague,
   } = props;
 
   const [invFilter, setInvFilter] = useState('전체');
@@ -909,7 +914,7 @@ export default function Sidebar(props) {
                                 물고기로 먹이주기 (!펫먹이 [물고기명]):
                               </div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {[...new Set((gs.fishInventory ?? []).map(f => f.name))].slice(0, 6).map(fname => (
+                                {[...new Set((gs.fishInventory ?? []).map(f => f.name).filter(n => typeof n === 'string'))].slice(0, 6).map(fname => (
                                   <button key={fname} className="btn-eq" style={{ fontSize: 11, padding: '2px 6px' }}
                                     onClick={() => handleCommand(`!펫먹이 ${fname}`)}>
                                     {fname} (+{Math.max(1, Math.ceil((FISH[fname]?.price ?? 20) / 40))}exp)
@@ -1610,7 +1615,21 @@ export default function Sidebar(props) {
                     {Object.entries(DISH_RECIPES).map(([key, recipe]) => {
                       const count = (gs.dishLog ?? {})[key] ?? 0;
                       const done = count > 0;
+                      const discovered = (gs.discoveredRecipes ?? []).includes(key) || done;
                       const locked = recipe.reqNpc && Object.entries(recipe.reqNpc).some(([npc, lv]) => (gs.npcAffinity?.[npc] ?? 0) < lv);
+                      if (!discovered) {
+                        return (
+                          <div key={key} className="rod-card" style={{ opacity: 0.45 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 20 }}>❓</span>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontWeight: 700, color: '#666' }}>??? 미발견 레시피</div>
+                                <div style={{ fontSize: 11, color: '#555' }}>!조합 [재료] 으로 실험해 발견하세요</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
                         <div key={key} className="rod-card" style={{ opacity: done ? 1 : 0.65, borderColor: done ? 'rgba(255,170,0,0.4)' : undefined }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2446,6 +2465,48 @@ export default function Sidebar(props) {
                 <div className="section">
                   <div className="section-title">📦 NPC 납품 주문 (일일)</div>
                   <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>매일 NPC 3종이 아이템 납품 요청. 완료 시 골드 + 친밀도 보너스</div>
+                  {(() => {
+                    // Bulk delivery button: fulfill all orders that can be completed
+                    const fulfillable = orders.filter(order => {
+                      const completed = (gs.deliveryOrders ?? []).find(o => o.id === order.id)?.completed;
+                      if (completed) return false;
+                      let have = 0;
+                      if (order.itemType === 'ore') have = (gs.oreInventory ?? {})[order.item] ?? 0;
+                      else if (order.itemType === 'herb') have = (gs.herbInventory ?? {})[order.item] ?? 0;
+                      else if (order.itemType === 'crop') have = (gs.cropInventory ?? {})[order.item] ?? 0;
+                      else if (order.itemType === 'processed') have = (gs.processedOreInventory ?? {})[order.item] ?? 0;
+                      return have >= order.qty;
+                    });
+                    if (fulfillable.length < 2) return null;
+                    return (
+                      <button tabIndex={-1} className="btn-buy" style={{ width: '100%', marginBottom: 8, fontSize: 12 }}
+                        onClick={() => {
+                          setGs(prev => {
+                            let ns = { ...prev };
+                            let totalMoney = 0;
+                            const updatedOrders = [...(prev.deliveryOrders?.length ? prev.deliveryOrders : orders)];
+                            for (const order of fulfillable) {
+                              if (order.itemType === 'ore') ns.oreInventory = { ...ns.oreInventory, [order.item]: Math.max(0, (ns.oreInventory[order.item] ?? 0) - order.qty) };
+                              else if (order.itemType === 'herb') ns.herbInventory = { ...(ns.herbInventory ?? {}), [order.item]: Math.max(0, ((ns.herbInventory ?? {})[order.item] ?? 0) - order.qty) };
+                              else if (order.itemType === 'crop') ns.cropInventory = { ...(ns.cropInventory ?? {}), [order.item]: Math.max(0, ((ns.cropInventory ?? {})[order.item] ?? 0) - order.qty) };
+                              else if (order.itemType === 'processed') ns.processedOreInventory = { ...(ns.processedOreInventory ?? {}), [order.item]: Math.max(0, ((ns.processedOreInventory ?? {})[order.item] ?? 0) - order.qty) };
+                              totalMoney += order.reward.money;
+                              ns.npcAffinity = { ...ns.npcAffinity, [order.npc]: (ns.npcAffinity?.[order.npc] ?? 0) + order.reward.affinity };
+                              const idx = updatedOrders.findIndex(o => o.id === order.id);
+                              if (idx >= 0) updatedOrders[idx] = { ...updatedOrders[idx], completed: true };
+                              else updatedOrders.push({ ...order, completed: true });
+                            }
+                            ns.money = (ns.money ?? 0) + totalMoney;
+                            ns.deliveryOrders = updatedOrders;
+                            ns.deliveryDate = today;
+                            return ns;
+                          });
+                          const totalGold = fulfillable.reduce((s, o) => s + o.reward.money, 0);
+                          addMsg(`📦 일괄 납품 완료! ${fulfillable.length}개 주문 → +${totalGold}G`, 'catch');
+                        }}
+                      >📦 일괄 납품 ({fulfillable.length}건)</button>
+                    );
+                  })()}
                   {orders.map((order) => {
                     const completed = (gs.deliveryOrders ?? []).find(o => o.id === order.id)?.completed;
                     let have = 0;
@@ -2860,7 +2921,7 @@ export default function Sidebar(props) {
 
             {/* Tab bar */}
             <div style={{ display: 'flex', gap: 4, padding: '8px 12px 0', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-              {(myGuildId ? ['내 길드', '채팅', '퀘스트', '경쟁', '목록'] : ['목록', '창설']).map(t => (
+              {(myGuildId ? ['내 길드', '채팅', '퀘스트', '경쟁', '창고', '목록'] : ['목록', '창설']).map(t => (
                 <button key={t} tabIndex={-1} onClick={() => setGuildTab(t)} style={{
                   padding: '4px 12px', borderRadius: '6px 6px 0 0', border: 'none', cursor: 'pointer', fontSize: 12,
                   background: guildTab === t ? 'rgba(255,255,255,0.15)' : 'transparent',
@@ -2968,6 +3029,28 @@ export default function Sidebar(props) {
                     setGuildTab('목록');
                   }}>탈퇴</button>
                 </div>
+                {/* Guild Level display */}
+                {guildInfo && (() => {
+                  const level = guildInfo.level ?? 1;
+                  const xp = guildInfo.xp ?? 0;
+                  const nextXP = GUILD_LEVEL_XP[level] ?? null;
+                  const bonus = GUILD_LEVEL_BONUSES[level - 1];
+                  return (
+                    <div className="rod-card" style={{ marginBottom: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700, color: '#ffd700' }}>⭐ 길드 레벨 {level}</span>
+                        <span style={{ fontSize: 11, color: '#aaa' }}>{xp.toLocaleString()} XP{nextXP ? ` / ${nextXP.toLocaleString()}` : ' (MAX)'}</span>
+                      </div>
+                      {nextXP && (
+                        <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, marginBottom: 6 }}>
+                          <div style={{ width: `${Math.min(100, (xp / nextXP) * 100)}%`, height: '100%', background: '#ffd700', borderRadius: 4 }} />
+                        </div>
+                      )}
+                      <div style={{ fontSize: 11, color: '#88ffaa' }}>보너스: {bonus?.label}</div>
+                    </div>
+                  );
+                })()}
+
                 <div className="section-title">길드원 ({guildMembers.length}명)</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {guildMembers.map(m => (
@@ -3075,6 +3158,121 @@ export default function Sidebar(props) {
             })()}
 
             {/* ── 경쟁 탭 ── */}
+            {guildTab === '창고' && myGuildId && (() => {
+              const GuildWarehouse = () => {
+                const [warehouseItems, setWarehouseItems] = useState(null);
+                const [whLoading, setWhLoading] = useState(false);
+                const [depositType, setDepositType] = useState('fish');
+                const [depositItem, setDepositItem] = useState('');
+                const [depositStatus, setDepositStatus] = useState('');
+                const guildLevel = guildInfo?.level ?? 1;
+                const maxSlots = GUILD_WAREHOUSE_SLOTS[Math.min(guildLevel - 1, 4)];
+                return (
+                  <div className="section">
+                    <div className="section-title">🏪 길드 공유 창고</div>
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 8 }}>
+                      길드 레벨 {guildLevel} · 슬롯 {warehouseItems?.length ?? '?'}/{maxSlots}
+                    </div>
+                    {warehouseItems === null ? (
+                      <button tabIndex={-1} className="btn-buy" onClick={async () => {
+                        setWhLoading(true);
+                        const items = await fetchGuildWarehouse(myGuildId);
+                        setWarehouseItems(items);
+                        setWhLoading(false);
+                      }}>{whLoading ? '불러오는 중…' : '창고 열기'}</button>
+                    ) : (
+                      <>
+                        {warehouseItems.length === 0 && <div className="empty">창고가 비어 있습니다.</div>}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
+                          {warehouseItems.map((item, i) => (
+                            <div key={i} className="rod-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <span style={{ fontWeight: 700, fontSize: 13 }}>{item.name}</span>
+                                {item.qty > 1 && <span style={{ fontSize: 11, color: '#ffcc44', marginLeft: 6 }}>×{item.qty}</span>}
+                                <div style={{ fontSize: 10, color: '#666' }}>by {item.addedBy}</div>
+                              </div>
+                              <button tabIndex={-1} className="btn-eq" style={{ fontSize: 11 }}
+                                onClick={async () => {
+                                  const result = await removeFromGuildWarehouse(myGuildId, i);
+                                  if (result.ok) {
+                                    const taken = result.item;
+                                    if (taken) {
+                                      // Add item to player inventory based on type
+                                      setGs(prev => {
+                                        if (taken.itemType === 'ore') return { ...prev, oreInventory: { ...prev.oreInventory, [taken.name]: (prev.oreInventory[taken.name] ?? 0) + (taken.qty ?? 1) } };
+                                        if (taken.itemType === 'herb') return { ...prev, herbInventory: { ...(prev.herbInventory ?? {}), [taken.name]: ((prev.herbInventory ?? {})[taken.name] ?? 0) + (taken.qty ?? 1) } };
+                                        if (taken.itemType === 'crop') return { ...prev, cropInventory: { ...(prev.cropInventory ?? {}), [taken.name]: ((prev.cropInventory ?? {})[taken.name] ?? 0) + (taken.qty ?? 1) } };
+                                        return prev;
+                                      });
+                                      addMsg(`📦 창고에서 ${taken.name} ×${taken.qty ?? 1} 가져옴`, 'catch');
+                                    }
+                                    const updated = await fetchGuildWarehouse(myGuildId);
+                                    setWarehouseItems(updated);
+                                  } else addMsg(`창고 오류: ${result.err}`, 'error');
+                                }}>
+                                가져오기
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                        {warehouseItems.length < maxSlots && (
+                          <>
+                            <div className="section-title">아이템 보관</div>
+                            <div style={{ display: 'flex', gap: 6, marginBottom: 6, flexWrap: 'wrap' }}>
+                              {['ore', 'herb', 'crop'].map(t => (
+                                <button key={t} tabIndex={-1}
+                                  onClick={() => setDepositType(t)}
+                                  className={depositType === t ? 'btn-buy' : 'btn-eq'}
+                                  style={{ fontSize: 11, padding: '3px 10px' }}>
+                                  {{ ore: '⛏ 광석', herb: '🌿 허브', crop: '🌾 작물' }[t]}
+                                </button>
+                              ))}
+                            </div>
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <input value={depositItem} onChange={e => setDepositItem(e.target.value)}
+                                placeholder={`아이템명 (보유: ${depositType === 'ore' ? Object.entries(gs.oreInventory ?? {}).filter(([,v]) => v > 0).map(([k,v]) => `${k}:${v}`).join(', ') || '없음' : '입력'})`}
+                                style={{ flex: 1, padding: '5px 8px', background: 'rgba(255,255,255,0.07)',
+                                  border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#fff', fontSize: 11 }}
+                              />
+                              <button tabIndex={-1} className="btn-buy" style={{ fontSize: 11 }}
+                                onClick={async () => {
+                                  const itemName = depositItem.trim();
+                                  if (!itemName) return;
+                                  let have = 0;
+                                  if (depositType === 'ore') have = (gs.oreInventory ?? {})[itemName] ?? 0;
+                                  else if (depositType === 'herb') have = (gs.herbInventory ?? {})[itemName] ?? 0;
+                                  else if (depositType === 'crop') have = (gs.cropInventory ?? {})[itemName] ?? 0;
+                                  if (have < 1) { setDepositStatus(`${itemName} 보유량이 부족합니다.`); return; }
+                                  const result = await addToGuildWarehouse(myGuildId, guildLevel, nickname, { name: itemName, qty: 1, itemType: depositType });
+                                  if (result.ok) {
+                                    setGs(prev => {
+                                      if (depositType === 'ore') return { ...prev, oreInventory: { ...prev.oreInventory, [itemName]: Math.max(0, (prev.oreInventory[itemName] ?? 0) - 1) } };
+                                      if (depositType === 'herb') return { ...prev, herbInventory: { ...(prev.herbInventory ?? {}), [itemName]: Math.max(0, ((prev.herbInventory ?? {})[itemName] ?? 0) - 1) } };
+                                      if (depositType === 'crop') return { ...prev, cropInventory: { ...(prev.cropInventory ?? {}), [itemName]: Math.max(0, ((prev.cropInventory ?? {})[itemName] ?? 0) - 1) } };
+                                      return prev;
+                                    });
+                                    contributeGuildXP(myGuildId, 2);
+                                    addMsg(`📦 ${itemName} × 1 을 길드 창고에 보관했습니다.`, 'catch');
+                                    const updated = await fetchGuildWarehouse(myGuildId);
+                                    setWarehouseItems(updated);
+                                    setDepositItem('');
+                                    setDepositStatus('');
+                                  } else setDepositStatus(result.err ?? '보관 실패');
+                                }}>
+                                보관 (+2 XP)
+                              </button>
+                            </div>
+                            {depositStatus && <div style={{ fontSize: 11, color: '#ff8888', marginTop: 4 }}>{depositStatus}</div>}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              };
+              return <GuildWarehouse key="warehouse" />;
+            })()}
+
             {guildTab === '경쟁' && myGuildId && (
               <div className="section">
                 <div className="section-title">🏆 길드 주간 경쟁 랭킹</div>
@@ -3399,6 +3597,45 @@ export default function Sidebar(props) {
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>세이브 파일을 로컬에 백업하고 복구합니다.</div>
               </div>
 
+              {/* Push notifications */}
+              <div className="section">
+                <div className="section-title">🔔 푸시 알림</div>
+                {(() => {
+                  const supported = 'Notification' in window;
+                  const permission = supported ? Notification.permission : 'unsupported';
+                  return (
+                    <div>
+                      <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>
+                        일일 퀘스트 초기화(자정) 시 알림을 받을 수 있습니다.
+                      </div>
+                      {!supported && (
+                        <div style={{ fontSize: 12, color: '#ff8888' }}>이 브라우저는 알림을 지원하지 않습니다.</div>
+                      )}
+                      {supported && permission === 'denied' && (
+                        <div style={{ fontSize: 12, color: '#ff8888' }}>알림이 차단되었습니다. 브라우저 설정에서 직접 허용해주세요.</div>
+                      )}
+                      {supported && permission === 'granted' && (
+                        <div style={{ fontSize: 12, color: '#88ffaa' }}>✅ 알림이 허용되어 있습니다. 자정에 일일 퀘스트 초기화 알림이 옵니다.</div>
+                      )}
+                      {supported && permission === 'default' && (
+                        <button tabIndex={-1} className="btn-buy" style={{ fontSize: 12 }}
+                          onClick={async () => {
+                            const result = await Notification.requestPermission();
+                            if (result === 'granted') {
+                              new Notification('Tidehaven 🎣', {
+                                body: '알림이 허용되었습니다! 매일 자정 일일 퀘스트 초기화 알림을 드립니다.',
+                                icon: '/vite.svg',
+                              });
+                            }
+                          }}>
+                          알림 허용하기
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* D-3: Colorblind mode */}
               <div className="section">
                 <div className="section-title">접근성</div>
@@ -3424,6 +3661,157 @@ export default function Sidebar(props) {
             </div>
           </div>
         );
+      })()}
+
+      {/* ── 우편함 패널 ── */}
+      {showMailbox && (() => {
+        const MailboxPanel = () => {
+          const [mails, setMails] = useState(null);
+          const [loading, setLoading] = useState(false);
+          const [sendTo, setSendTo] = useState('');
+          const [sendMsg, setSendMsg] = useState('');
+          const [sending, setSending] = useState(false);
+          const [sendStatus, setSendStatus] = useState('');
+          return (
+            <div className="overlay" onClick={() => setShowMailbox(false)}>
+              <div className="panel" style={{ maxWidth: 440, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                <div className="panel-head">
+                  <span>📬 우편함</span>
+                  <button tabIndex={-1} onClick={() => setShowMailbox(false)}>✕</button>
+                </div>
+                <div className="section">
+                  <div className="section-title">받은 편지함 (최대 10개)</div>
+                  {mails === null ? (
+                    <button tabIndex={-1} className="btn-buy" onClick={async () => {
+                      setLoading(true);
+                      const result = await fetchMailbox(nickname);
+                      setMails(result);
+                      setLoading(false);
+                    }}>{loading ? '불러오는 중…' : '편지 확인'}</button>
+                  ) : mails.length === 0 ? (
+                    <div className="empty">받은 편지가 없습니다.</div>
+                  ) : (
+                    <>
+                      {[...mails].reverse().map((mail, i) => (
+                        <div key={i} className="rod-card" style={{ borderColor: mail.read ? undefined : 'rgba(100,200,255,0.4)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontWeight: 700, color: '#88ccff', fontSize: 12 }}>📨 {mail.from}</span>
+                            <span style={{ fontSize: 10, color: '#666' }}>{new Date(mail.sentAt).toLocaleDateString('ko-KR')}</span>
+                          </div>
+                          <div style={{ fontSize: 13 }}>{mail.message}</div>
+                          {mail.gold > 0 && <div style={{ fontSize: 12, color: '#ffcc44', marginTop: 4 }}>💰 동봉 골드: +{mail.gold}G</div>}
+                        </div>
+                      ))}
+                      <button tabIndex={-1} className="btn-eq" style={{ marginTop: 8, fontSize: 11 }} onClick={async () => {
+                        await clearMailbox(nickname);
+                        setMails([]);
+                        addMsg('📬 우편함을 비웠습니다.', 'system');
+                      }}>우편함 비우기</button>
+                    </>
+                  )}
+                </div>
+                <div className="section">
+                  <div className="section-title">편지 보내기</div>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                    <input value={sendTo} onChange={e => setSendTo(e.target.value)} placeholder="닉네임..."
+                      style={{ width: 100, padding: '5px 8px', background: 'rgba(255,255,255,0.07)',
+                        border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#fff', fontSize: 12 }} />
+                    <input value={sendMsg} onChange={e => setSendMsg(e.target.value.slice(0, 200))} placeholder="메시지 (최대 200자)..."
+                      style={{ flex: 1, padding: '5px 8px', background: 'rgba(255,255,255,0.07)',
+                        border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#fff', fontSize: 12 }} />
+                  </div>
+                  <button tabIndex={-1} className={sendTo.trim() && sendMsg.trim() ? 'btn-buy' : 'btn-dis'}
+                    disabled={sending || !sendTo.trim() || !sendMsg.trim()}
+                    onClick={async () => {
+                      const to = sendTo.trim(); const msg = sendMsg.trim();
+                      if (!to || !msg) return;
+                      if (to === nickname) { setSendStatus('자신에게는 편지를 보낼 수 없습니다.'); return; }
+                      setSending(true); setSendStatus('');
+                      await sendPlayerMail(to, nickname, msg);
+                      setSending(false); setSendMsg('');
+                      setSendStatus(`✅ ${to}에게 편지를 보냈습니다!`);
+                    }}>
+                    {sending ? '전송 중…' : '보내기'}
+                  </button>
+                  {sendStatus && <div style={{ fontSize: 12, marginTop: 6, color: sendStatus.startsWith('✅') ? '#88ffaa' : '#ff8888' }}>{sendStatus}</div>}
+                </div>
+              </div>
+            </div>
+          );
+        };
+        return <MailboxPanel key="mailbox" />;
+      })()}
+
+      {/* ── 시즌 리그 패널 ── */}
+      {showSeasonLeague && (() => {
+        const SeasonPanel = () => {
+          const [rows, setRows] = useState(null);
+          const [loading, setLoading] = useState(false);
+          const MEDAL = ['🥇', '🥈', '🥉'];
+          const seasonLabel = (() => { const k = getSeasonKey(); const [y, m] = k.split('-'); return `${y}년 ${parseInt(m)}월`; })();
+          // Season title rewards per rank
+          const SEASON_REWARDS = [
+            { rank: 1, title: `시즌 낚시왕`, color: '#ffd700', icon: '🏆' },
+            { rank: 2, title: `시즌 고수`, color: '#c0c0c0', icon: '🥈' },
+            { rank: 3, title: `시즌 강자`, color: '#cd7f32', icon: '🥉' },
+          ];
+          return (
+            <div className="overlay" onClick={() => setShowSeasonLeague(false)}>
+              <div className="panel" onClick={e => e.stopPropagation()}>
+                <div className="panel-head">
+                  <span>🏆 낚시 시즌 리그 — {seasonLabel}</span>
+                  <button tabIndex={-1} onClick={() => setShowSeasonLeague(false)}>✕</button>
+                </div>
+                <div className="section">
+                  <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>
+                    매월 낚은 물고기 수로 순위 결정. 월말 상위 3명에게 전용 칭호 지급.
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 10 }}>
+                    {SEASON_REWARDS.map(r => (
+                      <div key={r.rank} style={{ textAlign: 'center', background: 'rgba(255,215,0,0.08)',
+                        border: '1px solid rgba(255,215,0,0.2)', borderRadius: 8, padding: '4px 10px' }}>
+                        <div style={{ fontSize: 18 }}>{r.icon}</div>
+                        <div style={{ fontSize: 11, color: r.color, fontWeight: 700 }}>{r.title}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {rows === null ? (
+                    <button tabIndex={-1} className="btn-buy" onClick={() => {
+                      setLoading(true);
+                      const unsub = subscribeSeasonRankings(data => {
+                        setRows(data); setLoading(false); unsub();
+                      });
+                    }}>{loading ? '불러오는 중…' : '순위 확인'}</button>
+                  ) : rows.length === 0 ? (
+                    <div className="empty">이번 달 참가자가 없습니다.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {rows.map((entry, idx) => {
+                        const isMe = entry.nickname === nickname;
+                        return (
+                          <div key={entry.nickname} className="rod-card"
+                            style={{ display: 'flex', alignItems: 'center', gap: 8,
+                              background: isMe ? 'rgba(100,200,255,0.1)' : undefined,
+                              borderColor: isMe ? 'rgba(100,200,255,0.4)' : undefined }}>
+                            <span style={{ fontSize: 18, minWidth: 24 }}>{MEDAL[idx] ?? `${idx + 1}`}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: isMe ? '#7df' : '#fff', fontSize: 13 }}>
+                                {entry.nickname}{isMe ? ' (나)' : ''}
+                              </div>
+                              <div style={{ fontSize: 12, color: '#aaa' }}>{(entry.fishCaught ?? 0).toLocaleString()}마리</div>
+                            </div>
+                            {idx < 3 && <span style={{ fontSize: 11, color: SEASON_REWARDS[idx].color }}>{SEASON_REWARDS[idx].title}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        };
+        return <SeasonPanel key="season" />;
       })()}
 
       {/* ── 오두막 패널 ── */}

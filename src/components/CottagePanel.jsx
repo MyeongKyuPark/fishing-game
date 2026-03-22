@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { FURNITURE, FISH } from '../gameData';
 import { ACHIEVEMENTS } from '../achievementData';
 import { rarityColor } from '../hooks/useGameState';
-import { saveCottagePublic, fetchCottage, incrementCottageVisit } from '../ranking';
+import { saveCottagePublic, fetchCottage, incrementCottageVisit, addGuestbookEntry, fetchGuestbook } from '../ranking';
 
-const TABS = ['인테리어', '상점', '트로피', '업적패', '방문'];
+const TABS = ['인테리어', '상점', '트로피', '업적패', '방문', '방명록'];
 
 export default function CottagePanel({ gs, setGs, nickname, onClose, addMsg }) {
   const [tab, setTab] = useState('인테리어');
@@ -12,6 +12,12 @@ export default function CottagePanel({ gs, setGs, nickname, onClose, addMsg }) {
   const [visitData, setVisitData] = useState(null); // fetched cottage
   const [visitLoading, setVisitLoading] = useState(false);
   const [visitError, setVisitError] = useState('');
+  const [guestbook, setGuestbook] = useState(null); // own guestbook entries
+  const [gbLoading, setGbLoading] = useState(false);
+  const [gbNoteTarget, setGbNoteTarget] = useState(''); // target nickname for leaving a note
+  const [gbNoteMsg, setGbNoteMsg] = useState('');
+  const [gbNoteSending, setGbNoteSending] = useState(false);
+  const [gbNoteStatus, setGbNoteStatus] = useState('');
 
   const cottage = gs.cottage ?? { furniture: [], achieveDisplay: [], trophyWall: [], visited: 0 };
 
@@ -373,6 +379,76 @@ export default function CottagePanel({ gs, setGs, nickname, onClose, addMsg }) {
         )}
 
         {/* ── 방문 탭 ── */}
+        {/* ── 방명록 탭 ── */}
+        {tab === '방명록' && (
+          <div className="section">
+            <div className="section-title">📝 내 오두막 방명록</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', marginBottom: 8 }}>
+              다른 플레이어가 남긴 메모를 확인하세요. (최대 20개 보관)
+            </div>
+            {guestbook === null && (
+              <button tabIndex={-1} className="btn-buy" style={{ marginBottom: 10 }}
+                onClick={async () => {
+                  setGbLoading(true);
+                  const entries = await fetchGuestbook(nickname);
+                  setGuestbook(entries);
+                  setGbLoading(false);
+                }}>
+                {gbLoading ? '불러오는 중…' : '방명록 불러오기'}
+              </button>
+            )}
+            {guestbook !== null && (
+              guestbook.length === 0
+                ? <div className="empty">아직 방명록이 비어있습니다.</div>
+                : <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[...guestbook].reverse().map((entry, i) => (
+                      <div key={i} className="rod-card">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                          <span style={{ fontWeight: 700, color: '#88ccff', fontSize: 12 }}>✍ {entry.from}</span>
+                          <span style={{ fontSize: 10, color: '#666' }}>{new Date(entry.createdAt).toLocaleDateString('ko-KR')}</span>
+                        </div>
+                        <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)' }}>{entry.message}</div>
+                      </div>
+                    ))}
+                  </div>
+            )}
+
+            <div className="section-title" style={{ marginTop: 16 }}>다른 플레이어 방명록에 글 남기기</div>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+              <input
+                value={gbNoteTarget}
+                onChange={e => setGbNoteTarget(e.target.value)}
+                placeholder="닉네임..."
+                style={{ width: 100, padding: '5px 8px', background: 'rgba(255,255,255,0.07)',
+                  border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#fff', fontSize: 12 }}
+              />
+              <input
+                value={gbNoteMsg}
+                onChange={e => setGbNoteMsg(e.target.value.slice(0, 100))}
+                placeholder="메모 (최대 100자)..."
+                style={{ flex: 1, padding: '5px 8px', background: 'rgba(255,255,255,0.07)',
+                  border: '1px solid rgba(255,255,255,0.15)', borderRadius: 6, color: '#fff', fontSize: 12 }}
+              />
+            </div>
+            <button tabIndex={-1} className={gbNoteTarget.trim() && gbNoteMsg.trim() ? 'btn-buy' : 'btn-dis'}
+              disabled={gbNoteSending || !gbNoteTarget.trim() || !gbNoteMsg.trim()}
+              onClick={async () => {
+                const target = gbNoteTarget.trim();
+                const msg = gbNoteMsg.trim();
+                if (!target || !msg) return;
+                if (target === nickname) { setGbNoteStatus('자신의 방명록에는 글을 남길 수 없습니다.'); return; }
+                setGbNoteSending(true); setGbNoteStatus('');
+                await addGuestbookEntry(target, nickname, msg);
+                setGbNoteSending(false);
+                setGbNoteMsg('');
+                setGbNoteStatus(`✅ ${target}의 방명록에 메모를 남겼습니다!`);
+              }}>
+              {gbNoteSending ? '전송 중…' : '메모 남기기'}
+            </button>
+            {gbNoteStatus && <div style={{ fontSize: 12, color: gbNoteStatus.startsWith('✅') ? '#88ffaa' : '#ff8888', marginTop: 6 }}>{gbNoteStatus}</div>}
+          </div>
+        )}
+
         {tab === '방문' && (
           <div className="section">
             <div className="section-title">다른 플레이어 오두막 방문</div>
@@ -457,6 +533,11 @@ export default function CottagePanel({ gs, setGs, nickname, onClose, addMsg }) {
                 {(visitData.furniture ?? []).length === 0 && (visitData.trophyWall ?? []).length === 0 && (visitData.achieveDisplay ?? []).length === 0 && (
                   <div className="empty">아직 아무것도 꾸미지 않은 빈 오두막입니다.</div>
                 )}
+                <button tabIndex={-1} style={{ marginTop: 10, padding: '6px 14px', borderRadius: 7, border: 'none',
+                  cursor: 'pointer', fontSize: 12, background: 'rgba(100,180,255,0.18)', color: '#88ccff' }}
+                  onClick={() => { setGbNoteTarget(visitData.nickname); setTab('방명록'); }}>
+                  ✍ 방명록 메모 남기기
+                </button>
               </div>
             )}
           </div>
