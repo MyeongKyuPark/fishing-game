@@ -868,7 +868,7 @@ export default function Sidebar(props) {
                                 물고기로 먹이주기 (!펫먹이 [물고기명]):
                               </div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                {[...new Set(gs.fishInventory ?? [])].slice(0, 6).map(fname => (
+                                {[...new Set((gs.fishInventory ?? []).map(f => f.name))].slice(0, 6).map(fname => (
                                   <button key={fname} className="btn-eq" style={{ fontSize: 11, padding: '2px 6px' }}
                                     onClick={() => handleCommand(`!펫먹이 ${fname}`)}>
                                     {fname} (+{Math.max(1, Math.ceil((FISH[fname]?.price ?? 20) / 40))}exp)

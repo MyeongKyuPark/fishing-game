@@ -1593,7 +1593,7 @@ export default function App() {
       const petInfo = PETS[activePet];
       const egg = (s.petEggs ?? {})[activePet];
       if (!egg || Date.now() < egg.hatchAt) { addMsg('펫이 아직 부화하지 않았습니다.', 'error'); return; }
-      const fishIdx = s.fishInventory.findIndex(f => f === fishName);
+      const fishIdx = s.fishInventory.findIndex(f => f.name === fishName);
       if (fishIdx === -1) { addMsg(`인벤토리에 ${fishName}이/가 없습니다.`, 'error'); return; }
       const fishInfo = FISH[fishName];
       const expGain = Math.max(1, Math.ceil((fishInfo?.price ?? 20) / 40));
@@ -1607,7 +1607,7 @@ export default function App() {
       }
       setGs(prev => {
         const newFishInv = [...prev.fishInventory];
-        newFishInv.splice(newFishInv.findIndex(f => f === fishName), 1);
+        newFishInv.splice(newFishInv.findIndex(f => f.name === fishName), 1);
         return {
           ...prev,
           fishInventory: newFishInv,
