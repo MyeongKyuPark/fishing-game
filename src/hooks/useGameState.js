@@ -132,6 +132,8 @@ export const DEFAULT_STATE = {
   ownedRodSkins: ['기본스킨'],
   spotDecos: [],
   shownChapters: [],
+  tutorialDone: false,
+  seenFeatures: [], // list of feature keys that user has seen
   // 주거 시스템
   cottage: {
     furniture: [],      // [{ id, key, x, y }] — 배치된 가구 목록
@@ -256,6 +258,8 @@ export function loadSave(nickname) {
       cottage: s.cottage ?? {
         furniture: [], achieveDisplay: [], trophyWall: [], visited: 0,
       },
+      tutorialDone: s.tutorialDone ?? false,
+      seenFeatures: s.seenFeatures ?? [],
     };
   } catch { return DEFAULT_STATE; }
 }
@@ -348,8 +352,13 @@ export function checkDailyBonus(nickname) {
   return { bonus, streak };
 }
 
-export function rarityColor(r) {
-  return { 흔함: '#909090', 보통: '#44aaff', 희귀: '#aa44ff', 전설: '#ffaa00', 신화: '#ff44ff' }[r] ?? '#fff';
+// Standard rarity colors
+const RARITY_COLORS_STD = { 흔함: '#909090', 보통: '#44aaff', 희귀: '#aa44ff', 전설: '#ffaa00', 신화: '#ff44ff' };
+// Colorblind-friendly rarity colors (uses shapes via text + color contrast)
+const RARITY_COLORS_CB  = { 흔함: '#999999', 보통: '#4499ee', 희귀: '#ee6600', 전설: '#ffcc00', 신화: '#cc88ff' };
+
+export function rarityColor(r, colorBlind = false) {
+  return (colorBlind ? RARITY_COLORS_CB : RARITY_COLORS_STD)[r] ?? '#fff';
 }
 
 // useGameState hook: manages gs state and stateRef

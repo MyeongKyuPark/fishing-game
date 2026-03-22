@@ -3,7 +3,7 @@ import { TILE_SIZE, MAP_W, MAP_H, TILE, RODS, ORES, HERBS, randInt } from './gam
 import { playSwimSplash } from './soundManager';
 import { getSettings } from './settingsManager';
 import {
-  FISHING_CHAIRS, MINE_ENTRANCE,
+  FISHING_CHAIRS, CHAIR_RANGE, MINE_ENTRANCE, FOREST_ZONE,
   PLAYER_START_X, PLAYER_START_Y, pickOre, pickHerb,
   COOKING_TX, COOKING_TY, DOOR_TRIGGERS,
 } from './mapData';
@@ -30,7 +30,7 @@ import {
 export default function GameCanvas({
   gameRef, onFishCaught, onOreMined, onHerbGathered, onActivityChange,
   onFishBite, onFishEscaped, nickname, title, titleColor,
-  otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange,
+  otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, onNearActionChange,
   hairColor, bodyColor, skinColor, gender,
   spotDecos,
 }) {
@@ -43,7 +43,9 @@ export default function GameCanvas({
   const onPlayerInspectRef = useRef(onPlayerInspect);
   const onEnterRoomRef = useRef(onEnterRoom);
   const onNearDoorChangeRef = useRef(onNearDoorChange);
+  const onNearActionChangeRef = useRef(onNearActionChange);
   const nearDoorRef = useRef(null);
+  const nearActionZoneRef = useRef(null);
   const lastSplashRef = useRef(0);
   const hairColorRef = useRef(hairColor ?? '#5a3010');
   const bodyColorRef = useRef(bodyColor ?? '#5a7aaa');
@@ -55,6 +57,7 @@ export default function GameCanvas({
   useEffect(() => { onPlayerInspectRef.current = onPlayerInspect; });
   useEffect(() => { onEnterRoomRef.current = onEnterRoom; });
   useEffect(() => { onNearDoorChangeRef.current = onNearDoorChange; });
+  useEffect(() => { onNearActionChangeRef.current = onNearActionChange; });
   useEffect(() => { hairColorRef.current = hairColor ?? '#5a3010'; }, [hairColor]);
   useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
   useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
@@ -317,6 +320,32 @@ export default function GameCanvas({
         g.enterRoom = () => {
           if (nearDoorRef.current) onEnterRoomRef.current?.(nearDoorRef.current.id);
         };
+      }
+
+      // ── Action zone proximity ──
+      {
+        let zone = null;
+        for (const c of FISHING_CHAIRS) {
+          const cx = c.tx * TILE_SIZE + TILE_SIZE / 2;
+          const cy = c.ty * TILE_SIZE + TILE_SIZE / 2;
+          if (Math.hypot(player.x - cx, player.y - cy) <= CHAIR_RANGE) {
+            zone = 'fish';
+            break;
+          }
+        }
+        if (!zone) {
+          const ptx = player.x / TILE_SIZE;
+          const pty = player.y / TILE_SIZE;
+          if (ptx >= FOREST_ZONE.tx1 && ptx <= FOREST_ZONE.tx2 &&
+              pty >= FOREST_ZONE.ty1 && pty <= FOREST_ZONE.ty2) {
+            zone = 'gather';
+          }
+        }
+        if (zone !== nearActionZoneRef.current) {
+          nearActionZoneRef.current = zone;
+          onNearActionChangeRef.current?.(zone);
+        }
+        g.nearActionZone = zone;
       }
 
       // ── Camera ──

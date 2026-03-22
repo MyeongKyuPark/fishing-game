@@ -455,17 +455,43 @@ export function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hai
   }
 
   if (state !== 'idle') {
-    const bw = 44, bh = 6;
-    const bx = px - bw / 2, by2 = py - PH / 2 - 14;
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(bx, by2, bw, bh);
-    const barColor = state === 'bite' ? '#ff4444' : state === 'fishing' ? '#44aaff' : state === 'gathering' ? '#44cc44' : '#ffaa44';
-    const barFill = state === 'bite' ? (1 - (activityProgress || 0)) : (activityProgress || 0);
-    ctx.fillStyle = barColor;
-    ctx.fillRect(bx, by2, bw * barFill, bh);
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(bx, by2, bw, bh);
+    const ringR = 18;
+    const cx2 = px, cy2 = py - PH / 2 - ringR - 6;
+    const progress = state === 'bite' ? (1 - (activityProgress || 0)) : (activityProgress || 0);
+    const ringColor = state === 'bite' ? '#ff4444' : state === 'fishing' ? '#44aaff' : state === 'gathering' ? '#44cc44' : '#ffaa44';
+    // Track circle
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx2, cy2, ringR, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx2, cy2, ringR, 0, Math.PI * 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    // Progress arc
+    if (progress > 0) {
+      ctx.beginPath();
+      ctx.arc(cx2, cy2, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+      ctx.strokeStyle = ringColor;
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      // Glow
+      ctx.shadowColor = ringColor;
+      ctx.shadowBlur = 6;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+    // Center icon
+    ctx.font = '11px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const icon = state === 'bite' ? '🎣' : state === 'fishing' ? '🐟' : state === 'gathering' ? '🌿' : '⛏';
+    ctx.fillText(icon, cx2, cy2);
+    ctx.restore();
   }
 
   if (player.floatText) {

@@ -60,6 +60,16 @@ function LoginScreen({ onLogin }) {
   const [bodyColor, setBodyColor] = useState('#5a7aaa');
   const [skinColor, setSkinColor] = useState('#f6cc88');
 
+  // D-4: Autocomplete from saved nicknames
+  const savedNicknames = (() => {
+    try {
+      return Object.keys(localStorage)
+        .filter(k => k.startsWith('fishingGame_v1_'))
+        .map(k => k.replace('fishingGame_v1_', ''))
+        .filter(n => n.length >= 2 && n.length <= 12);
+    } catch { return []; }
+  })();
+
   const submit = (e) => {
     e.preventDefault();
     const trimmed = name.trim();
@@ -85,7 +95,13 @@ function LoginScreen({ onLogin }) {
             onChange={e => { setName(e.target.value); setErr(''); }}
             autoFocus
             maxLength={12}
+            list="saved-nicknames"
           />
+          {savedNicknames.length > 0 && (
+            <datalist id="saved-nicknames">
+              {savedNicknames.map(n => <option key={n} value={n} />)}
+            </datalist>
+          )}
 
           {/* Gender */}
           <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'center' }}>
@@ -218,6 +234,7 @@ export default function App() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [indoorRoom, setIndoorRoom] = useState(null);
   const [nearDoor, setNearDoor] = useState(null);
+  const [nearActionZone, setNearActionZone] = useState(null);
   const [nearIndoorNpc, setNearIndoorNpc] = useState(null);
   const prevTitleRef = useRef(null);
   const prevServerStatsRef = useRef({});
@@ -229,8 +246,20 @@ export default function App() {
   const [showAppearance, setShowAppearance] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showCottage, setShowCottage] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0); // 0=hidden, 1-4=steps
+  const [catchPopup, setCatchPopup] = useState(null); // { name, size, price, rarity }
+  const [windfallPopup, setWindfallPopup] = useState(null); // { oreName, count }
+  const [goldFloats, setGoldFloats] = useState([]); // [{ id, amount }]
+  const prevGoldRef = useRef(null);
+  const [seasonFadeColor, setSeasonFadeColor] = useState(null); // css color string
+  const prevWeatherIdRef = useRef(null);
+  const prevSeasonIdRef = useRef(null);
   const [appearanceDraft, setAppearanceDraft] = useState(null); // { hairColor, bodyColor, skinColor }
   const [bankInput, setBankInput] = useState('');
+
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
+  useKeyboard({ setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex, setShowShortcuts });
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -737,6 +766,8 @@ export default function App() {
     const isNewRecord = size > prevRecord;
     addMsg(`🐟 ${name} ${size}cm 낚음! (${finalPrice}G)${seaMsg}${isNewRecord ? ' 🏆 신기록!' : ''}`, 'catch');
     playFishCatch(fd.rarity);
+    setCatchPopup({ name, size, price: finalPrice, rarity: fd.rarity, isNewRecord });
+    setTimeout(() => setCatchPopup(null), 800);
     if (nicknameRef.current) saveFishRecord(nicknameRef.current, name, size);
     if (nicknameRef.current) saveOverallFishRecord(nicknameRef.current, name, size, fd.rarity);
     if (gameRef.current?.player)
@@ -878,6 +909,8 @@ export default function App() {
     const isNewRecord = size > prevRecord;
     addMsg(`${fd.rarity === '신화' ? '🌟' : '⭐'} ${name} ${size}cm 낚음! (${finalPrice}G)${seaMsg}${isNewRecord ? ' 🏆 신기록!' : ''} — 대어 포획 성공!`, 'catch');
     playFishCatch(fd.rarity);
+    setCatchPopup({ name, size, price: finalPrice, rarity: fd.rarity, isNewRecord });
+    setTimeout(() => setCatchPopup(null), 800);
     if (nicknameRef.current) { saveFishRecord(nicknameRef.current, name, size); saveOverallFishRecord(nicknameRef.current, name, size, fd.rarity); }
     broadcastAnnouncement(`${nicknameRef.current}님이 ${size}cm ${name}을(를) 낚았습니다! ${fd.rarity === '신화' ? '🌟 신화어 출현!' : '⭐ 전설어!'}`);
     if (gameRef.current) gameRef.current.rareEffect = { age: 0, color: fd.rarity === '신화' ? '#ff88ff' : '#ffdd44', rarity: fd.rarity, fishName: name, size };
@@ -937,6 +970,8 @@ export default function App() {
       if (gameRef.current?.player)
         gameRef.current.player.floatText = { text: `💥 ${oreName} ×${extra+1}!`, age: 0, color: '#ffdd00' };
       if (gameRef.current) gameRef.current.shakeEffect = { age: 0, intensity: 8 };
+      setWindfallPopup({ oreName, count: extra });
+      setTimeout(() => setWindfallPopup(null), 1200);
     }
     grantAbility('채굴', ORE_ABILITY_GAIN[oreName] ?? 0.40);
     grantAbility('체력', STAMINA_GAIN);
@@ -1918,6 +1953,10 @@ export default function App() {
       }
     }
     setMessages(initMsgs);
+    // Show tutorial for new players
+    if (!stateRef.current?.tutorialDone) {
+      setTimeout(() => setTutorialStep(1), 800);
+    }
   };
 
   const takeOver = () => {
@@ -2078,6 +2117,32 @@ export default function App() {
     setIndoorRoom(null);
   };
 
+  // ── Season/weather transition fade ────────────────────────────────────────
+  useEffect(() => {
+    const wid = weather?.id ?? null;
+    const sid = currentSeason?.id ?? null;
+    const wChanged = prevWeatherIdRef.current !== null && prevWeatherIdRef.current !== wid;
+    const sChanged = prevSeasonIdRef.current !== null && prevSeasonIdRef.current !== sid;
+    prevWeatherIdRef.current = wid;
+    prevSeasonIdRef.current = sid;
+    if (!wChanged && !sChanged) return;
+    const seasonColors = { spring: 'rgba(255,180,180,0.55)', summer: 'rgba(100,180,255,0.45)', fall: 'rgba(255,140,60,0.5)', winter: 'rgba(180,220,255,0.55)' };
+    const weatherColors = { rain: 'rgba(80,100,140,0.5)', storm: 'rgba(40,40,60,0.6)', sunny: 'rgba(255,220,80,0.35)', cloudy: 'rgba(160,160,170,0.4)' };
+    const color = sChanged ? (seasonColors[sid] ?? 'rgba(200,200,200,0.4)') : (weatherColors[wid] ?? 'rgba(200,200,200,0.4)');
+    setSeasonFadeColor(color);
+    setTimeout(() => setSeasonFadeColor(null), 500);
+  }, [weather?.id, currentSeason?.id]);
+
+  // ── Gold float effect on gold change ─────────────────────────────────────
+  useEffect(() => {
+    if (prevGoldRef.current === null) { prevGoldRef.current = gs.gold; return; }
+    const diff = gs.gold - prevGoldRef.current;
+    prevGoldRef.current = gs.gold;
+    if (diff === 0) return;
+    const id = Date.now() + Math.random();
+    setGoldFloats(prev => [...prev, { id, amount: diff }]);
+    setTimeout(() => setGoldFloats(prev => prev.filter(f => f.id !== id)), 1400);
+  }, [gs.gold]);
 
 
   return (
@@ -2099,6 +2164,7 @@ export default function App() {
           onPlayerInspect={setInspectPlayer}
           onEnterRoom={handleEnterRoom}
           onNearDoorChange={setNearDoor}
+          onNearActionChange={setNearActionZone}
           hairColor={gs.hairColor}
           bodyColor={gs.bodyColor}
           skinColor={gs.skinColor}
@@ -2140,6 +2206,7 @@ export default function App() {
           serverEvent={serverEvent}
           indoorRoom={indoorRoom}
           nearDoor={nearDoor}
+          nearActionZone={nearActionZone}
           nearIndoorNpc={nearIndoorNpc}
           partyId={partyId}
           partyMembersRef={partyMembersRef}
@@ -2171,6 +2238,104 @@ export default function App() {
           setShowCottage={setShowCottage}
         />
       </div>
+
+      {catchPopup && (
+        <div className="catch-popup" style={{ border: `2px solid ${rarityColor(catchPopup.rarity)}` }}>
+          <div className="catch-popup-rarity" style={{ color: rarityColor(catchPopup.rarity) }}>{catchPopup.rarity}</div>
+          <div className="catch-popup-name">{catchPopup.name}</div>
+          <div className="catch-popup-size">{catchPopup.size}cm</div>
+          <div className="catch-popup-price">+{catchPopup.price.toLocaleString()}G</div>
+          {catchPopup.isNewRecord && <div className="catch-popup-record">🏆 신기록!</div>}
+        </div>
+      )}
+
+      {windfallPopup && (() => {
+        const oreIcons = { 철광석: '🪨', 구리광석: '🟤', 수정: '💎', 금광석: '✨' };
+        const icon = oreIcons[windfallPopup.oreName] ?? '💥';
+        const particles = Array.from({ length: 8 }, (_, i) => {
+          const angle = (i / 8) * Math.PI * 2;
+          const dist = 55 + Math.random() * 30;
+          const tx = `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist - 30}px)`;
+          return <span key={i} className="windfall-particle" style={{ '--tx': tx, left: '50%', top: '50%', marginLeft: '-11px', marginTop: '-11px', animationDelay: `${i * 0.05}s` }}>{icon}</span>;
+        });
+        return (
+          <div className="windfall-burst">
+            <div style={{ position: 'relative', width: 120, height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {particles}
+              <div style={{ fontSize: 28, fontWeight: 900, color: '#ffdd00', textShadow: '0 0 12px #ff8800', zIndex: 1 }}>💥 대박!</div>
+            </div>
+            <div style={{ textAlign: 'center', fontSize: 16, fontWeight: 700, color: '#fff', marginTop: 4 }}>{windfallPopup.oreName} +{windfallPopup.count}</div>
+          </div>
+        );
+      })()}
+
+      {seasonFadeColor && <div className="season-fade" style={{ background: seasonFadeColor }} />}
+
+      {tutorialStep > 0 && (() => {
+        const STEPS = [
+          { title: '🎣 낚시 의자 찾기', body: '지도 남쪽 부두나 연못 가장자리에 낚시 의자가 있어요. 의자 근처로 이동해보세요!' },
+          { title: '🐟 낚시 시작', body: '의자 옆에 서면 낚시가 시작됩니다. 물고기가 입질하면 화면 중앙에 찌가 나타나요!' },
+          { title: '💰 물고기 판매', body: '낚은 물고기는 🎒 인벤토리에서 판매할 수 있어요. 상단 바의 "인벤" 버튼을 눌러보세요!' },
+          { title: '🏪 상점 구경', body: '상단 "상점" 버튼으로 낚싯대·신발·미끼를 구매할 수 있어요. 이제 자유롭게 즐겨보세요! 🌊' },
+        ];
+        const step = STEPS[tutorialStep - 1];
+        if (!step) return null;
+        const advanceOrFinish = () => {
+          if (tutorialStep >= STEPS.length) {
+            setTutorialStep(0);
+            setGs(prev => ({ ...prev, tutorialDone: true }));
+          } else {
+            setTutorialStep(t => t + 1);
+          }
+        };
+        return (
+          <div className="tutorial-overlay">
+            <div className="tutorial-box" style={{ bottom: 120, left: 20 }}>
+              <div className="tutorial-step">튜토리얼 {tutorialStep} / {STEPS.length}</div>
+              <div className="tutorial-title">{step.title}</div>
+              <div className="tutorial-body">{step.body}</div>
+              <button className="tutorial-next" onClick={advanceOrFinish}>
+                {tutorialStep >= STEPS.length ? '시작하기! 🎣' : '다음 →'}
+              </button>
+              <button onClick={() => { setTutorialStep(0); setGs(prev => ({ ...prev, tutorialDone: true })); }}
+                style={{ width: '100%', marginTop: 6, background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 11 }}>
+                건너뛰기
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {showShortcuts && (
+        <div className="shortcut-tooltip" onClick={() => setShowShortcuts(false)}>
+          <div className="shortcut-tooltip-box" onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14, color: '#88ccff' }}>⌨️ 키보드 단축키</div>
+            {[
+              ['I', '인벤토리 열기/닫기'],
+              ['S', '상점 열기/닫기'],
+              ['A', '상태창 열기/닫기'],
+              ['Q', '퀘스트 열기/닫기'],
+              ['D', '도감 열기/닫기'],
+              ['R', '랭킹 열기/닫기'],
+              ['?', '이 도움말 토글'],
+              ['Esc', '모든 패널 닫기'],
+              ['Space', '낚시 찌 타이밍 (낚시 중)'],
+            ].map(([key, desc]) => (
+              <div key={key} style={{ display: 'flex', gap: 12, marginBottom: 8, alignItems: 'center' }}>
+                <kbd style={{ background: 'rgba(100,180,255,0.15)', border: '1px solid rgba(100,180,255,0.4)', borderRadius: 5, padding: '2px 8px', fontFamily: 'monospace', fontSize: 13, minWidth: 36, textAlign: 'center', color: '#88ccff' }}>{key}</kbd>
+                <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>{desc}</span>
+              </div>
+            ))}
+            <div style={{ marginTop: 12, fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center' }}>클릭하거나 Esc로 닫기</div>
+          </div>
+        </div>
+      )}
+
+      {goldFloats.map(f => (
+        <div key={f.id} className="gold-float" style={{ top: 52, right: 120, color: f.amount >= 0 ? '#ffe066' : '#ff6b6b' }}>
+          {f.amount >= 0 ? '+' : ''}{f.amount.toLocaleString()}G
+        </div>
+      ))}
 
       <ChatBox messages={messages} onCommand={handleCommand} />
 

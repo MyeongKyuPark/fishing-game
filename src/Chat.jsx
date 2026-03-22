@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 
+const COMMAND_SUGGESTIONS = [
+  { cmd: '!낚시', desc: '낚시 시작' },
+  { cmd: '!그만', desc: '현재 작업 중단' },
+  { cmd: '!광질', desc: '채굴 시작' },
+  { cmd: '!채집', desc: '허브 채집 시작' },
+  { cmd: '!요리', desc: '요리 시작' },
+  { cmd: '!인벤', desc: '인벤토리 열기' },
+  { cmd: '!상점', desc: '상점 열기' },
+  { cmd: '!상태', desc: '상태창 열기' },
+  { cmd: '!퀘스트', desc: '퀘스트 열기' },
+  { cmd: '!도감', desc: '물고기 도감' },
+  { cmd: '!은행', desc: '은행 열기' },
+  { cmd: '!도움말', desc: '전체 명령어 목록' },
+  { cmd: '!랭킹', desc: '랭킹 보기' },
+  { cmd: '!판매', desc: '물고기 전체 판매' },
+  { cmd: '!여관휴식', desc: '여관 특별 휴식 (500G)' },
+];
+
 const EMOJI_SUGGESTIONS = [
   { trigger: ':fish', emoji: '🐟', label: '물고기' },
   { trigger: ':rod', emoji: '🎣', label: '낚싯대' },
@@ -31,12 +49,29 @@ const EMOJI_SUGGESTIONS = [
 export default function Chat({ messages, onCommand }) {
   const listRef = useRef(null);
   const inputRef = useRef(null);
+  const panelRef = useRef(null);
   const [emojiPopup, setEmojiPopup] = useState(null); // { query, filtered, selIdx }
+  const [cmdPopup, setCmdPopup] = useState(null); // { filtered, selIdx }
 
   useEffect(() => {
     if (listRef.current)
       listRef.current.scrollTop = listRef.current.scrollHeight;
   }, [messages]);
+
+  // C-4: Prevent layout shift when virtual keyboard opens on mobile
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const handler = () => {
+      if (panelRef.current) {
+        const kbHeight = window.innerHeight - vv.height - vv.offsetTop;
+        panelRef.current.style.paddingBottom = kbHeight > 20 ? `${kbHeight}px` : '';
+      }
+    };
+    vv.addEventListener('resize', handler);
+    vv.addEventListener('scroll', handler);
+    return () => { vv.removeEventListener('resize', handler); vv.removeEventListener('scroll', handler); };
+  }, []);
 
   const submit = (e) => {
     e.preventDefault();
@@ -44,14 +79,27 @@ export default function Chat({ messages, onCommand }) {
     if (!val) return;
     inputRef.current.value = '';
     setEmojiPopup(null);
+    setCmdPopup(null);
     onCommand(val);
   };
 
   const handleInputChange = () => {
     const val = inputRef.current.value;
-    // Find the last `:word` pattern at cursor
     const cursor = inputRef.current.selectionStart;
     const before = val.slice(0, cursor);
+    // Command autocomplete: `!` prefix
+    const cmdMatch = before.match(/^(![\u0000-\uffff]*)$/);
+    if (cmdMatch) {
+      const query = cmdMatch[1];
+      const filtered = COMMAND_SUGGESTIONS.filter(c => c.cmd.startsWith(query));
+      if (filtered.length > 0) {
+        setCmdPopup({ filtered: filtered.slice(0, 8), selIdx: 0 });
+        setEmojiPopup(null);
+        return;
+      }
+    }
+    setCmdPopup(null);
+    // Emoji autocomplete: `:word` pattern
     const match = before.match(/:([a-z]*)$/);
     if (match) {
       const query = match[1];
@@ -77,7 +125,34 @@ export default function Chat({ messages, onCommand }) {
     setEmojiPopup(null);
   };
 
+  const insertCmd = (item) => {
+    inputRef.current.value = item.cmd + ' ';
+    inputRef.current.focus();
+    setCmdPopup(null);
+  };
+
   const handleKeyDown = (e) => {
+    if (cmdPopup) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setCmdPopup(prev => ({ ...prev, selIdx: (prev.selIdx + 1) % prev.filtered.length }));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setCmdPopup(prev => ({ ...prev, selIdx: (prev.selIdx - 1 + prev.filtered.length) % prev.filtered.length }));
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        insertCmd(cmdPopup.filtered[cmdPopup.selIdx]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        setCmdPopup(null);
+        return;
+      }
+    }
     if (emojiPopup) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -108,13 +183,37 @@ export default function Chat({ messages, onCommand }) {
   };
 
   return (
-    <div className="chat-panel" style={{ position: 'relative' }}>
+    <div className="chat-panel" ref={panelRef} style={{ position: 'relative' }}>
       <div className="chat-header">채팅 / 명령어</div>
       <div className="chat-messages" ref={listRef}>
         {messages.map((msg, i) => (
           <div key={i} className={`chat-msg chat-${msg.type}`}>{msg.text}</div>
         ))}
       </div>
+
+      {cmdPopup && (
+        <div style={{
+          position: 'absolute', bottom: 44, left: 0, right: 0,
+          background: 'rgba(15,20,35,0.98)', border: '1px solid rgba(100,180,255,0.25)',
+          borderRadius: 8, padding: '4px 0', zIndex: 100, maxHeight: 240, overflowY: 'auto',
+        }}>
+          <div style={{ padding: '3px 10px 2px', fontSize: 10, color: 'rgba(100,180,255,0.5)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>Tab으로 선택</div>
+          {cmdPopup.filtered.map((item, idx) => (
+            <div key={item.cmd}
+              onMouseDown={(e) => { e.preventDefault(); insertCmd(item); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '5px 10px', cursor: 'pointer', fontSize: 12,
+                background: idx === cmdPopup.selIdx ? 'rgba(100,180,255,0.15)' : 'transparent',
+                color: idx === cmdPopup.selIdx ? '#88ddff' : 'rgba(255,255,255,0.75)',
+              }}
+            >
+              <span style={{ fontFamily: 'monospace', fontWeight: 700, minWidth: 80, color: '#88ddff' }}>{item.cmd}</span>
+              <span style={{ opacity: 0.6 }}>{item.desc}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {emojiPopup && (
         <div style={{

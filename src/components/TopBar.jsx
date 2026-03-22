@@ -7,7 +7,7 @@ import { MINE_DEPTH_REQ, MINE_DEPTH_TIME } from '../hooks/useGameState';
 export default function TopBar({
   gs, setGs, nickname, myTitle, roomTitle, weather, currentSeason, activity, isOnline,
   serverStats, serverQuest, serverBoss, fishSurgeEvent, serverEvent,
-  indoorRoom, nearDoor, nearIndoorNpc, partyId, partyMembersRef, otherPlayersRef,
+  indoorRoom, nearDoor, nearActionZone, nearIndoorNpc, partyId, partyMembersRef, otherPlayersRef,
   pendingInvite, showAnnounce, serverAnnouncements,
   achPopup, gradeUpCelebration,
   gameRef, handleCommand, handleExitRoom, handleNpcInteract,
@@ -200,15 +200,19 @@ export default function TopBar({
 
       {/* Shortcut buttons (desktop only) */}
       <div className="shortcut-bar">
-        <button tabIndex={-1} onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
-        <button tabIndex={-1} onClick={() => setShowShop(v => !v)}>🏪 상점</button>
-        <button tabIndex={-1} onClick={() => setShowStats(v => !v)}>📊 상태</button>
-        <button tabIndex={-1} onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
-        <button tabIndex={-1} onClick={() => setShowQuest(v => !v)}>📋 퀘스트</button>
-        <button tabIndex={-1} onClick={() => setShowDex(v => !v)}>📖 도감</button>
-        <button tabIndex={-1} onClick={() => setShowTournament(v => !v)}>🏆 토너먼트</button>
-        <button tabIndex={-1} onClick={() => setShowCottage && setShowCottage(v => !v)}>🏠 오두막</button>
-        <button tabIndex={-1} onClick={() => setShowSettings(v => !v)}>⚙️ 설정</button>
+        <button tabIndex={-1} data-tooltip="인벤토리 (I)" onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
+        <button tabIndex={-1} data-tooltip="상점 (S)" onClick={() => setShowShop(v => !v)}>🏪 상점</button>
+        <button tabIndex={-1} data-tooltip="상태창 (A)" onClick={() => setShowStats(v => !v)}>📊 상태</button>
+        <button tabIndex={-1} data-tooltip="랭킹 (R)" onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
+        <button tabIndex={-1} data-tooltip="일일 퀘스트 (Q)" onClick={() => setShowQuest(v => !v)}>📋 퀘스트</button>
+        <button tabIndex={-1} data-tooltip="물고기 도감 (D)" onClick={() => setShowDex(v => !v)}>📖 도감</button>
+        <button tabIndex={-1} data-tooltip="주간 낚시 토너먼트" onClick={() => { setShowTournament(v => !v); setGs(prev => ({ ...prev, seenFeatures: [...new Set([...(prev.seenFeatures ?? []), 'tournament'])] })); }}>
+          🏆 토너먼트{!(gs.seenFeatures ?? []).includes('tournament') ? <span style={{ fontSize: 9, background: '#ff4444', color: '#fff', borderRadius: 4, padding: '1px 4px', marginLeft: 3, verticalAlign: 'middle' }}>NEW</span> : ''}
+        </button>
+        <button tabIndex={-1} data-tooltip="내 오두막 꾸미기" onClick={() => { setShowCottage && setShowCottage(v => !v); setGs(prev => ({ ...prev, seenFeatures: [...new Set([...(prev.seenFeatures ?? []), 'cottage'])] })); }}>
+          🏠 오두막{!(gs.seenFeatures ?? []).includes('cottage') ? <span style={{ fontSize: 9, background: '#ff4444', color: '#fff', borderRadius: 4, padding: '1px 4px', marginLeft: 3, verticalAlign: 'middle' }}>NEW</span> : ''}
+        </button>
+        <button tabIndex={-1} data-tooltip="게임 설정" onClick={() => setShowSettings(v => !v)}>⚙️ 설정</button>
         {indoorRoom && <button tabIndex={-1} style={{ color: '#ffaaaa', borderColor: 'rgba(255,100,100,0.4)' }} onClick={handleExitRoom}>🚪 나가기</button>}
         {indoorRoom === 'mine' && <button tabIndex={-1} style={{ color: '#aaffcc', borderColor: 'rgba(100,255,150,0.4)' }} onClick={() => handleCommand('!광질')}>⛏ 광질</button>}
       </div>
@@ -217,82 +221,85 @@ export default function TopBar({
       <div className="mobile-controls">
         <Joystick gameRef={gameRef} />
         <div className="action-btns">
-          <button className="action-btn" tabIndex={-1} onClick={() => setShowMobileMenu(v => !v)}>
-            <span>☰</span><span className="action-btn-label">메뉴</span>
-          </button>
-          <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!낚시')}>
-            <span>🎣</span><span className="action-btn-label">낚시</span>
-          </button>
-          <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!광질')}>
-            <span>⛏</span><span className="action-btn-label">광질</span>
-          </button>
-          <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!채집')}>
-            <span>🌿</span><span className="action-btn-label">채집</span>
-          </button>
-          <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
-            <span>🛑</span><span className="action-btn-label">그만</span>
-          </button>
-          <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!요리')}>
-            <span>🍳</span><span className="action-btn-label">요리</span>
-          </button>
-          <button className="action-btn" tabIndex={-1} onClick={() => setShowRank(true)}>
-            <span>🏆</span><span className="action-btn-label">랭킹</span>
-          </button>
-          <button className="action-btn" tabIndex={-1} onClick={() => setShowQuest(v => !v)}>
-            <span>📋</span><span className="action-btn-label">퀘스트</span>
-          </button>
-          <button className="action-btn" tabIndex={-1} onClick={() => setShowDex(v => !v)}>
-            <span>📖</span><span className="action-btn-label">도감</span>
-          </button>
-          <button className="action-btn" tabIndex={-1} onClick={() => setShowGuild(v => !v)}>
-            <span>🏰</span><span className="action-btn-label">길드</span>
-          </button>
-          <button className="action-btn" tabIndex={-1} onClick={() => setShowMarket(v => !v)}>
-            <span>🏪</span><span className="action-btn-label">경매장</span>
-          </button>
-          {nearDoor && !indoorRoom && (
-            <button className="action-btn action-btn-enter" tabIndex={-1} onClick={() => gameRef.current?.enterRoom?.()}>
-              <span>🚪</span><span className="action-btn-label">입장</span>
+          {/* Primary row: most-used actions */}
+          <div className="action-btns-primary">
+            {nearActionZone === 'fish' && (
+              <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!낚시')}>
+                <span>🎣</span><span className="action-btn-label">낚시</span>
+              </button>
+            )}
+            {indoorRoom === 'mine' && (
+              <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!광질')}>
+                <span>⛏</span><span className="action-btn-label">광질</span>
+              </button>
+            )}
+            {nearActionZone === 'gather' && (
+              <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!채집')}>
+                <span>🌿</span><span className="action-btn-label">채집</span>
+              </button>
+            )}
+            {indoorRoom === 'cooking' && (
+              <button className="action-btn" tabIndex={-1} onClick={() => handleCommand('!요리')}>
+                <span>🍳</span><span className="action-btn-label">요리</span>
+              </button>
+            )}
+            <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
+              <span>🛑</span><span className="action-btn-label">그만</span>
             </button>
-          )}
-          {indoorRoom && (
-            <button className="action-btn" tabIndex={-1} style={{ background: 'rgba(180,60,60,0.7)', borderColor: '#ff6666' }} onClick={handleExitRoom}>
-              <span>🚪</span><span className="action-btn-label">나가기</span>
+            <button className="action-btn" tabIndex={-1} onClick={() => setShowMobileMenu(v => !v)}>
+              <span>☰</span><span className="action-btn-label">메뉴</span>
             </button>
-          )}
-          {indoorRoom === 'mine' && (
-            <button className="action-btn" tabIndex={-1} style={{ background: 'rgba(60,120,60,0.7)', borderColor: '#66cc88' }} onClick={() => handleCommand('!광질')}>
-              <span>⛏</span><span className="action-btn-label">광질</span>
+          </div>
+          {/* Secondary row: less-used + context-sensitive */}
+          <div className="action-btns-secondary">
+            <button className="action-btn action-btn-sm" tabIndex={-1} onClick={() => setShowQuest(v => !v)}>
+              <span>📋</span><span className="action-btn-label">퀘스트</span>
             </button>
-          )}
-          {nearIndoorNpc && indoorRoom && (
-            <button className="action-btn action-btn-enter" tabIndex={-1} onClick={() => handleNpcInteract(nearIndoorNpc.name)}>
-              <span>💬</span><span className="action-btn-label">대화</span>
+            <button className="action-btn action-btn-sm" tabIndex={-1} onClick={() => setShowDex(v => !v)}>
+              <span>📖</span><span className="action-btn-label">도감</span>
             </button>
-          )}
-          {indoorRoom === 'inn' && !(gs.innBuff && Date.now() < gs.innBuff.expiresAt) && (
-            <button className="action-btn" tabIndex={-1} style={{ background: 'rgba(0,100,200,0.7)', borderColor: '#4488ff' }}
-              onClick={() => handleCommand('!여관휴식')}>
-              <span>💤</span><span className="action-btn-label">특별 휴식 (500G)</span>
+            <button className="action-btn action-btn-sm" tabIndex={-1} onClick={() => setShowRank(true)}>
+              <span>🏆</span><span className="action-btn-label">랭킹</span>
             </button>
-          )}
-          {indoorRoom === 'inn' && gs.innBuff && Date.now() < gs.innBuff.expiresAt && (
-            <div className="action-btn" style={{ background: 'rgba(0,60,140,0.6)', borderColor: '#2266cc', cursor: 'default' }}>
-              <span>💤</span><span className="action-btn-label">휴식 중 {Math.ceil((gs.innBuff.expiresAt - Date.now()) / 60000)}분</span>
-            </div>
-          )}
-          {indoorRoom === 'inn' && (
-            <button className="action-btn" tabIndex={-1} style={{ background: 'rgba(120,60,160,0.7)', borderColor: '#aa66ff' }}
-              onClick={() => { setAppearanceDraft({ hairColor: gs.hairColor, bodyColor: gs.bodyColor, skinColor: gs.skinColor }); setShowAppearance(true); }}>
-              <span>✂</span><span className="action-btn-label">외모 변경</span>
-            </button>
-          )}
-          {indoorRoom === 'guild' && (
-            <button className="action-btn" tabIndex={-1} style={{ background: 'rgba(120,90,20,0.7)', borderColor: '#ffcc44' }}
-              onClick={() => setShowGuild(true)}>
-              <span>🏰</span><span className="action-btn-label">길드 메뉴</span>
-            </button>
-          )}
+            {nearDoor && !indoorRoom && (
+              <button className="action-btn action-btn-sm action-btn-enter" tabIndex={-1} onClick={() => gameRef.current?.enterRoom?.()}>
+                <span>🚪</span><span className="action-btn-label">입장</span>
+              </button>
+            )}
+            {indoorRoom && (
+              <button className="action-btn action-btn-sm" tabIndex={-1} style={{ background: 'rgba(180,60,60,0.7)', borderColor: '#ff6666' }} onClick={handleExitRoom}>
+                <span>🚪</span><span className="action-btn-label">나가기</span>
+              </button>
+            )}
+            {nearIndoorNpc && indoorRoom && (
+              <button className="action-btn action-btn-sm action-btn-enter" tabIndex={-1} onClick={() => handleNpcInteract(nearIndoorNpc.name)}>
+                <span>💬</span><span className="action-btn-label">대화</span>
+              </button>
+            )}
+            {indoorRoom === 'inn' && !(gs.innBuff && Date.now() < gs.innBuff.expiresAt) && (
+              <button className="action-btn action-btn-sm" tabIndex={-1} style={{ background: 'rgba(0,100,200,0.7)', borderColor: '#4488ff' }}
+                onClick={() => handleCommand('!여관휴식')}>
+                <span>💤</span><span className="action-btn-label">여관</span>
+              </button>
+            )}
+            {indoorRoom === 'inn' && gs.innBuff && Date.now() < gs.innBuff.expiresAt && (
+              <div className="action-btn action-btn-sm" style={{ background: 'rgba(0,60,140,0.6)', borderColor: '#2266cc', cursor: 'default' }}>
+                <span>💤</span><span className="action-btn-label">{Math.ceil((gs.innBuff.expiresAt - Date.now()) / 60000)}분</span>
+              </div>
+            )}
+            {indoorRoom === 'inn' && (
+              <button className="action-btn action-btn-sm" tabIndex={-1} style={{ background: 'rgba(120,60,160,0.7)', borderColor: '#aa66ff' }}
+                onClick={() => { setAppearanceDraft({ hairColor: gs.hairColor, bodyColor: gs.bodyColor, skinColor: gs.skinColor }); setShowAppearance(true); }}>
+                <span>✂</span><span className="action-btn-label">외모</span>
+              </button>
+            )}
+            {indoorRoom === 'guild' && (
+              <button className="action-btn action-btn-sm" tabIndex={-1} style={{ background: 'rgba(120,90,20,0.7)', borderColor: '#ffcc44' }}
+                onClick={() => setShowGuild(true)}>
+                <span>🏰</span><span className="action-btn-label">길드</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

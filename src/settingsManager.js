@@ -13,6 +13,7 @@ const DEFAULT_SETTINGS = {
     수영: true,
   },
   canvasQuality: 'high', // 'low' | 'medium' | 'high'
+  colorBlindMode: false,
 };
 
 function loadSettings() {
@@ -23,6 +24,7 @@ function loadSettings() {
     return {
       sfx: { ...DEFAULT_SETTINGS.sfx, ...(s.sfx ?? {}) },
       canvasQuality: s.canvasQuality ?? 'high',
+      colorBlindMode: s.colorBlindMode ?? false,
     };
   } catch {
     return { ...DEFAULT_SETTINGS, sfx: { ...DEFAULT_SETTINGS.sfx } };
@@ -42,6 +44,12 @@ export function setSfxEnabled(key, enabled) {
 
 export function setCanvasQuality(q) {
   _settings = { ..._settings, canvasQuality: q };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings));
+  _listeners.forEach(fn => fn(_settings));
+}
+
+export function setColorBlindMode(enabled) {
+  _settings = { ..._settings, colorBlindMode: enabled };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(_settings));
   _listeners.forEach(fn => fn(_settings));
 }

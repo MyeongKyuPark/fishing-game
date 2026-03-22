@@ -22,7 +22,7 @@ import CottagePanel from './CottagePanel';
 
 const TOURNAMENT_PRIZES = [2000, 1000, 500]; // 1위/2위/3위 주간 보상 골드
 import { useState } from 'react';
-import { getSettings, setSfxEnabled, setCanvasQuality, subscribeSettings } from '../settingsManager';
+import { getSettings, setSfxEnabled, setCanvasQuality, setColorBlindMode, subscribeSettings } from '../settingsManager';
 import { setBgmVolume, getBgmVolume } from '../bgm';
 
 // eslint-disable-next-line no-unused-vars
@@ -58,8 +58,14 @@ export default function Sidebar(props) {
   } = props;
 
   const [invFilter, setInvFilter] = useState('전체');
+  const [buyToast, setBuyToast] = useState(null);
   const [settingsState, setSettingsState] = useState(() => getSettings());
   const [bgmVol, setBgmVolState] = useState(() => getBgmVolume());
+
+  const showBuyToast = (msg) => {
+    setBuyToast(msg);
+    setTimeout(() => setBuyToast(null), 1000);
+  };
 
   return (
     <>
@@ -135,13 +141,17 @@ export default function Sidebar(props) {
                                   <button tabIndex={-1} className="sell-btn" onClick={() => sellSpecies(species)}>전체판매</button>
                                 </div>
                                 <div className="species-fish-list">
-                                  {sorted.map(f => (
+                                  {sorted.map(f => {
+                                    const recSize = gs.fishRecords?.[species]?.size ?? 0;
+                                    const isRecord = f.size >= recSize && recSize > 0;
+                                    return (
                                     <div key={f.id} className="fish-row fish-row-compact">
-                                      <span className="grow">{f.size.toFixed(1)}cm{f.cooked ? ' 🍳' : ''}</span>
+                                      <span className="grow">{f.size.toFixed(1)}cm{f.cooked ? ' 🍳' : ''}{isRecord ? ' 🏆' : ''}</span>
                                       <span className="gold">{f.price}G</span>
                                       <button tabIndex={-1} className="sell-btn" onClick={() => sellOne(f.id)}>판매</button>
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               </div>
                             );
@@ -361,7 +371,7 @@ export default function Sidebar(props) {
                             {ab.grade > 0 && <span className="grade-badge">G{ab.grade}</span>}
                           </div>
                           <div className="skill-bar-wrap">
-                            <div className="skill-bar-fill" style={{ width: `${pct}%`, background: def.color }} />
+                            <div className="skill-bar-fill" style={{ '--pct': `${pct}%`, background: def.color }} />
                           </div>
                           <div className="skill-exp-txt">{ab.value.toFixed(2)} / 100.00</div>
                           <div className="skill-source">{def.desc}</div>
@@ -951,7 +961,7 @@ export default function Sidebar(props) {
                         <div style={{ width: `${affinity}%`, height: '100%', background: npc.color, borderRadius: 4, transition: 'width 0.3s' }} />
                       </div>
                       {npc.thresholds.filter(t => affinity >= t.at).map(t => (
-                        <div key={t.at} style={{ fontSize: 11, color: '#88ff88', marginBottom: 1 }}>✓ [{t.label}] {t.reward}</div>
+                        <div key={t.at} className="affinity-milestone" style={{ fontSize: 11, color: '#88ff88', marginBottom: 1 }}>✓ [{t.label}] {t.reward}</div>
                       ))}
                       {next && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>다음: [{next.label}] 호감도 {next.at} — {next.reward}</div>}
                       {!next && affinity >= 80 && <div style={{ fontSize: 11, color: npc.color, marginTop: 2 }}>최고 관계 달성!</div>}
@@ -1346,7 +1356,7 @@ export default function Sidebar(props) {
                 const claimed = !!(gs.questClaimed ?? {})[q.id];
                 const pct = Math.round((cur / q.goal) * 100);
                 return (
-                  <div key={q.id} className="quest-card" style={{ opacity: claimed ? 0.45 : 1 }}>
+                  <div key={q.id} className={`quest-card${done ? ' quest-done' : ''}`} style={{ opacity: claimed ? 0.45 : 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                       <span style={{ fontWeight: 700, color: claimed ? '#aaa' : done ? '#88ff88' : '#ffe0a0' }}>
                         {claimed ? '☑ ' : done ? '✅ ' : ''}{q.label}
@@ -1504,7 +1514,7 @@ export default function Sidebar(props) {
                     <div style={{ marginTop: 6 }}>
                       {owned
                         ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipRod(key)}>장착</button>)
-                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyRod(key)} disabled={!canBuy}>
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => { buyRod(key); showBuyToast(`${rod.name} 구매 완료`); }} disabled={!canBuy}>
                             {canBuy ? (needMoney ? `${rod.price}G + 재료` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
                           </button>
                       }
@@ -1541,7 +1551,7 @@ export default function Sidebar(props) {
                     <div style={{ marginTop: 6 }}>
                       {owned
                         ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => equipBoots(key)}>장착</button>)
-                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => buyBoots(key)} disabled={!canBuy}>
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} onClick={() => { buyBoots(key); showBuyToast(`${boot.name} 구매 완료`); }} disabled={!canBuy}>
                             {canBuy ? (boot.price > 0 ? `${boot.price}G 구매` : '획득') : (!canAfford ? '💰 골드 부족' : '재료 부족')}
                           </button>
                       }
@@ -1574,7 +1584,7 @@ export default function Sidebar(props) {
                         ? <button tabIndex={-1} className={equipped ? 'btn-dis' : 'btn-eq'} onClick={() => equipBait(key)} disabled={equipped}>
                             {equipped ? '장착중' : '장착'}
                           </button>
-                        : <button tabIndex={-1} className={canAfford ? 'btn-buy' : 'btn-dis'} onClick={() => buyBait(key)} disabled={!canAfford}>
+                        : <button tabIndex={-1} className={canAfford ? 'btn-buy' : 'btn-dis'} onClick={() => { buyBait(key); showBuyToast(`${bait.name} 구매 완료`); }} disabled={!canAfford}>
                             {canAfford ? `${bait.price}G 구매` : '💰 부족'}
                           </button>
                       }
@@ -2944,6 +2954,29 @@ export default function Sidebar(props) {
                   낮음: 파티클·장식 감소 / 중간: 기본 / 높음: 최대 품질 (다음 접속부터 적용)
                 </div>
               </div>
+
+              {/* D-3: Colorblind mode */}
+              <div className="section">
+                <div className="section-title">접근성</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>색약 친화 희귀도 색상 모드</div>
+                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>빨강/녹색 대신 청색/주황으로 구분</div>
+                  </div>
+                  <button tabIndex={-1}
+                    onClick={() => {
+                      const next = !settingsState.colorBlindMode;
+                      setColorBlindMode(next);
+                      setSettingsState(s => ({ ...s, colorBlindMode: next }));
+                    }}
+                    style={{ padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 13,
+                      background: settingsState.colorBlindMode ? 'rgba(80,160,255,0.35)' : 'rgba(255,255,255,0.08)',
+                      color: settingsState.colorBlindMode ? '#7df' : 'rgba(255,255,255,0.55)',
+                      fontWeight: settingsState.colorBlindMode ? 700 : 400,
+                    }}
+                  >{settingsState.colorBlindMode ? 'ON' : 'OFF'}</button>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -2958,6 +2991,7 @@ export default function Sidebar(props) {
         />
       )}
 
+      {buyToast && <div className="buy-toast">✅ {buyToast}</div>}
     </>
   );
 }
