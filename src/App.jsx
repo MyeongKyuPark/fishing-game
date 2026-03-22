@@ -11,8 +11,9 @@ import RankSidebar from './RankSidebar';
 import ChannelLobby from './ChannelLobby';
 import { saveFishRecord, saveOverallFishRecord, broadcastAnnouncement, incrementServerStat,
   submitTournamentScore, incrementServerQuestProgress,
-  saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore, savePrestigeRecord } from './ranking';
-import { sendPartyInvite, joinParty, leaveParty, sendPartyMessage } from './multiplay';
+  saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore, savePrestigeRecord,
+  damageServerBoss } from './ranking';
+import { sendPartyInvite, joinParty, leaveParty, sendPartyMessage, clearPartyInvite } from './multiplay';
 import { JOBS, getAvailableJobs } from './jobData';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
   SMELT_RECIPES, JEWELRY_RECIPES, POTION_RECIPES, DISH_RECIPES, SEEDS, MAX_FARM_PLOTS,
@@ -2374,6 +2375,35 @@ export default function App() {
     }
   }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, stateRef]);
 
+  // ── Season/weather transition fade (must be before early returns per hook rules) ──
+  const _currentSeasonForFade = getCurrentSeason();
+  useEffect(() => {
+    const wid = weather?.id ?? null;
+    const sid = _currentSeasonForFade?.id ?? null;
+    const wChanged = prevWeatherIdRef.current !== null && prevWeatherIdRef.current !== wid;
+    const sChanged = prevSeasonIdRef.current !== null && prevSeasonIdRef.current !== sid;
+    prevWeatherIdRef.current = wid;
+    prevSeasonIdRef.current = sid;
+    if (!wChanged && !sChanged) return;
+    const seasonColors = { spring: 'rgba(255,180,180,0.55)', summer: 'rgba(100,180,255,0.45)', fall: 'rgba(255,140,60,0.5)', winter: 'rgba(180,220,255,0.55)' };
+    const weatherColors = { rain: 'rgba(80,100,140,0.5)', storm: 'rgba(40,40,60,0.6)', sunny: 'rgba(255,220,80,0.35)', cloudy: 'rgba(160,160,170,0.4)' };
+    const color = sChanged ? (seasonColors[sid] ?? 'rgba(200,200,200,0.4)') : (weatherColors[wid] ?? 'rgba(200,200,200,0.4)');
+    setSeasonFadeColor(color);
+    setTimeout(() => setSeasonFadeColor(null), 500);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weather?.id, _currentSeasonForFade?.id]);
+
+  // ── Gold float effect on gold change (must be before early returns per hook rules) ──
+  useEffect(() => {
+    if (prevGoldRef.current === null) { prevGoldRef.current = gs.money; return; }
+    const diff = gs.money - prevGoldRef.current;
+    prevGoldRef.current = gs.money;
+    if (diff === 0) return;
+    const id = Date.now() + Math.random();
+    setGoldFloats(prev => [...prev, { id, amount: diff }]);
+    setTimeout(() => setGoldFloats(prev => prev.filter(f => f.id !== id)), 1400);
+  }, [gs.money]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (!nickname) return <LoginScreen onLogin={handleLogin} />;
@@ -2407,34 +2437,6 @@ export default function App() {
     }
     setIndoorRoom(null);
   };
-
-  // ── Season/weather transition fade ────────────────────────────────────────
-  useEffect(() => {
-    const wid = weather?.id ?? null;
-    const sid = currentSeason?.id ?? null;
-    const wChanged = prevWeatherIdRef.current !== null && prevWeatherIdRef.current !== wid;
-    const sChanged = prevSeasonIdRef.current !== null && prevSeasonIdRef.current !== sid;
-    prevWeatherIdRef.current = wid;
-    prevSeasonIdRef.current = sid;
-    if (!wChanged && !sChanged) return;
-    const seasonColors = { spring: 'rgba(255,180,180,0.55)', summer: 'rgba(100,180,255,0.45)', fall: 'rgba(255,140,60,0.5)', winter: 'rgba(180,220,255,0.55)' };
-    const weatherColors = { rain: 'rgba(80,100,140,0.5)', storm: 'rgba(40,40,60,0.6)', sunny: 'rgba(255,220,80,0.35)', cloudy: 'rgba(160,160,170,0.4)' };
-    const color = sChanged ? (seasonColors[sid] ?? 'rgba(200,200,200,0.4)') : (weatherColors[wid] ?? 'rgba(200,200,200,0.4)');
-    setSeasonFadeColor(color);
-    setTimeout(() => setSeasonFadeColor(null), 500);
-  }, [weather?.id, currentSeason?.id]);
-
-  // ── Gold float effect on gold change ─────────────────────────────────────
-  useEffect(() => {
-    if (prevGoldRef.current === null) { prevGoldRef.current = gs.money; return; }
-    const diff = gs.money - prevGoldRef.current;
-    prevGoldRef.current = gs.money;
-    if (diff === 0) return;
-    const id = Date.now() + Math.random();
-    setGoldFloats(prev => [...prev, { id, amount: diff }]);
-    setTimeout(() => setGoldFloats(prev => prev.filter(f => f.id !== id)), 1400);
-  }, [gs.money]);
-
 
   // Admin panel route
   if (window.location.hash === '#admin') {
@@ -2715,6 +2717,31 @@ export default function App() {
         setResistanceGame={setResistanceGame}
         miningMinigame={miningMinigame}
         setMiningMinigame={setMiningMinigame}
+        gameRef={gameRef}
+        playLevelUp={playLevelUp}
+        otherPlayersRef={otherPlayersRef}
+        onResistanceSuccess={onResistanceSuccess}
+        onResistanceFail={onResistanceFail}
+        setGradeUpCelebration={setGradeUpCelebration}
+        stateRef={stateRef}
+        playSellSound={playSellSound}
+        buyRod={buyRod}
+        equipRod={equipRod}
+        buyBoots={buyBoots}
+        equipBoots={equipBoots}
+        buyBait={buyBait}
+        buyCookware={buyCookware}
+        equipCookware={equipCookware}
+        buyMarineGear={buyMarineGear}
+        equipMarineGear={equipMarineGear}
+        buyPickaxe={buyPickaxe}
+        equipPickaxe={equipPickaxe}
+        buyGatherTool={buyGatherTool}
+        equipGatherTool={equipGatherTool}
+        setGuildInfo={setGuildInfo}
+        setGuildMembers={setGuildMembers}
+        setGuildChat={setGuildChat}
+        setGuildQuest={setGuildQuest}
         showSettings={showSettings}
         setShowSettings={setShowSettings}
         showCottage={showCottage}

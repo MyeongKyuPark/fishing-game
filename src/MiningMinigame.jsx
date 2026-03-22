@@ -26,6 +26,25 @@ export default function MiningMinigame({ oreName, onFinish }) {
 
   const oreColor = ORE_COLORS[oreName] ?? '#aaaaaa';
 
+  const handleResult = useCallback((isHit) => {
+    cancelAnimationFrame(rafRef.current);
+    setFlash(isHit ? 'hit' : 'miss');
+    if (isHit) setScore(s => s + 1);
+    setTimeout(() => {
+      setFlash(null);
+      const next = phase + 1;
+      if (next >= 3) {
+        setDone(true);
+        // score is state, need +1 if hit
+        setTimeout(() => onFinish(isHit ? score + 1 : score), 600);
+      } else {
+        setPhase(next);
+        radRef.current = 100;
+        lastRef.current = null;
+      }
+    }, 400);
+  }, [phase, score, onFinish]);
+
   useEffect(() => {
     if (done) return;
     radRef.current = 100;
@@ -45,26 +64,7 @@ export default function MiningMinigame({ oreName, onFinish }) {
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(rafRef.current); lastRef.current = null; };
-  }, [phase, done]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleResult = useCallback((isHit) => {
-    cancelAnimationFrame(rafRef.current);
-    setFlash(isHit ? 'hit' : 'miss');
-    if (isHit) setScore(s => s + 1);
-    setTimeout(() => {
-      setFlash(null);
-      const next = phase + 1;
-      if (next >= 3) {
-        setDone(true);
-        // score is state, need +1 if hit
-        setTimeout(() => onFinish(isHit ? score + 1 : score), 600);
-      } else {
-        setPhase(next);
-        radRef.current = 100;
-        lastRef.current = null;
-      }
-    }, 400);
-  }, [phase, score, onFinish]);
+  }, [phase, done, handleResult]);
 
   const handleClick = useCallback(() => {
     if (done || flash) return;

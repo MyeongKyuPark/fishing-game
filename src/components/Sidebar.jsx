@@ -6,7 +6,7 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE,
   BAIT_RECIPES, DELIVERY_ORDER_POOL } from '../gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, doGradeUp, gradeRareBonus,
-  SELL_ABILITY_PER_100G } from '../abilityData';
+  SELL_ABILITY_PER_100G, ENHANCE_ABILITY_GAIN } from '../abilityData';
 import { getTitle, TITLES } from '../titleData';
 import { PETS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from '../petData';
 import { NPCS, getAffinityLevel, getShopDiscount } from '../npcData';
@@ -61,7 +61,18 @@ export default function Sidebar(props) {
     showCottage, setShowCottage,
     showMailbox, setShowMailbox,
     showSeasonLeague, setShowSeasonLeague,
+    gameRef, playLevelUp, otherPlayersRef,
+    onResistanceSuccess, onResistanceFail,
+    setGradeUpCelebration,
+    stateRef, playSellSound,
+    buyRod, equipRod, buyBoots, equipBoots, buyBait,
+    buyCookware, equipCookware, buyMarineGear, equipMarineGear,
+    buyPickaxe, equipPickaxe, buyGatherTool, equipGatherTool,
+    setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
   } = props;
+
+  const myTitle = getTitle(gs);
+  const currentSeason = getCurrentSeason();
 
   const [invFilter, setInvFilter] = useState('전체');
   const [buyToast, setBuyToast] = useState(null);

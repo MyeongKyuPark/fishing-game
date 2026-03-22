@@ -42,7 +42,7 @@ export default function AdminPanel() {
     try {
       await signInWithEmailAndPassword(auth, ADMIN_EMAIL, pw);
       setAuthed(true);
-    } catch (err) {
+    } catch {
       setPwErr('로그인 실패: 비밀번호를 확인하세요.');
     } finally {
       setLoggingIn(false);
