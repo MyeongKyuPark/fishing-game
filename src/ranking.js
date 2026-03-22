@@ -425,3 +425,21 @@ export async function incrementCottageVisit(nickname) {
   } catch (e) { console.warn('cottage visit failed', e); }
 }
 
+
+// ── Prestige Leaderboard ───────────────────────────────────────────────────────
+/** Save prestige count to Firebase for leaderboard */
+export async function savePrestigeRecord(nickname, prestigeCount) {
+  try {
+    await setDoc(doc(db, 'prestige_records', encodeURIComponent(nickname)), {
+      nickname, prestigeCount, updatedAt: serverTimestamp(),
+    }, { merge: true });
+  } catch (e) { console.warn('prestige record save failed', e); }
+}
+
+/** Subscribe to top 30 prestige leaderboard */
+export function subscribePrestigeRankings(callback) {
+  const q = query(collection(db, 'prestige_records'), orderBy('prestigeCount', 'desc'), limit(30));
+  return onSnapshot(q, snap => {
+    callback(snap.docs.map(d => d.data()));
+  }, () => callback([]));
+}

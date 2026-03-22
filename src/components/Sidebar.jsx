@@ -595,6 +595,26 @@ export default function Sidebar(props) {
                     );
                   })}
                 </div>
+                {/* ── 뉴 타이드+ (Prestige) ── */}
+                {(() => {
+                  const npcKeys = ['민준', '수연', '미나', '철수', '은행원'];
+                  const allQuestsDone = npcKeys.every(k => (gs.npcQuestStep?.[k] ?? 0) >= (NPC_QUESTS[k]?.length ?? 0));
+                  const canPrestige = allQuestsDone && gs.seenChapter4;
+                  const [showPrestigeConfirm, setShowPrestigeConfirm] = props._prestigeConfirmState ?? [false, () => {}];
+                  return canPrestige ? (
+                    <div className="section">
+                      <div className="section-title">🌟 뉴 타이드+ (명예 초기화)</div>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>
+                        프레스티지 횟수: <b style={{ color: '#ffd700' }}>{gs.prestigeCount ?? 0}회</b>
+                        &nbsp;·&nbsp; 영구 판매가 보너스: <b style={{ color: '#88ff88' }}>+{((gs.prestigePermanentSellBonus ?? 0) * 100).toFixed(0)}%</b>
+                      </div>
+                      <button className="btn-buy" style={{ background: 'linear-gradient(135deg, #7733cc, #3366cc)' }}
+                        onClick={() => props.onPrestige?.()}>
+                        🌟 명예 초기화 (뉴 타이드+)
+                      </button>
+                    </div>
+                  ) : null;
+                })()}
               </>
             )}
 
@@ -1418,11 +1438,16 @@ export default function Sidebar(props) {
                         <button
                           style={{ background: 'rgba(255,220,50,0.25)', color: '#ffdd44', border: '1px solid rgba(255,220,50,0.5)', borderRadius: 6, padding: '3px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}
                           onClick={() => {
-                            setGs(prev => ({
-                              ...prev,
-                              money: prev.money + q.reward,
-                              questClaimed: { ...(prev.questClaimed ?? {}), [q.id]: true },
-                            }));
+                            setGs(prev => {
+                              const newSpXP = (prev.seasonPassXP ?? 0) + 5;
+                              return {
+                                ...prev,
+                                money: prev.money + q.reward,
+                                questClaimed: { ...(prev.questClaimed ?? {}), [q.id]: true },
+                                seasonPassXP: newSpXP,
+                                seasonPassTier: Math.min(10, Math.floor(newSpXP / 50)),
+                              };
+                            });
                             addMsg(`🎁 퀘스트 보상 수령: +${q.reward}G!`, 'catch');
                             if (gameRef.current) gameRef.current.questCompleteEffect = { age: 0 };
                           }}

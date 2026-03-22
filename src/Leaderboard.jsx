@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { subscribeOverallFishRankings, subscribeGoldRankings, subscribeAbilityRankings, subscribeAchievementRankings, subscribeTournament, getWeekKey } from './ranking';
+import { subscribeOverallFishRankings, subscribeGoldRankings, subscribeAbilityRankings, subscribeAchievementRankings, subscribeTournament, getWeekKey, subscribePrestigeRankings } from './ranking';
 import { FISH } from './gameData';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -25,6 +25,7 @@ const TABS = [
   { key: 'ability', label: '⚡ 어빌리티' },
   { key: 'achievement', label: '🏆 업적' },
   { key: 'tournament', label: '🎣 주간 대회' },
+  { key: 'prestige', label: '🌟 프레스티지' },
 ];
 
 export default function Leaderboard({ onClose, myNickname }) {
@@ -34,6 +35,7 @@ export default function Leaderboard({ onClose, myNickname }) {
   const [abilRows, setAbilRows] = useState([]);
   const [achRows, setAchRows] = useState([]);
   const [tournRows, setTournRows] = useState([]);
+  const [prestigeRows, setPrestigeRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,6 +49,8 @@ export default function Leaderboard({ onClose, myNickname }) {
       unsub = subscribeAbilityRankings(data => { setAbilRows(data); setLoading(false); });
     } else if (tab === 'tournament') {
       unsub = subscribeTournament(data => { setTournRows(data); setLoading(false); });
+    } else if (tab === 'prestige') {
+      unsub = subscribePrestigeRankings(data => { setPrestigeRows(data); setLoading(false); });
     } else {
       unsub = subscribeAchievementRankings(data => { setAchRows(data); setLoading(false); });
     }
@@ -135,6 +139,18 @@ export default function Leaderboard({ onClose, myNickname }) {
               <span className="rank-nick">{r.nickname}</span>
               <span className="rank-size" style={{ color: '#44ccff', fontWeight: 700 }}>
                 {(r.score ?? 0).toLocaleString()}마리
+              </span>
+            </div>
+          ))}
+          {!loading && tab === 'prestige' && prestigeRows.length === 0 && (
+            <div className="empty">아직 명예 초기화를 달성한 플레이어가 없습니다.</div>
+          )}
+          {!loading && tab === 'prestige' && prestigeRows.map((r, i) => (
+            <div key={r.nickname} className={`rank-row ${r.nickname === myNickname ? 'rank-me' : ''}`}>
+              <span className="rank-pos">{i < 3 ? MEDALS[i] : i + 1}</span>
+              <span className="rank-nick">{r.nickname}</span>
+              <span className="rank-size" style={{ color: '#ffd700', fontWeight: 700 }}>
+                🌟 {(r.prestigeCount ?? 0)}회
               </span>
             </div>
           ))}

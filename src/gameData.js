@@ -72,18 +72,30 @@ export const FISH = {
   불꽃송어:   { minSz: 35, maxSz: 90,  price: 1100, rarity: '전설', reqSeason: '여름낚시대회' },
   단풍잉어:   { minSz: 22, maxSz: 65,  price: 640,  rarity: '희귀', reqSeason: '추수감사절' },
   빙어왕:     { minSz: 18, maxSz: 55,  price: 1150, rarity: '전설', reqSeason: '겨울얼음낚시' },
+  // Phase 9-4: 10 new fish
+  빛붕어:     { minSz: 10, maxSz: 40,  price: 275,  rarity: '흔함' },
+  자갈치:     { minSz: 15, maxSz: 60,  price: 240,  rarity: '흔함' },
+  무지개퍼치: { minSz: 12, maxSz: 45,  price: 300,  rarity: '흔함' },
+  황금장어:   { minSz: 30, maxSz: 110, price: 750,  rarity: '보통' },
+  삼치:       { minSz: 25, maxSz: 90,  price: 625,  rarity: '보통' },
+  보석복어:   { minSz: 10, maxSz: 25,  price: 850,  rarity: '보통' },
+  달빛가오리: { minSz: 60, maxSz: 240, price: 1000, rarity: '보통' },
+  고대철갑상어: { minSz: 150, maxSz: 600, price: 2750, rarity: '희귀' },
+  용아귀:     { minSz: 90, maxSz: 360, price: 3250, rarity: '희귀' },
+  타이드헤이븐리바이어던: { minSz: 1500, maxSz: 6000, price: 20000, rarity: '신화' },
 };
 
 // ── Ability-gated fish tables (낚시 ability determines available fish pool) ──
 export const ABILITY_FISH = [
-  { minAbil:  0, table: [{ f:'붕어',w:35},{f:'잉어',w:30},{f:'미꾸라지',w:25},{f:'메기',w:10}] },
-  { minAbil: 10, table: [{ f:'붕어',w:16},{f:'잉어',w:16},{f:'멸치',w:20},{f:'배스',w:20},{f:'송어',w:18},{f:'피라미',w:10}] },
-  { minAbil: 20, table: [{ f:'꽁치',w:22},{f:'강꼬치고기',w:20},{f:'황다랑어',w:18},{f:'금눈돔',w:16},{f:'배스',w:10},{f:'도미',w:10},{f:'벚꽃붕어',w:12},{f:'단풍잉어',w:12}] },
-  { minAbil: 30, table: [{ f:'연어',w:18},{f:'황금붕어',w:15},{f:'오징어',w:18},{f:'낙지',w:16},{f:'금눈돔',w:14},{f:'해마',w:9},{f:'벚꽃붕어',w:12},{f:'단풍잉어',w:12}] },
-  { minAbil: 40, table: [{ f:'참치',w:20},{f:'광어',w:22},{f:'감성돔',w:18},{f:'황금붕어',w:10},{f:'연어',w:8},{f:'전갱이',w:10},{f:'불꽃송어',w:12},{f:'빙어왕',w:12}] },
-  { minAbil: 50, table: [{ f:'우럭',w:20},{f:'뱀장어',w:18},{f:'황새치',w:16},{f:'참치',w:12},{f:'감성돔',w:10},{f:'부시리',w:12},{f:'불꽃송어',w:12},{f:'빙어왕',w:12}] },
-  { minAbil: 65, table: [{ f:'우럭',w:16},{f:'황새치',w:14},{f:'뱀장어',w:14},{f:'부시리',w:13},{f:'개복치',w:13},{f:'참치',w:18},{f:'빙어왕',w:12}] },
-  { minAbil: 70, table: [{ f:'황새치',w:18},{f:'용고기',w:22},{f:'고대어',w:18},{f:'우럭',w:12},{f:'뱀장어',w:10},{f:'불사조고기',w:8},{f:'개복치',w:8},{f:'빙어',w:10}] },
+  { minAbil:  0, table: [{ f:'붕어',w:30},{f:'잉어',w:25},{f:'미꾸라지',w:20},{f:'메기',w:10},{f:'빛붕어',w:8},{f:'자갈치',w:7}] },
+  { minAbil: 10, table: [{ f:'붕어',w:14},{f:'잉어',w:14},{f:'멸치',w:18},{f:'배스',w:18},{f:'송어',w:16},{f:'피라미',w:8},{f:'빛붕어',w:6},{f:'자갈치',w:6}] },
+  { minAbil: 20, table: [{ f:'꽁치',w:20},{f:'강꼬치고기',w:18},{f:'황다랑어',w:16},{f:'금눈돔',w:14},{f:'배스',w:8},{f:'도미',w:8},{f:'무지개퍼치',w:8},{f:'벚꽃붕어',w:10},{f:'단풍잉어',w:10}] },
+  { minAbil: 30, table: [{ f:'연어',w:16},{f:'황금붕어',w:13},{f:'오징어',w:16},{f:'낙지',w:14},{f:'금눈돔',w:12},{f:'해마',w:8},{f:'황금장어',w:8},{f:'삼치',w:7},{f:'벚꽃붕어',w:10},{f:'단풍잉어',w:10}] },
+  { minAbil: 40, table: [{ f:'참치',w:18},{f:'광어',w:20},{f:'감성돔',w:16},{f:'황금붕어',w:8},{f:'연어',w:6},{f:'전갱이',w:8},{f:'보석복어',w:8},{f:'달빛가오리',w:6},{f:'불꽃송어',w:10},{f:'빙어왕',w:10}] },
+  { minAbil: 50, table: [{ f:'우럭',w:18},{f:'뱀장어',w:16},{f:'황새치',w:14},{f:'참치',w:10},{f:'감성돔',w:8},{f:'부시리',w:10},{f:'달빛가오리',w:8},{f:'불꽃송어',w:10},{f:'빙어왕',w:10}] },
+  { minAbil: 60, table: [{ f:'고대철갑상어',w:10},{f:'용아귀',w:8},{f:'우럭',w:14},{f:'황새치',w:12},{f:'뱀장어',w:12},{f:'부시리',w:11},{f:'개복치',w:11},{f:'참치',w:16},{f:'빙어왕',w:10}] },
+  { minAbil: 65, table: [{ f:'우럭',w:14},{f:'황새치',w:12},{f:'뱀장어',w:12},{f:'부시리',w:11},{f:'개복치',w:11},{f:'참치',w:16},{f:'고대철갑상어',w:12},{f:'용아귀',w:10},{f:'빙어왕',w:10}] },
+  { minAbil: 70, table: [{ f:'황새치',w:16},{f:'용고기',w:20},{f:'고대어',w:16},{f:'우럭',w:10},{f:'뱀장어',w:8},{f:'불사조고기',w:7},{f:'개복치',w:7},{f:'타이드헤이븐리바이어던',w:5},{f:'빙어',w:8}] },
 ];
 
 /** Get fish table matching current 낚시 ability value */
@@ -538,6 +550,20 @@ export const FURNITURE = {
   액자:      { name: '액자',        icon: '🖼', price: 200,  category: '장식', desc: '집 꾸미기 — 업적 패 전시',   bonus: {},                     size: [1, 1] },
   항아리:    { name: '항아리',      icon: '🏺', price: 250,  category: '장식', desc: '집 꾸미기 — 분위기 소품',    bonus: {},                     size: [1, 1] },
 };
+
+// ── Season Pass Rewards (Phase 9-3) ──────────────────────────────────────────
+export const SEASON_PASS_REWARDS = [
+  { tier: 1,  reward: '황금 미끼 ×3',          type: 'item',     item: '황금미끼',        qty: 3 },
+  { tier: 2,  reward: '골드 500G',             type: 'gold',     amount: 500 },
+  { tier: 3,  reward: '낚시 포션 ×2',          type: 'item',     item: '낚시포션',        qty: 2 },
+  { tier: 4,  reward: '골드 1000G',            type: 'gold',     amount: 1000 },
+  { tier: 5,  reward: '밀짚모자 스킨',          type: 'cosmetic', item: 'strawHatSkin' },
+  { tier: 6,  reward: '신화 미끼 ×1',          type: 'item',     item: '신화미끼',        qty: 1 },
+  { tier: 7,  reward: '골드 2000G',            type: 'gold',     amount: 2000 },
+  { tier: 8,  reward: '채굴 포션 ×2',          type: 'item',     item: '채굴포션',        qty: 2 },
+  { tier: 9,  reward: '시즌 전용 낚시복 스킨', type: 'cosmetic', item: 'seasonFishingSuit' },
+  { tier: 10, reward: '골드 5000G + 시즌 칭호', type: 'special',  amount: 5000 },
+];
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 export function weightedPick(table) {

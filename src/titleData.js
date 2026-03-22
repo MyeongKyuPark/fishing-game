@@ -34,6 +34,10 @@ export const TITLES = [
   { label: '마을 영웅',     color: '#ff88ff', condition: (gs)  => Object.values(gs.npcAffinity ?? {}).filter(v => v >= 80).length >= 5 },
   { label: '바다의 주인',   color: '#00ccff', condition: (gs)  => (gs.caughtSpecies?.length ?? 0) >= 30 },
   { label: '신화 소환사',   color: '#ff00ff', condition: (gs)  => (gs.achStats?.mythicCount ?? 0) >= 10 },
+  { label: '타이드헤이븐의 전설', color: '#ffd700', condition: (gs) => gs.seenChapter5 === true },
+  { label: '새벽의 낚시꾼', color: '#aaddff', condition: (gs) => (gs.prestigeCount ?? 0) >= 1 },
+  { label: '전설의 어부',  color: '#ffcc00', condition: (gs) => (gs.prestigeCount ?? 0) >= 3 },
+  { label: '불멸의 어부',  color: '#ff88ff', condition: (gs) => (gs.prestigeCount ?? 0) >= 5 },
 ];
 
 export function getTitle(gs) {

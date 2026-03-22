@@ -156,6 +156,18 @@ export const DEFAULT_STATE = {
   diyBaitLog: {},       // { baitKey: n }
   // Phase 8-2: 레시피 발견 시스템
   discoveredRecipes: [], // [dishKey, ...] — 발견된 요리 레시피 목록
+  // Phase 9-6: NPC Story Conclusion
+  seenChapter4: false,
+  seenChapter5: false,
+  // Phase 9-1: Prestige
+  prestigeCount: 0,
+  prestigePermanentSellBonus: 0,
+  prestigePending: false,
+  // Phase 9-3: Season Pass
+  seasonPassXP: 0,
+  seasonPassTier: 0,
+  seasonPassClaimedTiers: [],
+  lastSeasonReset: '',
 };
 
 export const SAVE_VERSION = 2;
@@ -286,6 +298,15 @@ export function loadSave(nickname) {
       deliveryDate: s.deliveryDate ?? '',
       diyBaitLog: s.diyBaitLog ?? {},
       discoveredRecipes: s.discoveredRecipes ?? [],
+      seenChapter4: s.seenChapter4 ?? false,
+      seenChapter5: s.seenChapter5 ?? false,
+      prestigeCount: s.prestigeCount ?? 0,
+      prestigePermanentSellBonus: s.prestigePermanentSellBonus ?? 0,
+      prestigePending: false,
+      seasonPassXP: s.seasonPassXP ?? 0,
+      seasonPassTier: s.seasonPassTier ?? 0,
+      seasonPassClaimedTiers: s.seasonPassClaimedTiers ?? [],
+      lastSeasonReset: s.lastSeasonReset ?? '',
     };
   } catch { return DEFAULT_STATE; }
 }
