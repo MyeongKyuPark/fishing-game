@@ -56,6 +56,12 @@ export const ACHIEVEMENTS = [
   // Exploration
   { id: 'explore_1',    label: '탐험가',        desc: '탐험 구역 1곳 발견',       icon: '🗺', type: 'zonesFound',    goal: 1,      reward: { money: 1000 } },
   { id: 'explore_all',  label: '모험가',        desc: '모든 탐험 구역 발견',      icon: '🧭', type: 'zonesFound',    goal: 4,      reward: { money: 8000, potionInventory: { 희귀낚시포션: 1 } } },
+  // Phase 8: Encyclopedia completions
+  { id: 'herb_all',     label: '숲의 탐험가',   desc: '모든 허브 종류 채집',                  icon: '🌿', type: 'herbSpecies',   goal: 3,  reward: { money: 3000 } },
+  { id: 'ore_all',      label: '광석 수집가',   desc: '모든 광석 종류 채굴',                  icon: '💎', type: 'oreSpecies',    goal: 4,  reward: { money: 2000 } },
+  { id: 'dish_all',     label: '마스터 셰프',   desc: '모든 특별 요리 레시피 완성',            icon: '👨‍🍳', type: 'dishSpecies',  goal: 9,  reward: { money: 15000 } },
+  { id: 'crop_all',     label: '대지의 개척자', desc: '모든 종류 작물 수확',                  icon: '🌱', type: 'cropSpecies',   goal: 9,  reward: { money: 10000 } },
+  { id: 'potion_all',   label: '연금술사',      desc: '모든 포션 종류 제조',                  icon: '⚗️', type: 'potionSpecies', goal: 7,  reward: { money: 8000 } },
 ];
 
 /** Check which new achievements were just unlocked.

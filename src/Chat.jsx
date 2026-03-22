@@ -15,6 +15,7 @@ const COMMAND_SUGGESTIONS = [
   { cmd: '!도움말', desc: '전체 명령어 목록' },
   { cmd: '!랭킹', desc: '랭킹 보기' },
   { cmd: '!판매', desc: '물고기 전체 판매' },
+  { cmd: '!방류', desc: '물고기 전체 방류 (생태계 기여)' },
   { cmd: '!여관휴식', desc: '여관 특별 휴식 (500G)' },
 ];
 

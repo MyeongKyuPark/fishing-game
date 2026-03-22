@@ -141,6 +141,19 @@ export const DEFAULT_STATE = {
     trophyWall: [],     // 최대 12개 { fishName, size } — 트로피 벽
     visited: 0,         // 방문자 수
   },
+  // Phase 8: 도감 로그 (per-item counts for encyclopedia)
+  herbLog: {},    // { 들풀: n, 버섯: n, 희귀허브: n }
+  oreLog: {},     // { 철광석: n, 구리광석: n, 수정: n, 금광석: n }
+  dishLog: {},    // { dishKey: n }
+  smeltLog: {},   // { smeltKey: n }
+  jewelLog: {},   // { jewelKey: n }
+  potionLog: {},  // { potionKey: n }
+  cropLog: {},    // { cropName: n }
+  // Phase 8-2: 납품 주문
+  deliveryOrders: [],   // [{ id, npc, item, itemType, qty, reward, deadline }]
+  deliveryDate: '',     // last order generation date
+  // Phase 8-2: 미끼 DIY
+  diyBaitLog: {},       // { baitKey: n }
 };
 
 export const SAVE_VERSION = 2;
@@ -260,6 +273,16 @@ export function loadSave(nickname) {
       },
       tutorialDone: s.tutorialDone ?? false,
       seenFeatures: s.seenFeatures ?? [],
+      herbLog: s.herbLog ?? {},
+      oreLog: s.oreLog ?? {},
+      dishLog: s.dishLog ?? {},
+      smeltLog: s.smeltLog ?? {},
+      jewelLog: s.jewelLog ?? {},
+      potionLog: s.potionLog ?? {},
+      cropLog: s.cropLog ?? {},
+      deliveryOrders: s.deliveryOrders ?? [],
+      deliveryDate: s.deliveryDate ?? '',
+      diyBaitLog: s.diyBaitLog ?? {},
     };
   } catch { return DEFAULT_STATE; }
 }

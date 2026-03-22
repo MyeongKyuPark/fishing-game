@@ -3,7 +3,8 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   FARM_EXPANSION_PRICE, FARM_EXPANSION_SLOTS, FARM_MAX_EXPANSIONS,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
-  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE } from '../gameData';
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE,
+  BAIT_RECIPES, DELIVERY_ORDER_POOL } from '../gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, doGradeUp, gradeRareBonus,
   SELL_ABILITY_PER_100G } from '../abilityData';
 import { getTitle, TITLES } from '../titleData';
@@ -61,6 +62,7 @@ export default function Sidebar(props) {
   const [buyToast, setBuyToast] = useState(null);
   const [settingsState, setSettingsState] = useState(() => getSettings());
   const [bgmVol, setBgmVolState] = useState(() => getBgmVolume());
+  const [dexTab, setDexTab] = useState('어종');
 
   const showBuyToast = (msg) => {
     setBuyToast(msg);
@@ -139,6 +141,12 @@ export default function Sidebar(props) {
                                   <span className="species-count">{fishes.length}마리</span>
                                   <span className="species-val">{speciesVal}G</span>
                                   <button tabIndex={-1} className="sell-btn" onClick={() => sellSpecies(species)}>전체판매</button>
+                                  <button tabIndex={-1} className="sell-btn" style={{ color: '#88ddff', borderColor: 'rgba(100,200,255,0.3)' }}
+                                    onClick={() => {
+                                      const ids = new Set(fishes.map(f => f.id));
+                                      setGs(prev => ({ ...prev, fishInventory: prev.fishInventory.filter(f => !ids.has(f.id)) }));
+                                      addMsg(`🌊 ${species} ${fishes.length}마리 방류! 생태계 회복에 기여했습니다.`, 'catch');
+                                    }}>방류</button>
                                 </div>
                                 <div className="species-fish-list">
                                   {sorted.map(f => {
@@ -267,6 +275,18 @@ export default function Sidebar(props) {
               const baitData  = gs.equippedBait ? BAIT[gs.equippedBait] : null;
               const cwData    = gs.cookware ? COOKWARE[gs.cookware] : null;
               const enhLv     = gs.rodEnhance?.[gs.rod] ?? 0;
+              // Compute overall 도감 completion %
+              const dexFish   = (gs.caughtSpecies ?? []).length;
+              const dexHerb   = Object.keys(HERBS).filter(h => (gs.herbLog ?? {})[h] > 0).length;
+              const dexOre    = Object.keys(ORES).filter(o => (gs.oreLog ?? {})[o] > 0).length;
+              const dexDish   = Object.keys(DISH_RECIPES).filter(d => (gs.dishLog ?? {})[d] > 0).length;
+              const dexSmelt  = Object.keys(SMELT_RECIPES).filter(k => (gs.smeltLog ?? {})[k] > 0).length;
+              const dexJewel  = Object.keys(JEWELRY_RECIPES).filter(k => (gs.jewelLog ?? {})[k] > 0).length;
+              const dexPotion = Object.keys(POTION_RECIPES).filter(k => (gs.potionLog ?? {})[k] > 0).length;
+              const dexCrop   = Object.keys(SEEDS).filter(s => (gs.cropLog ?? {})[SEEDS[s].yield.item] > 0).length;
+              const dexTotal  = Object.keys(FISH).length + Object.keys(HERBS).length + Object.keys(ORES).length + Object.keys(DISH_RECIPES).length + Object.keys(SMELT_RECIPES).length + Object.keys(JEWELRY_RECIPES).length + Object.keys(POTION_RECIPES).length + Object.keys(SEEDS).length;
+              const dexDone   = dexFish + dexHerb + dexOre + dexDish + dexSmelt + dexJewel + dexPotion + dexCrop;
+              const dexPct    = dexTotal > 0 ? Math.round(dexDone / dexTotal * 100) : 0;
 
               // Slot renderer
               const Slot = ({ icon, label, color, sub, locked }) => (
@@ -281,6 +301,19 @@ export default function Sidebar(props) {
               );
 
               return (
+                <>
+                <div style={{ padding: '6px 16px 4px', background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                    <span style={{ fontSize: 12, color: '#aaa' }}>📖 도감 달성률</span>
+                    <span style={{ fontSize: 13, color: '#ffcc44', fontWeight: 700 }}>{dexPct}%</span>
+                    <span style={{ fontSize: 11, color: '#666' }}>({dexDone}/{dexTotal})</span>
+                    <button tabIndex={-1} style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 8px', borderRadius: 6, border: 'none', background: 'rgba(100,180,255,0.2)', color: '#88ddff', cursor: 'pointer' }}
+                      onClick={() => setShowDex(true)}>도감 열기</button>
+                  </div>
+                  <div style={{ height: 5, background: 'rgba(255,255,255,0.1)', borderRadius: 3 }}>
+                    <div style={{ width: `${dexPct}%`, height: '100%', background: `hsl(${dexPct * 1.2}, 80%, 55%)`, borderRadius: 3, transition: 'width 0.5s' }} />
+                  </div>
+                </div>
                 <div className="doll-wrap">
                   {/* Left column — body slots */}
                   <div className="doll-col doll-col-left">
@@ -347,6 +380,7 @@ export default function Sidebar(props) {
                     />
                   </div>
                 </div>
+                </>
               );
             })()}
 
@@ -603,9 +637,10 @@ export default function Sidebar(props) {
                               addMsg(`🔥 ${recipe.name} 제련 성공!`, 'catch');
                               setGs(prev2 => {
                                 const ps = prev2.achStats ?? {};
+                                const newSmeltLog = { ...(prev2.smeltLog ?? {}), [key]: ((prev2.smeltLog ?? {})[key] ?? 0) + 1 };
                                 const us = { ...ps, smeltCount: (ps.smeltCount ?? 0) + 1 };
                                 setTimeout(() => checkAndGrantAchievements(us), 0);
-                                return { ...prev2, achStats: us };
+                                return { ...prev2, achStats: us, smeltLog: newSmeltLog };
                               });
                             } else addMsg(`🔥 제련 실패… 재료 소모됨`, 'error');
                           }}>제련하기</button>
@@ -645,7 +680,8 @@ export default function Sidebar(props) {
                                 const proc = { ...(prev.processedOreInventory ?? {}) };
                                 for (const [mat, n] of Object.entries(recipe.input)) proc[mat] = Math.max(0, (proc[mat] || 0) - n);
                                 const jewelry = success ? [...(prev.jewelryInventory ?? []), { id: Date.now(), name: key, ...recipe }] : (prev.jewelryInventory ?? []);
-                                return { ...prev, processedOreInventory: proc, jewelryInventory: jewelry };
+                                const newJewelLog = success ? { ...(prev.jewelLog ?? {}), [key]: ((prev.jewelLog ?? {})[key] ?? 0) + 1 } : (prev.jewelLog ?? {});
+                                return { ...prev, processedOreInventory: proc, jewelryInventory: jewelry, jewelLog: newJewelLog };
                               });
                               grantAbility('제련', 5);
                               if (success) addMsg(`${recipe.icon} ${recipe.name} 제작 성공!`, 'catch');
@@ -701,7 +737,12 @@ export default function Sidebar(props) {
                                 const crops = { ...(prev.cropInventory ?? {}) };
                                 for (const [crop, n] of Object.entries(recipe.cropInput ?? {})) crops[crop] = Math.max(0, (crops[crop] || 0) - n);
                                 const pots = { ...(prev.potionInventory ?? {}), [key]: (prev.potionInventory?.[key] ?? 0) + 1 };
-                                return { ...prev, herbInventory: herbs, cropInventory: crops, potionInventory: pots };
+                                const newPotionLog = { ...(prev.potionLog ?? {}), [key]: ((prev.potionLog ?? {})[key] ?? 0) + 1 };
+                                const potionSpecies = Object.keys(newPotionLog).filter(k => newPotionLog[k] > 0).length;
+                                const ps = prev.achStats ?? {};
+                                const us = { ...ps, potionSpecies };
+                                setTimeout(() => checkAndGrantAchievements(us), 0);
+                                return { ...prev, herbInventory: herbs, cropInventory: crops, potionInventory: pots, potionLog: newPotionLog, achStats: us };
                               });
                               addMsg(`${recipe.icon} ${recipe.name} 제조 완료!`, 'catch');
                             }}>제조</button>
@@ -1398,22 +1439,59 @@ export default function Sidebar(props) {
       )}
 
       {/* Fish encyclopedia modal */}
-      {showDex && (
-        <div className="overlay" onClick={() => setShowDex(false)}>
-          <div className="panel" onClick={e => e.stopPropagation()}>
-            <div className="panel-head">
-              <span>📖 물고기 도감</span>
-              <button tabIndex={-1} onClick={() => setShowDex(false)}>✕</button>
-            </div>
-            <div style={{ padding: '0 16px 8px' }}>
-              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 6 }}>
-                수집: {(gs.caughtSpecies ?? []).length} / {Object.keys(FISH).length}
+      {showDex && (() => {
+        const DEX_TABS = ['어종', '채집', '광석', '요리', '제작', '포션', '작물'];
+        // Compute per-tab completion for overall %
+        const fishTotal = Object.keys(FISH).length;
+        const fishDone = (gs.caughtSpecies ?? []).length;
+        const herbTotal = Object.keys(HERBS).length;
+        const herbDone = Object.keys(HERBS).filter(h => (gs.herbLog ?? {})[h] > 0).length;
+        const oreTotal = Object.keys(ORES).length;
+        const oreDone = Object.keys(ORES).filter(o => (gs.oreLog ?? {})[o] > 0).length;
+        const dishTotal = Object.keys(DISH_RECIPES).length;
+        const dishDone = Object.keys(DISH_RECIPES).filter(d => (gs.dishLog ?? {})[d] > 0).length;
+        const smeltTotal = Object.keys(SMELT_RECIPES).length;
+        const smeltDone = Object.keys(SMELT_RECIPES).filter(k => (gs.smeltLog ?? {})[k] > 0).length;
+        const jewelTotal = Object.keys(JEWELRY_RECIPES).length;
+        const jewelDone = Object.keys(JEWELRY_RECIPES).filter(k => (gs.jewelLog ?? {})[k] > 0).length;
+        const potionTotal = Object.keys(POTION_RECIPES).length;
+        const potionDone = Object.keys(POTION_RECIPES).filter(k => (gs.potionLog ?? {})[k] > 0).length;
+        const cropTotal = Object.keys(SEEDS).length;
+        const cropDone = Object.keys(SEEDS).filter(s => (gs.cropLog ?? {})[SEEDS[s].yield.item] > 0).length;
+        const grandTotal = fishTotal + herbTotal + oreTotal + dishTotal + smeltTotal + jewelTotal + potionTotal + cropTotal;
+        const grandDone = fishDone + herbDone + oreDone + dishDone + smeltDone + jewelDone + potionDone + cropDone;
+        const completePct = grandTotal > 0 ? Math.round(grandDone / grandTotal * 100) : 0;
+
+        return (
+          <div className="overlay" onClick={() => setShowDex(false)}>
+            <div className="panel" onClick={e => e.stopPropagation()}>
+              <div className="panel-head">
+                <span>📖 도감 ({completePct}% 완성)</span>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button tabIndex={-1} style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: 'none', background: 'rgba(100,200,100,0.25)', color: '#88ee88', cursor: 'pointer' }}
+                    onClick={() => {
+                      const summary = `🎮 타이드헤이븐 도감 현황 (${completePct}% 달성)\n` +
+                        `🐟 어종: ${fishDone}/${fishTotal} | 🌿 채집: ${herbDone}/${herbTotal} | ⛏ 광석: ${oreDone}/${oreTotal}\n` +
+                        `🍽 요리: ${dishDone}/${dishTotal} | 🔥 제작: ${(smeltDone+jewelDone)}/${(smeltTotal+jewelTotal)} | 🧪 포션: ${potionDone}/${potionTotal} | 🌱 작물: ${cropDone}/${cropTotal}`;
+                      navigator.clipboard?.writeText(summary).then(() => addMsg('📋 도감 현황 클립보드 복사 완료!', 'catch')).catch(() => addMsg('클립보드 복사 실패', 'error'));
+                    }}>공유</button>
+                  <button tabIndex={-1} onClick={() => setShowDex(false)}>✕</button>
+                </div>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 6, marginBottom: 12 }}>
-                <div style={{ width: `${((gs.caughtSpecies?.length ?? 0) / Object.keys(FISH).length) * 100}%`, height: '100%', background: '#44ffaa', borderRadius: 4 }} />
+              {/* Tab bar */}
+              <div style={{ display: 'flex', gap: 4, padding: '6px 10px 2px', flexWrap: 'wrap' }}>
+                {DEX_TABS.map(t => (
+                  <button key={t} tabIndex={-1} onClick={() => setDexTab(t)}
+                    style={{ padding: '3px 8px', fontSize: 11, borderRadius: 6, border: 'none', cursor: 'pointer',
+                      background: dexTab === t ? 'rgba(100,180,255,0.35)' : 'rgba(255,255,255,0.08)',
+                      color: dexTab === t ? '#7df' : 'rgba(255,255,255,0.6)', fontWeight: dexTab === t ? 700 : 400 }}>
+                    {t}
+                  </button>
+                ))}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                {(() => {
+              <div style={{ padding: '6px 16px 12px', overflowY: 'auto', maxHeight: 'calc(80vh - 120px)' }}>
+                {/* 어종 탭 */}
+                {dexTab === '어종' && (() => {
                   const FISH_HINT = {
                     붕어: '낚시 0+ · 부두에서 낚시', 잉어: '낚시 0+ · 부두에서 낚시',
                     미꾸라지: '낚시 0+ · 부두에서 낚시', 메기: '낚시 0+ · 부두에서 낚시',
@@ -1431,41 +1509,238 @@ export default function Sidebar(props) {
                     벚꽃붕어: '🌸 봄 한정 · 낚시 20+', 불꽃송어: '🔥 여름 한정 · 낚시 40+',
                     단풍잉어: '🍂 가을 한정 · 낚시 20+', 빙어왕: '❄️ 겨울 한정 · 낚시 40+',
                   };
-                  return Object.entries(FISH).map(([fishName, fd]) => {
-                    const caught = (gs.caughtSpecies ?? []).includes(fishName);
-                    const record = (gs.fishRecords ?? {})[fishName];
-                    const isMaxSize = record && record.size >= fd.maxSz * 0.97;
-                    return (
-                      <div key={fishName} style={{
-                        background: caught ? (isMaxSize ? 'rgba(255,200,0,0.12)' : 'rgba(68,255,170,0.1)') : 'rgba(255,255,255,0.04)',
-                        border: `1px solid ${caught ? (isMaxSize ? 'rgba(255,200,0,0.5)' : 'rgba(68,255,170,0.3)') : 'rgba(255,255,255,0.08)'}`,
-                        borderRadius: 6, padding: '6px 10px',
-                        opacity: caught ? 1 : 0.65,
-                      }}>
-                        <div style={{ fontWeight: 700, fontSize: 12, color: caught ? (isMaxSize ? '#ffcc44' : '#44ffaa') : '#aaa' }}>
-                          {caught ? (isMaxSize ? '🏆 ' : '✓ ') : '🔍 '}{fishName}
-                          {fd.reqSeason && <span style={{ fontSize: 10, color: '#ffcc66', marginLeft: 4 }}>[계절한정]</span>}
-                        </div>
-                        {caught
-                          ? <>
-                              <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~{fd.reqSeason ? ` · ${fd.reqSeason}` : ''}</div>
-                              {record && (
-                                <div style={{ fontSize: 10, color: isMaxSize ? '#ffcc44' : '#aaa' }}>
-                                  최대: {record.size}cm {isMaxSize ? '(최고 크기!)' : `/ ${fd.maxSz}cm`}
-                                </div>
-                              )}
-                            </>
-                          : <div style={{ fontSize: 10, color: '#7ab' }}>{FISH_HINT[fishName] ?? '낚시 중 발견 가능'}</div>
-                        }
+                  return (
+                    <>
+                      <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>수집: {fishDone} / {fishTotal}</div>
+                      <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, marginBottom: 10 }}>
+                        <div style={{ width: `${fishDone / fishTotal * 100}%`, height: '100%', background: '#44ffaa', borderRadius: 4 }} />
                       </div>
-                    );
-                  });
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                        {Object.entries(FISH).map(([fishName, fd]) => {
+                          const caught = (gs.caughtSpecies ?? []).includes(fishName);
+                          const record = (gs.fishRecords ?? {})[fishName];
+                          const isMaxSize = record && record.size >= fd.maxSz * 0.97;
+                          return (
+                            <div key={fishName} style={{
+                              background: caught ? (isMaxSize ? 'rgba(255,200,0,0.12)' : 'rgba(68,255,170,0.1)') : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${caught ? (isMaxSize ? 'rgba(255,200,0,0.5)' : 'rgba(68,255,170,0.3)') : 'rgba(255,255,255,0.08)'}`,
+                              borderRadius: 6, padding: '6px 10px', opacity: caught ? 1 : 0.65,
+                            }}>
+                              <div style={{ fontWeight: 700, fontSize: 12, color: caught ? (isMaxSize ? '#ffcc44' : '#44ffaa') : '#aaa' }}>
+                                {caught ? (isMaxSize ? '🏆 ' : '✓ ') : '🔍 '}{fishName}
+                                {fd.reqSeason && <span style={{ fontSize: 10, color: '#ffcc66', marginLeft: 4 }}>[계절]</span>}
+                              </div>
+                              {caught ? <>
+                                <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~</div>
+                                {record && <div style={{ fontSize: 10, color: isMaxSize ? '#ffcc44' : '#aaa' }}>최대: {record.size}cm {isMaxSize ? '(최고!)' : `/ ${fd.maxSz}cm`}</div>}
+                              </> : <div style={{ fontSize: 10, color: '#7ab' }}>{FISH_HINT[fishName] ?? '낚시 중 발견 가능'}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  );
                 })()}
+                {/* 채집 탭 */}
+                {dexTab === '채집' && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>채집: {herbDone} / {herbTotal}종</div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, marginBottom: 10 }}>
+                      <div style={{ width: `${herbDone / herbTotal * 100}%`, height: '100%', background: '#88ee44', borderRadius: 4 }} />
+                    </div>
+                    {Object.entries(HERBS).map(([herbName, hd]) => {
+                      const count = (gs.herbLog ?? {})[herbName] ?? 0;
+                      const done = count > 0;
+                      return (
+                        <div key={herbName} className="rod-card" style={{ opacity: done ? 1 : 0.6, borderColor: done ? 'rgba(136,238,68,0.4)' : undefined }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>🌿</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: done ? '#88ee44' : '#aaa' }}>{done ? '✓ ' : '🔍 '}{herbName}</div>
+                              <div style={{ fontSize: 11, color: '#aaa' }}>판매가: {hd.price}G/개</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#ffcc44', fontSize: 13, fontWeight: 700 }}>{count.toLocaleString()}회</div>
+                              <div style={{ fontSize: 10, color: '#aaa' }}>총 채집</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {herbDone < herbTotal && <div style={{ fontSize: 11, color: '#aaa', marginTop: 8 }}>💡 숲 구역에서 채집하면 모든 종류를 발견할 수 있습니다.</div>}
+                    {herbDone >= herbTotal && <div style={{ fontSize: 11, color: '#88ee44', marginTop: 8 }}>🌿 모든 허브 종류 채집 완료! "숲의 탐험가" 업적 달성 가능</div>}
+                  </>
+                )}
+                {/* 광석 탭 */}
+                {dexTab === '광석' && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>채굴: {oreDone} / {oreTotal}종</div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, marginBottom: 10 }}>
+                      <div style={{ width: `${oreDone / oreTotal * 100}%`, height: '100%', background: '#ffaa44', borderRadius: 4 }} />
+                    </div>
+                    {Object.entries(ORES).map(([oreName, od]) => {
+                      const count = (gs.oreLog ?? {})[oreName] ?? 0;
+                      const done = count > 0;
+                      return (
+                        <div key={oreName} className="rod-card" style={{ opacity: done ? 1 : 0.6, borderColor: done ? `${od.color}55` : undefined }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>⛏</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: done ? od.color : '#aaa' }}>{done ? '✓ ' : '🔍 '}{oreName}</div>
+                              <div style={{ fontSize: 11, color: '#aaa' }}>판매가: {od.price}G/개 · {od.desc ?? ''}</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#ffcc44', fontSize: 13, fontWeight: 700 }}>{count.toLocaleString()}개</div>
+                              <div style={{ fontSize: 10, color: '#aaa' }}>총 채굴</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {oreDone >= oreTotal && <div style={{ fontSize: 11, color: '#ffaa44', marginTop: 8 }}>💎 모든 광석 종류 채굴 완료! "광석 수집가" 업적 달성 가능</div>}
+                  </>
+                )}
+                {/* 요리 탭 */}
+                {dexTab === '요리' && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>완성: {dishDone} / {dishTotal}종</div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, marginBottom: 10 }}>
+                      <div style={{ width: `${dishDone / dishTotal * 100}%`, height: '100%', background: '#ffaa00', borderRadius: 4 }} />
+                    </div>
+                    {Object.entries(DISH_RECIPES).map(([key, recipe]) => {
+                      const count = (gs.dishLog ?? {})[key] ?? 0;
+                      const done = count > 0;
+                      const locked = recipe.reqNpc && Object.entries(recipe.reqNpc).some(([npc, lv]) => (gs.npcAffinity?.[npc] ?? 0) < lv);
+                      return (
+                        <div key={key} className="rod-card" style={{ opacity: done ? 1 : 0.65, borderColor: done ? 'rgba(255,170,0,0.4)' : undefined }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 20 }}>{locked ? '🔒' : recipe.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: done ? '#ffe0a0' : '#aaa' }}>{done ? '✓ ' : '🔍 '}{recipe.name}</div>
+                              <div style={{ fontSize: 11, color: '#888' }}>{locked ? '🔒 ' + Object.entries(recipe.reqNpc).map(([n, l]) => `${n} Lv.${l}`).join(', ') : recipe.desc}</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#ffcc44', fontSize: 13, fontWeight: 700 }}>{count}회</div>
+                              <div style={{ fontSize: 10, color: '#aaa' }}>{recipe.price}G/개</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {dishDone >= dishTotal && <div style={{ fontSize: 11, color: '#ffaa00', marginTop: 8 }}>👨‍🍳 모든 특별 요리 완성! "마스터 셰프" 업적 달성 가능</div>}
+                  </>
+                )}
+                {/* 제작 탭 (제련 + 장신구) */}
+                {dexTab === '제작' && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>제련: {smeltDone}/{smeltTotal} · 장신구: {jewelDone}/{jewelTotal}</div>
+                    <div className="section-title" style={{ marginTop: 8 }}>🔥 제련 도감</div>
+                    {Object.entries(SMELT_RECIPES).map(([key, recipe]) => {
+                      const count = (gs.smeltLog ?? {})[key] ?? 0;
+                      const done = count > 0;
+                      return (
+                        <div key={key} className="rod-card" style={{ opacity: done ? 1 : 0.6, borderColor: done ? `${recipe.color}55` : undefined }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 16, color: recipe.color }}>⬡</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: done ? recipe.color : '#aaa' }}>{done ? '✓ ' : '🔍 '}{recipe.name}</div>
+                              <div style={{ fontSize: 11, color: '#888' }}>{recipe.desc}</div>
+                            </div>
+                            <div style={{ color: '#ffcc44', fontSize: 12 }}>{count}회</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="section-title" style={{ marginTop: 12 }}>💍 장신구 도감</div>
+                    {Object.entries(JEWELRY_RECIPES).map(([key, recipe]) => {
+                      const count = (gs.jewelLog ?? {})[key] ?? 0;
+                      const done = count > 0;
+                      const equipped = gs.equippedJewelry?.[recipe.slot] === key;
+                      return (
+                        <div key={key} className="rod-card" style={{ opacity: done ? 1 : 0.6, borderColor: done ? `${recipe.color}55` : undefined }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 18, color: recipe.color }}>{recipe.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: done ? recipe.color : '#aaa' }}>{done ? '✓ ' : '🔍 '}{recipe.name} {equipped && <span className="badge">장착</span>}</div>
+                              <div style={{ fontSize: 11, color: '#888' }}>{recipe.desc}</div>
+                            </div>
+                            <div style={{ color: '#ffcc44', fontSize: 12 }}>{count}회</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+                {/* 포션 탭 */}
+                {dexTab === '포션' && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>제조: {potionDone} / {potionTotal}종</div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, marginBottom: 10 }}>
+                      <div style={{ width: `${potionDone / potionTotal * 100}%`, height: '100%', background: '#cc44ff', borderRadius: 4 }} />
+                    </div>
+                    {Object.entries(POTION_RECIPES).map(([key, recipe]) => {
+                      const count = (gs.potionLog ?? {})[key] ?? 0;
+                      const done = count > 0;
+                      const stock = (gs.potionInventory ?? {})[key] ?? 0;
+                      const isActive = gs.activePotion?.type === key;
+                      return (
+                        <div key={key} className="rod-card" style={{ opacity: done ? 1 : 0.6, borderColor: done ? `${recipe.color}55` : undefined }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 18, color: recipe.color }}>{recipe.icon}</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: done ? recipe.color : '#aaa' }}>{done ? '✓ ' : '🔍 '}{recipe.name} {isActive && <span className="badge" style={{ background: '#1a88cc' }}>효과중</span>}</div>
+                              <div style={{ fontSize: 11, color: '#888' }}>{recipe.desc}</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#ffcc44', fontSize: 12 }}>{count}회 제조</div>
+                              {stock > 0 && <div style={{ fontSize: 10, color: '#88ff88' }}>보유 ×{stock}</div>}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {potionDone >= potionTotal && <div style={{ fontSize: 11, color: '#cc44ff', marginTop: 8 }}>⚗️ 모든 포션 제조 완료! "연금술사" 업적 달성 가능</div>}
+                  </>
+                )}
+                {/* 작물 탭 */}
+                {dexTab === '작물' && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>수확: {cropDone} / {cropTotal}종</div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, marginBottom: 10 }}>
+                      <div style={{ width: `${cropDone / cropTotal * 100}%`, height: '100%', background: '#66cc44', borderRadius: 4 }} />
+                    </div>
+                    {Object.entries(SEEDS).map(([seedKey, sd]) => {
+                      const cropName = sd.yield.item;
+                      const count = (gs.cropLog ?? {})[cropName] ?? 0;
+                      const done = count > 0;
+                      const seasonal = sd.reqSeason ? `🗓 ${sd.seasonDesc ?? sd.reqSeason}` : null;
+                      return (
+                        <div key={seedKey} className="rod-card" style={{ opacity: done ? 1 : 0.65, borderColor: done ? 'rgba(102,204,68,0.4)' : undefined }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 18 }}>🌱</span>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 700, color: done ? '#66cc44' : '#aaa' }}>
+                                {done ? '✓ ' : '🔍 '}{cropName}
+                                {seasonal && <span style={{ fontSize: 10, color: '#ffcc66', marginLeft: 4 }}>[계절]</span>}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#888' }}>{sd.name} · 판매가 {sd.yield.sellPrice}G{seasonal ? ` · ${seasonal}` : ''}</div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ color: '#ffcc44', fontSize: 12, fontWeight: 700 }}>{count.toLocaleString()}개</div>
+                              <div style={{ fontSize: 10, color: '#aaa' }}>총 수확</div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {cropDone >= cropTotal && <div style={{ fontSize: 11, color: '#66cc44', marginTop: 8 }}>🌾 모든 작물 수확 완료! "대지의 개척자" 업적 달성 가능</div>}
+                  </>
+                )}
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Shop modal */}
       {showShop && (
@@ -1589,6 +1864,62 @@ export default function Sidebar(props) {
                           </button>
                       }
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── DIY Bait Crafting ── */}
+            <div className="section">
+              <div className="section-title">🌿 미끼 DIY 제작</div>
+              <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>허브 + 광석 조합으로 커스텀 미끼 제작</div>
+              {Object.entries(BAIT_RECIPES).map(([key, recipe]) => {
+                const herbOk = Object.entries(recipe.input).filter(([k]) => ['들풀','버섯','희귀허브'].includes(k)).every(([h, n]) => (gs.herbInventory?.[h] ?? 0) >= n);
+                const oreOk = Object.entries(recipe.input).filter(([k]) => ['철광석','구리광석','수정','금광석'].includes(k)).every(([o, n]) => (gs.oreInventory?.[o] ?? 0) >= n);
+                const canCraft = herbOk && oreOk;
+                const stock = (gs.baitInventory ?? {})[recipe.name] ?? 0;
+                return (
+                  <div key={key} className="rod-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                      <span style={{ fontSize: 18 }}>{recipe.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontWeight: 700, color: '#ffe0a0' }}>{recipe.name}</span>
+                        {stock > 0 && <span style={{ marginLeft: 6, color: '#88ff88', fontSize: 11 }}>×{stock}</span>}
+                        <div style={{ fontSize: 11, color: '#888' }}>{recipe.effect}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, marginBottom: 4 }}>
+                      재료:{' '}
+                      {Object.entries(recipe.input).map(([item, n]) => {
+                        const isHerb = ['들풀','버섯','희귀허브'].includes(item);
+                        const have = isHerb ? (gs.herbInventory?.[item] ?? 0) : (gs.oreInventory?.[item] ?? 0);
+                        return (
+                          <span key={item} style={{ marginRight: 6, color: have >= n ? '#88ff88' : '#ff8888' }}>
+                            {item} {have}/{n}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <button tabIndex={-1} className={canCraft ? 'btn-buy' : 'btn-dis'} disabled={!canCraft} style={{ fontSize: 11 }}
+                      onClick={() => {
+                        setGs(prev => {
+                          const herbs = { ...(prev.herbInventory ?? {}) };
+                          const ores = { ...prev.oreInventory };
+                          for (const [item, n] of Object.entries(recipe.input)) {
+                            if (['들풀','버섯','희귀허브'].includes(item)) herbs[item] = Math.max(0, (herbs[item] ?? 0) - n);
+                            else ores[item] = Math.max(0, (ores[item] ?? 0) - n);
+                          }
+                          const newBait = { ...(prev.baitInventory ?? {}), [recipe.name]: ((prev.baitInventory ?? {})[recipe.name] ?? 0) + 1 };
+                          const newDiyLog = { ...(prev.diyBaitLog ?? {}), [key]: ((prev.diyBaitLog ?? {})[key] ?? 0) + 1 };
+                          if (!prev.ownedBait.includes(recipe.name)) {
+                            return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog, ownedBait: [...prev.ownedBait, recipe.name] };
+                          }
+                          return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog };
+                        });
+                        addMsg(`${recipe.icon} ${recipe.name} 제작 완료!`, 'catch');
+                      }}>
+                      {canCraft ? '제작' : '재료 부족'}
+                    </button>
                   </div>
                 );
               })}
@@ -2090,6 +2421,77 @@ export default function Sidebar(props) {
                   </>
               }
             </div>
+
+            {/* ── Delivery Orders ── */}
+            {(() => {
+              const today = new Date().toDateString();
+              let orders = gs.deliveryOrders ?? [];
+              // Generate new orders daily
+              if ((gs.deliveryDate ?? '') !== today || orders.length === 0) {
+                // This is render-time generation — just show what we'd show; actual generation is in App via command or this triggers via state
+                // We generate a preview for display; actual state update on click of "수령하기 없음" button
+                const dateHash = today.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0);
+                const pool = [...DELIVERY_ORDER_POOL];
+                const selected = [];
+                let h = dateHash;
+                for (let i = 0; i < 3 && pool.length > 0; i++) {
+                  const idx = h % pool.length;
+                  const base = pool.splice(idx, 1)[0];
+                  selected.push({ ...base, id: `delivery_${today}_${i}`, deadline: today });
+                  h = (h * 1664525 + 1013904223) >>> 0;
+                }
+                orders = selected;
+              }
+              return (
+                <div className="section">
+                  <div className="section-title">📦 NPC 납품 주문 (일일)</div>
+                  <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>매일 NPC 3종이 아이템 납품 요청. 완료 시 골드 + 친밀도 보너스</div>
+                  {orders.map((order) => {
+                    const completed = (gs.deliveryOrders ?? []).find(o => o.id === order.id)?.completed;
+                    let have = 0;
+                    if (order.itemType === 'ore') have = (gs.oreInventory ?? {})[order.item] ?? 0;
+                    else if (order.itemType === 'herb') have = (gs.herbInventory ?? {})[order.item] ?? 0;
+                    else if (order.itemType === 'crop') have = (gs.cropInventory ?? {})[order.item] ?? 0;
+                    else if (order.itemType === 'processed') have = (gs.processedOreInventory ?? {})[order.item] ?? 0;
+                    const canFulfill = !completed && have >= order.qty;
+                    const npcColor = { 채굴사: '#ffaa44', 요리사: '#ff88cc', 여관주인: '#88ccff', 상인: '#ffcc44' }[order.npc] ?? '#aaa';
+                    return (
+                      <div key={order.id} className="rod-card" style={{ opacity: completed ? 0.5 : 1, borderColor: completed ? 'rgba(100,255,100,0.3)' : undefined }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span style={{ fontSize: 14, color: npcColor, fontWeight: 700 }}>{order.npc}</span>
+                          <span style={{ fontSize: 12 }}>→ {order.item} {order.qty}개</span>
+                          {completed && <span className="badge" style={{ background: '#228822' }}>완료</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#aaa', marginBottom: 4 }}>
+                          보유: {have}/{order.qty} · 보상: +{order.reward.money}G, 친밀도 +{order.reward.affinity}
+                        </div>
+                        <button tabIndex={-1} className={canFulfill ? 'btn-buy' : 'btn-dis'} disabled={!canFulfill} style={{ fontSize: 11 }}
+                          onClick={() => {
+                            setGs(prev => {
+                              const newState = { ...prev };
+                              if (order.itemType === 'ore') newState.oreInventory = { ...prev.oreInventory, [order.item]: Math.max(0, (prev.oreInventory[order.item] ?? 0) - order.qty) };
+                              else if (order.itemType === 'herb') newState.herbInventory = { ...(prev.herbInventory ?? {}), [order.item]: Math.max(0, ((prev.herbInventory ?? {})[order.item] ?? 0) - order.qty) };
+                              else if (order.itemType === 'crop') newState.cropInventory = { ...(prev.cropInventory ?? {}), [order.item]: Math.max(0, ((prev.cropInventory ?? {})[order.item] ?? 0) - order.qty) };
+                              else if (order.itemType === 'processed') newState.processedOreInventory = { ...(prev.processedOreInventory ?? {}), [order.item]: Math.max(0, ((prev.processedOreInventory ?? {})[order.item] ?? 0) - order.qty) };
+                              newState.money = prev.money + order.reward.money;
+                              // Mark order completed & save today's orders
+                              const savedOrders = orders.map(o => o.id === order.id ? { ...o, completed: true } : o);
+                              newState.deliveryOrders = savedOrders;
+                              newState.deliveryDate = today;
+                              const npcKey = order.npc;
+                              newState.npcAffinity = { ...prev.npcAffinity, [npcKey]: (prev.npcAffinity?.[npcKey] ?? 0) + order.reward.affinity };
+                              return newState;
+                            });
+                            addMsg(`📦 납품 완료! ${order.item} ${order.qty}개 → +${order.reward.money}G, ${order.npc} 친밀도 +${order.reward.affinity}`, 'catch');
+                          }}>
+                          {completed ? '완료됨' : canFulfill ? '납품하기' : '재료 부족'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* ── Buy seeds ── */}
             <div className="section">
@@ -2953,6 +3355,48 @@ export default function Sidebar(props) {
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
                   낮음: 파티클·장식 감소 / 중간: 기본 / 높음: 최대 품질 (다음 접속부터 적용)
                 </div>
+              </div>
+
+              {/* Cloud save backup */}
+              <div className="section">
+                <div className="section-title">💾 세이브 데이터 백업</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button tabIndex={-1} className="btn-eq" style={{ fontSize: 12 }}
+                    onClick={() => {
+                      const key = `fishingGame_v2_${nickname}`;
+                      const raw = localStorage.getItem(key);
+                      if (!raw) { addMsg('저장 데이터가 없습니다.', 'error'); return; }
+                      const blob = new Blob([raw], { type: 'application/octet-stream' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url; a.download = `tidehaven_${nickname}_backup.save`;
+                      a.click(); URL.revokeObjectURL(url);
+                      addMsg('💾 세이브 데이터 다운로드 완료!', 'catch');
+                    }}>
+                    📥 백업 다운로드
+                  </button>
+                  <label tabIndex={-1} className="btn-eq" style={{ fontSize: 12, cursor: 'pointer' }}>
+                    📤 백업 불러오기
+                    <input type="file" accept=".save,.json" style={{ display: 'none' }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = ev => {
+                          try {
+                            const raw = ev.target.result;
+                            const key = `fishingGame_v2_${nickname}`;
+                            localStorage.setItem(key, raw);
+                            addMsg('✅ 백업 복구 완료! 새로고침하면 적용됩니다.', 'catch');
+                          } catch { addMsg('백업 파일 오류', 'error'); }
+                        };
+                        reader.readAsText(file);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>세이브 파일을 로컬에 백업하고 복구합니다.</div>
               </div>
 
               {/* D-3: Colorblind mode */}

@@ -375,6 +375,36 @@ export const FARM_EXPANSION_PRICE = 3000;  // 농장 확장권 가격
 export const FARM_EXPANSION_SLOTS = 3;     // 확장당 추가 칸 수
 export const FARM_MAX_EXPANSIONS = 3;      // 최대 확장 횟수 (최대 6+9=15칸)
 
+// ── DIY 미끼 제작 (BAIT_RECIPES) ─────────────────────────────────────────────
+// 허브 + 광석 조합으로 커스텀 미끼 제작
+export const BAIT_RECIPES = {
+  숲의미끼:   { name: '숲의 미끼',    icon: '🌿', input: { 버섯: 3, 구리광석: 2 },     effect: '+40% 희귀 확률 (1회용)', rareBonus: 0.40, oneTime: true, price: 0 },
+  황금미끼2:  { name: '황금 미끼',    icon: '✨', input: { 들풀: 5, 금광석: 1 },       effect: '+25% 희귀 확률 (영구)', rareBonus: 0.25, oneTime: false, price: 0 },
+  심해미끼:   { name: '심해 미끼',    icon: '🌊', input: { 희귀허브: 2, 수정: 2 },     effect: '심해 낚시 속도 +30% (1회용)', fishSpeedBonus: 0.30, seaOnly: true, oneTime: true, price: 0 },
+  광산미끼:   { name: '광산 미끼',    icon: '⛏', input: { 들풀: 3, 철광석: 3 },       effect: '낚시 속도 +20% (1회용)', fishSpeedBonus: 0.20, oneTime: true, price: 0 },
+};
+
+// ── 납품 주문 풀 (Delivery Order Pool) ──────────────────────────────────────
+export const DELIVERY_ORDER_POOL = [
+  // 광석 납품
+  { npc: '채굴사', item: '철광석',  itemType: 'ore',  qty: 5,  reward: { money: 300, affinity: 2 } },
+  { npc: '채굴사', item: '구리광석',itemType: 'ore',  qty: 5,  reward: { money: 400, affinity: 2 } },
+  { npc: '채굴사', item: '수정',    itemType: 'ore',  qty: 3,  reward: { money: 700, affinity: 3 } },
+  { npc: '채굴사', item: '금광석',  itemType: 'ore',  qty: 2,  reward: { money: 1500, affinity: 4 } },
+  // 허브 납품
+  { npc: '요리사', item: '들풀',    itemType: 'herb', qty: 5,  reward: { money: 200, affinity: 1 } },
+  { npc: '요리사', item: '버섯',    itemType: 'herb', qty: 3,  reward: { money: 350, affinity: 2 } },
+  { npc: '요리사', item: '희귀허브',itemType: 'herb', qty: 2,  reward: { money: 800, affinity: 3 } },
+  // 작물 납품
+  { npc: '여관주인', item: '감자',  itemType: 'crop', qty: 5,  reward: { money: 300, affinity: 2 } },
+  { npc: '여관주인', item: '당근',  itemType: 'crop', qty: 4,  reward: { money: 400, affinity: 2 } },
+  { npc: '여관주인', item: '밀',    itemType: 'crop', qty: 8,  reward: { money: 350, affinity: 2 } },
+  { npc: '여관주인', item: '치유초',itemType: 'crop', qty: 2,  reward: { money: 900, affinity: 3 } },
+  // 제련 납품
+  { npc: '상인', item: '정제철',    itemType: 'processed', qty: 2, reward: { money: 600, affinity: 2 } },
+  { npc: '상인', item: '황금괴',    itemType: 'processed', qty: 1, reward: { money: 2000, affinity: 4 } },
+];
+
 // ── Zone-specific fish tables ────────────────────────────────────────────────
 export const ZONE_FISH = {
   // 민물낚시터: freshwater pond (default, near dock)

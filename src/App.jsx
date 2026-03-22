@@ -941,11 +941,14 @@ export default function App() {
   const onOreMined = useCallback((oreName) => {
     setGs(prev => {
       const prevStats = prev.achStats ?? {};
-      const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + 1 };
+      const newOreLog = { ...(prev.oreLog ?? {}), [oreName]: ((prev.oreLog ?? {})[oreName] ?? 0) + 1 };
+      const oreSpecies = Object.keys(newOreLog).filter(k => newOreLog[k] > 0).length;
+      const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + 1, oreSpecies };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       return {
         ...prev,
         oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + 1 },
+        oreLog: newOreLog,
         achStats: updatedStats,
       };
     });
@@ -1010,11 +1013,14 @@ export default function App() {
   const onHerbGathered = useCallback((herbName) => {
     setGs(prev => {
       const prevStats = prev.achStats ?? {};
-      const updatedStats = { ...prevStats, herbGathered: (prevStats.herbGathered ?? 0) + 1 };
+      const newHerbLog = { ...(prev.herbLog ?? {}), [herbName]: ((prev.herbLog ?? {})[herbName] ?? 0) + 1 };
+      const herbSpecies = Object.keys(newHerbLog).filter(k => newHerbLog[k] > 0).length;
+      const updatedStats = { ...prevStats, herbGathered: (prevStats.herbGathered ?? 0) + 1, herbSpecies };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       return {
         ...prev,
         herbInventory: { ...(prev.herbInventory ?? {}), [herbName]: ((prev.herbInventory ?? {})[herbName] || 0) + 1 },
+        herbLog: newHerbLog,
         achStats: updatedStats,
       };
     });
@@ -1389,6 +1395,25 @@ export default function App() {
       return;
     }
 
+    // ── 방류 (fish release) ──────────────────────────────────────────────────
+    if (cmd === '!방류') {
+      const inv = stateRef.current?.fishInventory ?? [];
+      if (inv.length === 0) { addMsg('방류할 물고기가 없습니다.', 'error'); return; }
+      setGs(prev => ({ ...prev, fishInventory: [] }));
+      addMsg(`🌊 ${inv.length}마리 전체 방류! 생태계 회복에 기여했습니다.`, 'catch');
+      return;
+    }
+    if (input.trim().startsWith('!방류 ')) {
+      const fishName = input.trim().slice(4).trim();
+      const inv = stateRef.current?.fishInventory ?? [];
+      const toRelease = inv.filter(f => f.name === fishName);
+      if (toRelease.length === 0) { addMsg(`인벤토리에 ${fishName}이/가 없습니다.`, 'error'); return; }
+      const ids = new Set(toRelease.map(f => f.id));
+      setGs(prev => ({ ...prev, fishInventory: prev.fishInventory.filter(f => !ids.has(f.id)) }));
+      addMsg(`🌊 ${fishName} ${toRelease.length}마리 방류!`, 'catch');
+      return;
+    }
+
     if (cmd === '!탐험') {
       const abilities = stateRef.current?.abilities;
       const explored = stateRef.current?.exploredZones ?? [];
@@ -1509,9 +1534,12 @@ export default function App() {
       advanceQuest('farm', totalHarvested);
       setGs(prev => {
         const prevStats = prev.achStats ?? {};
-        const updatedStats = { ...prevStats, cropsHarvested: (prevStats.cropsHarvested ?? 0) + totalHarvested };
+        const newCropLog = { ...(prev.cropLog ?? {}) };
+        for (const [item, qty] of Object.entries(gained)) newCropLog[item] = (newCropLog[item] ?? 0) + qty;
+        const cropSpecies = Object.keys(newCropLog).filter(k => newCropLog[k] > 0).length;
+        const updatedStats = { ...prevStats, cropsHarvested: (prevStats.cropsHarvested ?? 0) + totalHarvested, cropSpecies };
         setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
-        return { ...prev, achStats: updatedStats };
+        return { ...prev, achStats: updatedStats, cropLog: newCropLog };
       });
       return;
     }
@@ -1573,9 +1601,11 @@ export default function App() {
             })
           : prev.fishInventory;
         const prevStats = prev.achStats ?? {};
-        const updatedStats = { ...prevStats, dishCooked: (prevStats.dishCooked ?? 0) + 1, cookCount: (prevStats.cookCount ?? 0) + 1 };
+        const newDishLog = { ...(prev.dishLog ?? {}), [dishKey]: ((prev.dishLog ?? {})[dishKey] ?? 0) + 1 };
+        const dishSpecies = Object.keys(newDishLog).filter(k => newDishLog[k] > 0).length;
+        const updatedStats = { ...prevStats, dishCooked: (prevStats.dishCooked ?? 0) + 1, cookCount: (prevStats.cookCount ?? 0) + 1, dishSpecies };
         setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
-        return { ...prev, cropInventory: newCrops, fishInventory: newFishInv, money: prev.money + dishEarned, achStats: updatedStats };
+        return { ...prev, cropInventory: newCrops, fishInventory: newFishInv, money: prev.money + dishEarned, achStats: updatedStats, dishLog: newDishLog };
       });
       addMsg(`${recipe.icon} ${recipe.name} 완성! +${dishEarned}G${cookedDouble ? ' 🍽 제자 보너스 2배!' : ''}`, 'catch');
       grantAbility('요리', 5);
