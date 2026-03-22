@@ -471,3 +471,84 @@
 - ✅ `checkZoneUnlock`의 `reqAbil` falsy 체크 취약 — `!z.reqAbil || Object.keys(z.reqAbil).length === 0` 명시적 체크로 변경
 
 *마지막 업데이트: 2026-03-22 → 수정 완료 2026-03-22*
+
+---
+
+## Phase 2 — 단기 신규 기능 (UX 개선 및 콘텐츠 확장)
+
+### 2-1. 서버 실시간 랭킹
+- ✅ Firebase `gold_records`, `ability_records` — 골드/어빌리티 합산 순위 (ranking.js)
+- ✅ Leaderboard.jsx 탭: 💰 보유 골드, ⚡ 어빌리티, 🏆 업적, 🌟 프레스티지
+- ✅ 랭킹 업데이트: 60초 디바운스로 saveGoldRecord/saveAbilityRecord 호출 (App.jsx)
+
+### 2-2. 레벨업 / 그레이드업 화면 연출
+- ✅ gradeUpCelebration state — doGradeUp 시 setGradeUpCelebration 호출 (Sidebar.jsx)
+- ✅ TopBar.jsx에서 gradeup-burst CSS 애니메이션 오버레이 렌더링
+- ✅ playLevelUp 사운드 (Web Audio API)
+
+### 2-3. 희귀어 포획 파티클 이펙트
+- ✅ 희귀/전설/신화 포획 시 emoji 파티클 gameRef.fishParticles 에 추가 (App.jsx:911)
+- ✅ GameCanvas에서 fishParticles 캔버스 렌더링
+
+### 2-4. 7일 연속 접속 특별 미끼 지급
+- ✅ streak >= 7 달성 시 전설미끼 1개 자동 지급 (useOfflineReward.js:41)
+- ✅ 채팅창 알림 메시지 "7일 연속 접속! +500G + 전설 미끼 1개 지급!"
+
+### 2-5. NPC 개별 퀘스트 라인
+- ✅ npcQuestData.js — 민준/수연/미나/철수 각 3단계 퀘스트 체인
+- ✅ npcQuestStep 상태 추적, NPC 대화 UI에 퀘스트 진행 표시 (App.jsx:2227)
+- ✅ 퀘스트 완료 시 골드/아이템/스킨 보상 지급
+
+### 2-6. 전설어 출몰 알림 이벤트 (30분 한정)
+- ✅ 20~40분 간격 자동 랜덤 출몰 이벤트 (useWebSocket.js:231)
+- ✅ fishSurgeRef로 낚시 확률 4배 적용, 채팅창 알림
+- ✅ Admin 패널에서 수동 발동 — 어종 선택 드롭다운 + `legendarySpawn` 이벤트 버튼 (AdminPanel.jsx)
+- ✅ 클라이언트에서 `legendarySpawn` 이벤트 감지 → fishSurgeRef 동기화 (useWebSocket.js)
+
+---
+
+## Phase 3 — 중기 콘텐츠
+
+### 3-1. 주간 낚시대회
+- ✅ 매주 자동 집계 (getWeekKey 기준), submitTournamentScore로 점수 제출
+- ✅ Leaderboard.jsx 🎣 주간 대회 탭 (Top 20, 크기+희귀도 보너스 점수)
+- ✅ Sidebar 내 TournamentPanel — 내 점수, 순위 표시
+
+### 3-2. 희귀어 박제 시스템
+- ✅ trophyFish 배열 — 전설/신화 포획 시 자동 수집 (App.jsx:904)
+- ✅ Sidebar.jsx 박제실 탭 — trophyFish 목록 전시, 크기/포획일 표시
+
+### 3-3. 캐릭터 코스튬 시스템
+- ✅ HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS (gameData.js)
+- ✅ ownedHats, hat, outfit, ownedOutfits, activeRodSkin 상태 관리
+- ✅ Sidebar.jsx 코스튬 탭 — 모자/낚시복/낚싯대 스킨 선택 UI
+- ✅ GameCanvas 캐릭터 렌더링에 의상 적용
+
+### 3-4. 광산 고대 유적 비밀 구역
+- ✅ explorationData.js — '광산 고대 유적' 탐험 구역 (광산 깊이 4층+ 요구, 고대 보석 드롭)
+- ✅ App.jsx:1120 — 고대 보석 5% 드롭 로직
+- ✅ Sidebar.jsx 탐험 탭에 구역 목록 및 탐험 버튼
+
+### 3-5. 어종 확장 (30종+) + 도감 칭호
+- ✅ FISH 배열 40종+ (계절 한정, 보스 전용 포함)
+- ✅ titleData.js — '박물학자'(20종), '바다의 주인'(30종) 칭호
+
+---
+
+## Phase 4 — 장기 목표
+
+### 4-1. 직업 트리 시스템
+- ✅ jobData.js — JOBS 데이터 (낚시장인, 광산전문가 등), getAvailableJobs()
+- ✅ selectedJob 상태, 직업 선택 UI (Sidebar.jsx 어빌리티 탭)
+- ✅ 직업별 패시브 보너스 낚시/채굴 루프에 적용 (JOBS[selectedJob].bonus)
+
+### 4-2. 계절별 스토리 이벤트
+- ✅ seasonData.js SEASONS 각 항목에 story 배열 (봄/여름/가을/겨울 스토리)
+- ✅ 계절 전환 시 shownSeasonStories 체크 후 자동 대사 표시 (App.jsx:2202)
+
+### 4-3. 낚시터 개인 자리 꾸미기
+- ✅ SPOT_DECOS (gameData.js) — 파라솔, 이름표, 낚시의자, 미끼통
+- ✅ spotDecos 상태, GameCanvas에 데코 렌더링
+- ✅ Sidebar.jsx 코스튬 탭에 자리 꾸미기 구매/장착 UI
+
+*마지막 업데이트: 2026-03-22*

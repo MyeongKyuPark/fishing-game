@@ -19,9 +19,12 @@ async function writeAuditLog(action) {
   }
 }
 
+const RARE_FISH_LIST = ['감성돔', '우럭', '뱀장어', '황새치', '용고기', '고대어', '불사조고기'];
+
 export default function AdminPanel() {
   const [authed, setAuthed] = useState(false);
   const [pw, setPw] = useState('');
+  const [surgeFish, setSurgeFish] = useState(RARE_FISH_LIST[0]);
   const [pwErr, setPwErr] = useState('');
   const [loggingIn, setLoggingIn] = useState(false);
   const [status, setStatus] = useState('');
@@ -68,6 +71,25 @@ export default function AdminPanel() {
       });
       await writeAuditLog(`activate_event:${type}`);
       setStatus(`✅ 이벤트 활성화: ${label}`);
+    } catch (e) {
+      setStatus(`❌ 오류: ${e.message}`);
+    }
+  };
+
+  const activateLegendarySpawn = async () => {
+    try {
+      const endsAt = new Date(Date.now() + 30 * 60 * 1000);
+      await setDoc(doc(db, 'server_events', 'current'), {
+        type: 'legendarySpawn',
+        label: `전설어 출몰 — ${surgeFish} (30분)`,
+        targetFish: surgeFish,
+        effectValue: 4,
+        active: true,
+        endsAt,
+        createdAt: serverTimestamp(),
+      });
+      await writeAuditLog(`activate_event:legendarySpawn:${surgeFish}`);
+      setStatus(`✅ 전설어 출몰 이벤트 발동: ${surgeFish}`);
     } catch (e) {
       setStatus(`❌ 오류: ${e.message}`);
     }
@@ -133,6 +155,18 @@ export default function AdminPanel() {
           style={btnStyle('#3a1a5a')}>
           📖 챕터 5 이벤트 발동<br /><small>전서버 스토리 완결</small>
         </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <select
+            value={surgeFish}
+            onChange={e => setSurgeFish(e.target.value)}
+            style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: 13 }}
+          >
+            {RARE_FISH_LIST.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
+          <button onClick={activateLegendarySpawn} style={btnStyle('#1a3a5a')}>
+            ⭐ 전설어 출몰 이벤트<br /><small>선택 어종 ×4 / 30분</small>
+          </button>
+        </div>
         <button onClick={clearEvents}
           style={btnStyle('#5a1a1a')}>
           🗑 모든 이벤트 초기화<br /><small>현재 이벤트 제거</small>

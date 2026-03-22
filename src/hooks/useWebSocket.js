@@ -219,6 +219,21 @@ export function useWebSocket(params) {
     const unsub = subscribeActiveServerEvent(evt => {
       setServerEvent(evt);
       serverEventRef.current = evt;
+      // Admin-triggered legendary spawn: sync to fishSurgeRef
+      if (evt?.type === 'legendarySpawn' && evt.targetFish) {
+        const until = evt.endsAt?.toMillis?.() ?? (Date.now() + 30 * 60 * 1000);
+        fishSurgeRef.current = { fish: evt.targetFish, until };
+        setFishSurgeEvent({ fish: evt.targetFish, until });
+        const fd = FISH[evt.targetFish];
+        const rarityLabel = fd?.rarity === '신화' ? '🌟 신화' : '⭐ 전설';
+        addMsgRef.current(`📣 [관리자 이벤트] ${rarityLabel} ${evt.targetFish} 출몰! 30분간 출현 확률 상승!`, 'catch');
+      } else if (!evt || evt?.type !== 'legendarySpawn') {
+        // Event cleared or switched — if it was a legendarySpawn, clear fishSurge
+        if (serverEventRef.current?.type === 'legendarySpawn') {
+          fishSurgeRef.current = null;
+          setFishSurgeEvent(null);
+        }
+      }
     });
     return unsub;
   }, [nickname]); // eslint-disable-line react-hooks/exhaustive-deps
