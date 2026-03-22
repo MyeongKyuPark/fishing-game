@@ -876,8 +876,8 @@ export default function Sidebar(props) {
                   )}
                   {gs.activePet && (() => {
                     const pet = PETS[gs.activePet];
-                    const level = petLevels[gs.activePet] ?? 1;
-                    const exp = petExp[gs.activePet] ?? 0;
+                    const level = typeof petLevels[gs.activePet] === 'number' ? petLevels[gs.activePet] : 1;
+                    const exp = typeof petExp[gs.activePet] === 'number' ? petExp[gs.activePet] : 0;
                     const nextThresh = level < PET_MAX_LEVEL ? PET_EXP_THRESHOLDS[level - 1] : null;
                     const mult = PET_LEVEL_MULT[level - 1] ?? 1.0;
                     return (
