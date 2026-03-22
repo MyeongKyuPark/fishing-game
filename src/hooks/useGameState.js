@@ -1,6 +1,7 @@
 // ── Game State: constants, pure functions, and useGameState hook ─────────────
 import { useState, useEffect, useRef } from 'react';
 import { DEFAULT_ABILITIES } from '../abilityData';
+import LZString from 'lz-string';
 
 export const SKIN_PRESETS = ['#f6cc88', '#e8a870', '#c8845a', '#a06040', '#7a4830', '#fddbb4'];
 
@@ -131,11 +132,28 @@ export const DEFAULT_STATE = {
   ownedRodSkins: ['기본스킨'],
   spotDecos: [],
   shownChapters: [],
+  // 주거 시스템
+  cottage: {
+    furniture: [],      // [{ id, key, x, y }] — 배치된 가구 목록
+    achieveDisplay: [], // 최대 6개 업적 키 — 벽 전시
+    trophyWall: [],     // 최대 12개 { fishName, size } — 트로피 벽
+    visited: 0,         // 방문자 수
+  },
 };
 
 export const SAVE_VERSION = 2;
 export function saveKey(nickname) { return `fishingGame_v2_${nickname}`; }
 export function saveKeyV1(nickname) { return `fishingGame_v1_${nickname}`; }
+
+function decompressRaw(raw) {
+  if (!raw) return null;
+  // Try LZ decompression first, fall back to plain JSON
+  try {
+    const decompressed = LZString.decompressFromUTF16(raw);
+    if (decompressed) return decompressed;
+  } catch { /* ignore */ }
+  return raw; // already plain JSON
+}
 
 export function loadSave(nickname) {
   try {
@@ -148,7 +166,7 @@ export function loadSave(nickname) {
         raw = v1;
       }
     }
-    const s = JSON.parse(raw);
+    const s = JSON.parse(decompressRaw(raw));
     if (!s) return DEFAULT_STATE;
     const savedAbil = s.abilities ?? {};
     const abilities = Object.fromEntries(
@@ -235,6 +253,9 @@ export function loadSave(nickname) {
       ownedRodSkins: s.ownedRodSkins ?? ['기본스킨'],
       spotDecos: s.spotDecos ?? [],
       shownChapters: s.shownChapters ?? [],
+      cottage: s.cottage ?? {
+        furniture: [], achieveDisplay: [], trophyWall: [], visited: 0,
+      },
     };
   } catch { return DEFAULT_STATE; }
 }

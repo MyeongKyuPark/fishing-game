@@ -3,7 +3,7 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   FARM_EXPANSION_PRICE, FARM_EXPANSION_SLOTS, FARM_MAX_EXPANSIONS,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
-  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS } from '../gameData';
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE } from '../gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, doGradeUp, gradeRareBonus,
   SELL_ABILITY_PER_100G } from '../abilityData';
 import { getTitle, TITLES } from '../titleData';
@@ -18,6 +18,12 @@ import { createGuild, joinGuild, leaveGuild, sendGuildChat } from '../guildData'
 import { listItem, buyItem, cancelListing } from '../marketData';
 import Leaderboard from '../Leaderboard';
 import { rarityColor, SKIN_PRESETS } from '../hooks/useGameState';
+import CottagePanel from './CottagePanel';
+
+const TOURNAMENT_PRIZES = [2000, 1000, 500]; // 1위/2위/3위 주간 보상 골드
+import { useState } from 'react';
+import { getSettings, setSfxEnabled, setCanvasQuality, subscribeSettings } from '../settingsManager';
+import { setBgmVolume, getBgmVolume } from '../bgm';
 
 // eslint-disable-next-line no-unused-vars
 export default function Sidebar(props) {
@@ -47,7 +53,13 @@ export default function Sidebar(props) {
     checkNpcQuest,
     resistanceGame, setResistanceGame,
     miningMinigame, setMiningMinigame,
+    showSettings, setShowSettings,
+    showCottage, setShowCottage,
   } = props;
+
+  const [invFilter, setInvFilter] = useState('전체');
+  const [settingsState, setSettingsState] = useState(() => getSettings());
+  const [bgmVol, setBgmVolState] = useState(() => getBgmVolume());
 
   return (
     <>
@@ -68,6 +80,13 @@ export default function Sidebar(props) {
           addMsg(`💰 ${name} ${groups[name].length}마리 판매 +${total}G`, 'catch');
           grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
         };
+        const INV_FILTERS = ['전체', '물고기', '광석', '허브', '작물', '기타'];
+        const showFish  = invFilter === '전체' || invFilter === '물고기';
+        const showOre   = invFilter === '전체' || invFilter === '광석';
+        const showHerb  = invFilter === '전체' || invFilter === '허브';
+        const showCrop  = invFilter === '전체' || invFilter === '작물';
+        const showOther = invFilter === '전체' || invFilter === '기타';
+        const cropEntries = Object.entries(gs.cropInventory ?? {}).filter(([, n]) => n > 0);
         return (
           <div className="overlay" onClick={() => setShowInv(false)}>
             <div className="panel" onClick={e => e.stopPropagation()}>
@@ -76,93 +95,138 @@ export default function Sidebar(props) {
                 <button tabIndex={-1} onClick={() => setShowInv(false)}>✕</button>
               </div>
 
-              <div className="section">
-                <div className="section-title">물고기 ({gs.fishInventory.length}마리)</div>
-                {gs.fishInventory.length === 0
-                  ? <div className="empty">물고기가 없습니다.</div>
-                  : <>
-                      <button tabIndex={-1} className="sell-all-btn" onClick={sellAll}>
-                        전체 판매 ({totalFishVal}G)
-                      </button>
-                      <div className="fish-list">
-                        {sortedGroups.map(([species, fishes]) => {
-                          const fd = FISH[species];
-                          const rc = rarityColor(fd?.rarity);
-                          const speciesVal = fishes.reduce((s, f) => s + f.price, 0);
-                          const sorted = [...fishes].sort((a, b) => b.size - a.size);
-                          return (
-                            <div key={species} className="species-group">
-                              <div className="species-header">
-                                <span className="species-rarity" style={{ color: rc }}>[{fd?.rarity}]</span>
-                                <span className="species-name" style={{ color: rc }}>{species}</span>
-                                <span className="species-count">{fishes.length}마리</span>
-                                <span className="species-val">{speciesVal}G</span>
-                                <button tabIndex={-1} className="sell-btn" onClick={() => sellSpecies(species)}>전체판매</button>
-                              </div>
-                              <div className="species-fish-list">
-                                {sorted.map(f => (
-                                  <div key={f.id} className="fish-row fish-row-compact">
-                                    <span className="grow">{f.size.toFixed(1)}cm{f.cooked ? ' 🍳' : ''}</span>
-                                    <span className="gold">{f.price}G</span>
-                                    <button tabIndex={-1} className="sell-btn" onClick={() => sellOne(f.id)}>판매</button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </>
-                }
-              </div>
-
-              <div className="section">
-                <div className="section-title">광물</div>
-                {Object.entries(gs.oreInventory).map(([ore, cnt]) => (
-                  <div key={ore} className="ore-row">
-                    <span className="grow">{ore}</span>
-                    <span className="dim">{cnt}개</span>
-                    <span className="gold">{(ORES[ore]?.price ?? 0) * cnt}G 상당</span>
-                  </div>
+              {/* Category filter tabs */}
+              <div style={{ display: 'flex', gap: 4, padding: '6px 10px 2px', flexWrap: 'wrap' }}>
+                {INV_FILTERS.map(f => (
+                  <button key={f} tabIndex={-1}
+                    onClick={() => setInvFilter(f)}
+                    style={{
+                      padding: '3px 8px', fontSize: 12, borderRadius: 6, border: 'none', cursor: 'pointer',
+                      background: invFilter === f ? 'rgba(100,180,255,0.35)' : 'rgba(255,255,255,0.08)',
+                      color: invFilter === f ? '#7df' : 'rgba(255,255,255,0.6)',
+                      fontWeight: invFilter === f ? 700 : 400,
+                    }}
+                  >{f}</button>
                 ))}
               </div>
 
-              <div className="section">
-                <div className="section-title">허브</div>
-                {Object.keys(gs.herbInventory ?? {}).filter(k => (gs.herbInventory[k] ?? 0) > 0).length === 0
-                  ? <div className="empty">허브 없음 (숲에서 채집)</div>
-                  : Object.entries(gs.herbInventory ?? {}).filter(([, n]) => n > 0).map(([herb, cnt]) => (
-                    <div key={herb} className="ore-row">
-                      <span className="grow" style={{ color: HERBS[herb]?.color ?? '#8c4' }}>🌿 {herb}</span>
-                      <span className="dim">{cnt}개</span>
-                      <span className="gold">{(HERBS[herb]?.price ?? 0) * cnt}G 상당</span>
-                    </div>
-                  ))
-                }
-              </div>
+              {showFish && (
+                <div className="section">
+                  <div className="section-title">물고기 ({gs.fishInventory.length}마리)</div>
+                  {gs.fishInventory.length === 0
+                    ? <div className="empty">물고기가 없습니다.</div>
+                    : <>
+                        <button tabIndex={-1} className="sell-all-btn" onClick={sellAll}>
+                          전체 판매 ({totalFishVal}G)
+                        </button>
+                        <div className="fish-list">
+                          {sortedGroups.map(([species, fishes]) => {
+                            const fd = FISH[species];
+                            const rc = rarityColor(fd?.rarity);
+                            const speciesVal = fishes.reduce((s, f) => s + f.price, 0);
+                            const sorted = [...fishes].sort((a, b) => b.size - a.size);
+                            return (
+                              <div key={species} className="species-group">
+                                <div className="species-header">
+                                  <span className="species-rarity" style={{ color: rc }}>[{fd?.rarity}]</span>
+                                  <span className="species-name" style={{ color: rc }}>{species}</span>
+                                  <span className="species-count">{fishes.length}마리</span>
+                                  <span className="species-val">{speciesVal}G</span>
+                                  <button tabIndex={-1} className="sell-btn" onClick={() => sellSpecies(species)}>전체판매</button>
+                                </div>
+                                <div className="species-fish-list">
+                                  {sorted.map(f => (
+                                    <div key={f.id} className="fish-row fish-row-compact">
+                                      <span className="grow">{f.size.toFixed(1)}cm{f.cooked ? ' 🍳' : ''}</span>
+                                      <span className="gold">{f.price}G</span>
+                                      <button tabIndex={-1} className="sell-btn" onClick={() => sellOne(f.id)}>판매</button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                  }
+                </div>
+              )}
 
-              <div className="section">
-                <div className="section-title">미끼</div>
-                {Object.entries(BAIT).map(([key, bait]) => {
-                  const owned = bait.type === 'permanent' ? (gs.ownedBait ?? []).includes(key) : ((gs.baitInventory ?? {})[key] ?? 0) > 0;
-                  if (!owned) return null;
-                  const equipped = gs.equippedBait === key;
-                  return (
-                    <div key={key} className="fish-row">
-                      <span style={{ color: bait.color }}>🪝 {bait.name}</span>
-                      {bait.type === 'once' && <span className="dim">{(gs.baitInventory ?? {})[key] ?? 0}개</span>}
-                      <span className="grow" />
-                      <button tabIndex={-1} className={equipped ? 'btn-eq' : 'sell-btn'} onClick={() => equipBait(key)}>
-                        {equipped ? '장착중' : '장착'}
-                      </button>
-                    </div>
-                  );
-                })}
-                {!Object.values(BAIT).some((b, i) => {
-                  const key = Object.keys(BAIT)[i];
-                  return b.type === 'permanent' ? (gs.ownedBait ?? []).includes(key) : ((gs.baitInventory ?? {})[key] ?? 0) > 0;
-                }) && <div className="empty">미끼 없음 (상점에서 구매)</div>}
-              </div>
+              {showOre && (
+                <div className="section">
+                  <div className="section-title">광물</div>
+                  {Object.entries(gs.oreInventory).filter(([, n]) => n > 0).length === 0
+                    ? <div className="empty">광물 없음 (광산에서 채굴)</div>
+                    : Object.entries(gs.oreInventory).filter(([, n]) => n > 0).map(([ore, cnt]) => (
+                      <div key={ore} className="ore-row">
+                        <span className="grow">{ore}</span>
+                        <span className="dim">{cnt}개</span>
+                        <span className="gold">{(ORES[ore]?.price ?? 0) * cnt}G 상당</span>
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+
+              {showHerb && (
+                <div className="section">
+                  <div className="section-title">허브</div>
+                  {Object.keys(gs.herbInventory ?? {}).filter(k => (gs.herbInventory[k] ?? 0) > 0).length === 0
+                    ? <div className="empty">허브 없음 (숲에서 채집)</div>
+                    : Object.entries(gs.herbInventory ?? {}).filter(([, n]) => n > 0).map(([herb, cnt]) => (
+                      <div key={herb} className="ore-row">
+                        <span className="grow" style={{ color: HERBS[herb]?.color ?? '#8c4' }}>🌿 {herb}</span>
+                        <span className="dim">{cnt}개</span>
+                        <span className="gold">{(HERBS[herb]?.price ?? 0) * cnt}G 상당</span>
+                      </div>
+                    ))
+                  }
+                </div>
+              )}
+
+              {showCrop && (
+                <div className="section">
+                  <div className="section-title">작물</div>
+                  {cropEntries.length === 0
+                    ? <div className="empty">작물 없음 (농장에서 수확)</div>
+                    : cropEntries.map(([itemName, count]) => {
+                      const seed = Object.values(SEEDS).find(s => s.yield?.item === itemName);
+                      return (
+                        <div key={itemName} className="ore-row">
+                          <span className="grow">🌾 {itemName}</span>
+                          <span className="dim">{count}개</span>
+                          <span className="gold">{(seed?.yield?.sellPrice ?? 0) * count}G 상당</span>
+                        </div>
+                      );
+                    })
+                  }
+                </div>
+              )}
+
+              {showOther && (
+                <div className="section">
+                  <div className="section-title">기타 (미끼)</div>
+                  {Object.entries(BAIT).map(([key, bait]) => {
+                    const owned = bait.type === 'permanent' ? (gs.ownedBait ?? []).includes(key) : ((gs.baitInventory ?? {})[key] ?? 0) > 0;
+                    if (!owned) return null;
+                    const equipped = gs.equippedBait === key;
+                    return (
+                      <div key={key} className="fish-row">
+                        <span style={{ color: bait.color }}>🪝 {bait.name}</span>
+                        {bait.type === 'once' && <span className="dim">{(gs.baitInventory ?? {})[key] ?? 0}개</span>}
+                        <span className="grow" />
+                        <button tabIndex={-1} className={equipped ? 'btn-eq' : 'sell-btn'} onClick={() => equipBait(key)}>
+                          {equipped ? '장착중' : '장착'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {!Object.values(BAIT).some((b, i) => {
+                    const key = Object.keys(BAIT)[i];
+                    return b.type === 'permanent' ? (gs.ownedBait ?? []).includes(key) : ((gs.baitInventory ?? {})[key] ?? 0) > 0;
+                  }) && <div className="empty">미끼 없음 (상점에서 구매)</div>}
+                </div>
+              )}
             </div>
           </div>
         );
@@ -1354,6 +1418,8 @@ export default function Sidebar(props) {
                     우럭: '낚시 50+ · 바다·전설 미끼', 뱀장어: '낚시 50+ · 바다 낚시',
                     황새치: '낚시 50+ · 신화 미끼 추천',
                     용고기: '낚시 70+ · 바다·신화 미끼', 고대어: '낚시 70+ · 신화 미끼 필수',
+                    벚꽃붕어: '🌸 봄 한정 · 낚시 20+', 불꽃송어: '🔥 여름 한정 · 낚시 40+',
+                    단풍잉어: '🍂 가을 한정 · 낚시 20+', 빙어왕: '❄️ 겨울 한정 · 낚시 40+',
                   };
                   return Object.entries(FISH).map(([fishName, fd]) => {
                     const caught = (gs.caughtSpecies ?? []).includes(fishName);
@@ -1368,10 +1434,11 @@ export default function Sidebar(props) {
                       }}>
                         <div style={{ fontWeight: 700, fontSize: 12, color: caught ? (isMaxSize ? '#ffcc44' : '#44ffaa') : '#aaa' }}>
                           {caught ? (isMaxSize ? '🏆 ' : '✓ ') : '🔍 '}{fishName}
+                          {fd.reqSeason && <span style={{ fontSize: 10, color: '#ffcc66', marginLeft: 4 }}>[계절한정]</span>}
                         </div>
                         {caught
                           ? <>
-                              <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~</div>
+                              <div style={{ fontSize: 10, color: '#888' }}>{fd.rarity} · {fd.price}G~{fd.reqSeason ? ` · ${fd.reqSeason}` : ''}</div>
                               {record && (
                                 <div style={{ fontSize: 10, color: isMaxSize ? '#ffcc44' : '#aaa' }}>
                                   최대: {record.size}cm {isMaxSize ? '(최고 크기!)' : `/ ${fd.maxSz}cm`}
@@ -2536,36 +2603,57 @@ export default function Sidebar(props) {
 
             {/* ── 퀘스트 탭 ── */}
             {guildTab === '퀘스트' && myGuildId && (() => {
+              // goals: [{ target, reward }] — reward shown as label
               const GUILD_QUESTS = [
-                { key: 'fishCaught', label: '물고기 포획', icon: '🐟', goals: [100, 500, 1000] },
-                { key: 'oreMined',   label: '광석 채굴',   icon: '⛏', goals: [50, 200, 500] },
+                { key: 'fishCaught', label: '물고기 포획', icon: '🐟',
+                  milestones: [
+                    { target: 100,  reward: '+300G · 구리미끼 1개' },
+                    { target: 500,  reward: '+1000G · 황금미끼 1개' },
+                    { target: 1000, reward: '+2500G · 전설미끼 2개' },
+                  ],
+                },
+                { key: 'oreMined', label: '광석 채굴', icon: '⛏',
+                  milestones: [
+                    { target: 50,  reward: '+200G · 철광석 5개' },
+                    { target: 200, reward: '+800G · 수정 3개' },
+                    { target: 500, reward: '+2000G · 금광석 2개' },
+                  ],
+                },
               ];
               return (
                 <div className="section">
                   <div className="section-title">길드 공동 퀘스트</div>
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 8 }}>
-                    낚시/채굴 시 자동으로 길드 퀘스트 진행도가 올라갑니다.
+                    낚시/채굴 시 자동으로 진행도가 오르고 마일스톤 달성 시 길드원 전체에게 보상이 지급됩니다.
                   </div>
                   {GUILD_QUESTS.map(q => {
                     const curr = guildQuest[q.key] ?? 0;
-                    const nextGoal = q.goals.find(g => curr < g) ?? q.goals[q.goals.length - 1];
-                    const pct = Math.min(100, Math.round((curr / nextGoal) * 100));
-                    const done = curr >= q.goals[q.goals.length - 1];
+                    const nextMs = q.milestones.find(m => curr < m.target);
+                    const nextTarget = nextMs?.target ?? q.milestones[q.milestones.length - 1].target;
+                    const pct = Math.min(100, Math.round((curr / nextTarget) * 100));
+                    const allDone = curr >= q.milestones[q.milestones.length - 1].target;
                     return (
                       <div key={q.key} className="rod-card">
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                           <span style={{ fontWeight: 700 }}>{q.icon} {q.label}</span>
-                          <span style={{ color: done ? '#44ff88' : '#ffcc44', fontSize: 12 }}>{curr.toLocaleString()} / {nextGoal.toLocaleString()}</span>
+                          <span style={{ color: allDone ? '#44ff88' : '#ffcc44', fontSize: 12 }}>
+                            {curr.toLocaleString()} / {nextTarget.toLocaleString()}
+                          </span>
                         </div>
                         <div style={{ height: 8, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${pct}%`, background: done ? '#44ff88' : '#ffcc44', borderRadius: 4, transition: 'width 0.3s' }} />
+                          <div style={{ height: '100%', width: `${pct}%`, background: allDone ? '#44ff88' : '#ffcc44', borderRadius: 4, transition: 'width 0.3s' }} />
                         </div>
-                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                          {q.goals.map(g => (
-                            <span key={g} style={{ fontSize: 10, color: curr >= g ? '#44ff88' : 'rgba(255,255,255,0.3)' }}>
-                              {curr >= g ? '✓' : '○'} {g.toLocaleString()}
-                            </span>
-                          ))}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 6 }}>
+                          {q.milestones.map(m => {
+                            const reached = curr >= m.target;
+                            return (
+                              <div key={m.target} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10,
+                                color: reached ? '#44ff88' : 'rgba(255,255,255,0.4)' }}>
+                                <span>{reached ? '✅' : '○'} {m.target.toLocaleString()}마리/개</span>
+                                <span style={{ color: reached ? '#44ff88' : '#ffcc55' }}>{m.reward}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -2700,6 +2788,175 @@ export default function Sidebar(props) {
         </div>
         );
       })()}
+
+      {/* Tournament panel */}
+      {showTournament && (() => {
+        const myRank = tournamentRanking.findIndex(e => e.nickname === nickname);
+        const myEntry = myRank >= 0 ? tournamentRanking[myRank] : null;
+        const MEDAL = ['🥇', '🥈', '🥉'];
+        return (
+          <div className="overlay" onClick={() => setShowTournament(false)}>
+            <div className="panel" onClick={e => e.stopPropagation()}>
+              <div className="panel-head">
+                <span>🏆 주간 낚시 토너먼트</span>
+                <button tabIndex={-1} onClick={() => setShowTournament(false)}>✕</button>
+              </div>
+
+              <div className="section">
+                <div style={{ textAlign: 'center', fontSize: 12, color: 'rgba(255,255,255,0.45)', marginBottom: 6 }}>
+                  매주 리셋 · 점수 = 물고기 크기 + 희귀도 보너스<br/>
+                  <span style={{ fontSize: 11 }}>보통+10 · 희귀+25 · 전설+60 · 신화+150</span>
+                </div>
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 10 }}>
+                  {TOURNAMENT_PRIZES.map((prize, i) => (
+                    <div key={i} style={{ textAlign: 'center', background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.25)', borderRadius: 8, padding: '4px 10px' }}>
+                      <div style={{ fontSize: 16 }}>{'🥇🥈🥉'[i]}</div>
+                      <div style={{ fontSize: 11, color: '#ffd700', fontWeight: 700 }}>+{prize.toLocaleString()}G</div>
+                    </div>
+                  ))}
+                </div>
+                {myEntry && (
+                  <div style={{ background: 'rgba(100,200,255,0.1)', border: '1px solid rgba(100,200,255,0.3)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 20 }}>🎣</span>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#7df', fontSize: 13 }}>{nickname} (내 기록)</div>
+                      <div style={{ color: '#aaa', fontSize: 12 }}>
+                        총 {myEntry.score.toLocaleString()}cm · {myRank + 1}위
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {!myEntry && (
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginBottom: 10 }}>
+                    아직 기록 없음 — 낚시하면 자동 등록!
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {tournamentRanking.length === 0 && (
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: 16 }}>
+                      이번 주 참가자 없음
+                    </div>
+                  )}
+                  {tournamentRanking.map((entry, idx) => {
+                    const isMe = entry.nickname === nickname;
+                    return (
+                      <div key={entry.nickname} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '6px 10px', borderRadius: 7,
+                        background: isMe ? 'rgba(100,200,255,0.12)' : idx < 3 ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${isMe ? 'rgba(100,200,255,0.35)' : idx < 3 ? 'rgba(255,215,0,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                      }}>
+                        <span style={{ fontSize: 16, minWidth: 24, textAlign: 'center' }}>
+                          {idx < 3 ? MEDAL[idx] : `${idx + 1}`}
+                        </span>
+                        <span style={{ flex: 1, fontWeight: isMe ? 700 : 400, color: isMe ? '#7df' : idx < 3 ? '#ffd700' : '#ccc', fontSize: 13 }}>
+                          {entry.nickname}
+                        </span>
+                        <span style={{ fontSize: 12, color: '#aaa' }}>{entry.score.toLocaleString()}cm</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Settings panel */}
+      {showSettings && (() => {
+        const SFX_LABELS = {
+          낚시시작: '낚시 시작', 포획: '물고기 포획', 채굴: '채굴',
+          요리: '요리 완료', 판매: '아이템 판매', 입장: '실내 입장',
+          NPC: 'NPC 대화', 레벨업: '레벨업', 수영: '수영/물',
+        };
+        return (
+          <div className="overlay" onClick={() => setShowSettings(false)}>
+            <div className="panel" onClick={e => e.stopPropagation()}>
+              <div className="panel-head">
+                <span>⚙️ 설정</span>
+                <button tabIndex={-1} onClick={() => setShowSettings(false)}>✕</button>
+              </div>
+
+              <div className="section">
+                <div className="section-title">BGM 볼륨</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
+                  <span style={{ fontSize: 13, minWidth: 28 }}>🎵</span>
+                  <input type="range" min={0} max={1} step={0.05} value={bgmVol}
+                    style={{ flex: 1, accentColor: '#4af' }}
+                    onChange={e => {
+                      const v = parseFloat(e.target.value);
+                      setBgmVolState(v);
+                      setBgmVolume(v);
+                    }}
+                  />
+                  <span style={{ fontSize: 12, minWidth: 36, color: '#aaa' }}>{Math.round(bgmVol * 100)}%</span>
+                </div>
+              </div>
+
+              <div className="section">
+                <div className="section-title">효과음 개별 설정</div>
+                {Object.entries(SFX_LABELS).map(([key, label]) => {
+                  const enabled = settingsState.sfx[key] !== false;
+                  return (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <span style={{ fontSize: 13, color: enabled ? '#ddd' : '#666' }}>{label}</span>
+                      <button tabIndex={-1}
+                        onClick={() => {
+                          setSfxEnabled(key, !enabled);
+                          setSettingsState(s => ({ ...s, sfx: { ...s.sfx, [key]: !enabled } }));
+                        }}
+                        style={{
+                          padding: '3px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                          background: enabled ? 'rgba(60,180,80,0.3)' : 'rgba(180,60,60,0.3)',
+                          color: enabled ? '#6f6' : '#f66',
+                        }}
+                      >{enabled ? 'ON' : 'OFF'}</button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="section">
+                <div className="section-title">캔버스 화질</div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {['low', 'medium', 'high'].map(q => {
+                    const labels = { low: '낮음', medium: '중간', high: '높음' };
+                    const active = settingsState.canvasQuality === q;
+                    return (
+                      <button key={q} tabIndex={-1}
+                        onClick={() => {
+                          setCanvasQuality(q);
+                          setSettingsState(s => ({ ...s, canvasQuality: q }));
+                        }}
+                        style={{
+                          flex: 1, padding: '6px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 13,
+                          background: active ? 'rgba(80,160,255,0.35)' : 'rgba(255,255,255,0.06)',
+                          color: active ? '#7df' : 'rgba(255,255,255,0.55)',
+                          fontWeight: active ? 700 : 400,
+                        }}
+                      >{labels[q]}</button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
+                  낮음: 파티클·장식 감소 / 중간: 기본 / 높음: 최대 품질 (다음 접속부터 적용)
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── 오두막 패널 ── */}
+      {showCottage && (
+        <CottagePanel
+          gs={gs} setGs={setGs} nickname={nickname}
+          onClose={() => setShowCottage(false)}
+          addMsg={addMsg}
+        />
+      )}
 
     </>
   );

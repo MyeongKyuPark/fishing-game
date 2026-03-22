@@ -1,3 +1,5 @@
+import { isSfxEnabled } from './settingsManager';
+
 let _ctx = null;
 
 function getCtx() {
@@ -13,6 +15,7 @@ function resumeCtx(ctx) {
 }
 
 export function playFishCatch(rarity) {
+  if (!isSfxEnabled('포획')) return;
   try {
     const ctx = getCtx(); if (!ctx) return;
     resumeCtx(ctx);
@@ -32,6 +35,7 @@ export function playFishCatch(rarity) {
 }
 
 export function playFishingStart() {
+  if (!isSfxEnabled('낚시시작')) return;
   try {
     const ctx = getCtx(); if (!ctx) return;
     resumeCtx(ctx);
@@ -55,6 +59,7 @@ export function playFishingStart() {
 }
 
 export function playOreMined() {
+  if (!isSfxEnabled('채굴')) return;
   try {
     const ctx = getCtx(); if (!ctx) return;
     resumeCtx(ctx);
@@ -72,6 +77,7 @@ export function playOreMined() {
 }
 
 export function playCookComplete() {
+  if (!isSfxEnabled('요리')) return;
   try {
     const ctx = getCtx(); if (!ctx) return;
     resumeCtx(ctx);
@@ -95,6 +101,7 @@ export function playCookComplete() {
 }
 
 export function playSellSound(amount) {
+  if (!isSfxEnabled('판매')) return;
   try {
     const ctx = getCtx(); if (!ctx) return;
     resumeCtx(ctx);
@@ -117,6 +124,7 @@ export function playSellSound(amount) {
 }
 
 export function playEnterRoom() {
+  if (!isSfxEnabled('입장')) return;
   try {
     const ctx = getCtx(); if (!ctx) return;
     resumeCtx(ctx);
@@ -134,6 +142,7 @@ export function playEnterRoom() {
 }
 
 export function playNpcInteract() {
+  if (!isSfxEnabled('NPC')) return;
   try {
     const ctx = getCtx(); if (!ctx) return;
     resumeCtx(ctx);
@@ -154,6 +163,7 @@ export function playNpcInteract() {
 }
 
 export function playLevelUp() {
+  if (!isSfxEnabled('레벨업')) return;
   try {
     const ctx = getCtx(); if (!ctx) return;
     resumeCtx(ctx);
@@ -174,6 +184,7 @@ export function playLevelUp() {
 }
 
 export function playSwimSplash() {
+  if (!isSfxEnabled('수영')) return;
   try {
     const ctx = getCtx(); if (!ctx) return;
     resumeCtx(ctx);

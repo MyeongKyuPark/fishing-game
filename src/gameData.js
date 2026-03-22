@@ -62,20 +62,25 @@ export const FISH = {
   // Ability 60~69 (추가)
   개복치:     { minSz: 80, maxSz: 300, price: 950,  rarity: '전설' },
   // Ability 70+ (추가)
-  빙어:       { minSz: 8,  maxSz: 25,  price: 220,  rarity: '보통', season: '겨울얼음낚시' }, // 겨울 전용
+  빙어:       { minSz: 8,  maxSz: 25,  price: 220,  rarity: '보통', reqSeason: '겨울얼음낚시' }, // 겨울 전용
   불사조고기: { minSz: 40, maxSz: 120, price: 5000, rarity: '신화' },
+  // 계절 한정 어종 (봄/여름/가을/겨울 전용 — 해당 시즌 외 미등장)
+  벚꽃붕어:   { minSz: 12, maxSz: 40,  price: 520,  rarity: '희귀', reqSeason: '봄꽃축제' },
+  불꽃송어:   { minSz: 35, maxSz: 90,  price: 1100, rarity: '전설', reqSeason: '여름낚시대회' },
+  단풍잉어:   { minSz: 22, maxSz: 65,  price: 640,  rarity: '희귀', reqSeason: '추수감사절' },
+  빙어왕:     { minSz: 18, maxSz: 55,  price: 1150, rarity: '전설', reqSeason: '겨울얼음낚시' },
 };
 
 // ── Ability-gated fish tables (낚시 ability determines available fish pool) ──
 export const ABILITY_FISH = [
   { minAbil:  0, table: [{ f:'붕어',w:35},{f:'잉어',w:30},{f:'미꾸라지',w:25},{f:'메기',w:10}] },
   { minAbil: 10, table: [{ f:'붕어',w:16},{f:'잉어',w:16},{f:'멸치',w:20},{f:'배스',w:20},{f:'송어',w:18},{f:'피라미',w:10}] },
-  { minAbil: 20, table: [{ f:'꽁치',w:22},{f:'강꼬치고기',w:20},{f:'황다랑어',w:18},{f:'금눈돔',w:16},{f:'배스',w:12},{f:'도미',w:12}] },
-  { minAbil: 30, table: [{ f:'연어',w:20},{f:'황금붕어',w:16},{f:'오징어',w:20},{f:'낙지',w:18},{f:'금눈돔',w:16},{f:'해마',w:10}] },
-  { minAbil: 40, table: [{ f:'참치',w:22},{f:'광어',w:24},{f:'감성돔',w:20},{f:'황금붕어',w:12},{f:'연어',w:10},{f:'전갱이',w:12}] },
-  { minAbil: 50, table: [{ f:'우럭',w:22},{f:'뱀장어',w:20},{f:'황새치',w:18},{f:'참치',w:14},{f:'감성돔',w:12},{f:'부시리',w:14}] },
-  { minAbil: 65, table: [{ f:'우럭',w:18},{f:'황새치',w:16},{f:'뱀장어',w:16},{f:'부시리',w:15},{f:'개복치',w:15},{f:'참치',w:20}] },
-  { minAbil: 70, table: [{ f:'황새치',w:18},{f:'용고기',w:22},{f:'고대어',w:18},{f:'우럭',w:14},{f:'뱀장어',w:12},{f:'불사조고기',w:8},{f:'개복치',w:8}] },
+  { minAbil: 20, table: [{ f:'꽁치',w:22},{f:'강꼬치고기',w:20},{f:'황다랑어',w:18},{f:'금눈돔',w:16},{f:'배스',w:10},{f:'도미',w:10},{f:'벚꽃붕어',w:12},{f:'단풍잉어',w:12}] },
+  { minAbil: 30, table: [{ f:'연어',w:18},{f:'황금붕어',w:15},{f:'오징어',w:18},{f:'낙지',w:16},{f:'금눈돔',w:14},{f:'해마',w:9},{f:'벚꽃붕어',w:12},{f:'단풍잉어',w:12}] },
+  { minAbil: 40, table: [{ f:'참치',w:20},{f:'광어',w:22},{f:'감성돔',w:18},{f:'황금붕어',w:10},{f:'연어',w:8},{f:'전갱이',w:10},{f:'불꽃송어',w:12},{f:'빙어왕',w:12}] },
+  { minAbil: 50, table: [{ f:'우럭',w:20},{f:'뱀장어',w:18},{f:'황새치',w:16},{f:'참치',w:12},{f:'감성돔',w:10},{f:'부시리',w:12},{f:'불꽃송어',w:12},{f:'빙어왕',w:12}] },
+  { minAbil: 65, table: [{ f:'우럭',w:16},{f:'황새치',w:14},{f:'뱀장어',w:14},{f:'부시리',w:13},{f:'개복치',w:13},{f:'참치',w:18},{f:'빙어왕',w:12}] },
+  { minAbil: 70, table: [{ f:'황새치',w:18},{f:'용고기',w:22},{f:'고대어',w:18},{f:'우럭',w:12},{f:'뱀장어',w:10},{f:'불사조고기',w:8},{f:'개복치',w:8},{f:'빙어',w:10}] },
 ];
 
 /** Get fish table matching current 낚시 ability value */
@@ -485,6 +490,20 @@ export const SPOT_DECOS = {
   이름표: { name: '이름표', icon: '🪧', price: 300, desc: '자리에 이름표 설치 (닉네임 표시)' },
   낚시의자: { name: '낚시 의자', icon: '🎪', price: 1200, desc: '고급 낚시 의자 (낚시 속도 +5%)', bonus: { fishTimeMult: 0.95 }, upgradeMats: { 정제철: 2 } },
   미끼통: { name: '미끼통', icon: '🪣', price: 500, desc: '미끼 효율 +15%', bonus: { baitEfficiency: 1.15 } },
+};
+
+// ── Furniture (가구 — 개인 오두막 배치용) ────────────────────────────────────
+export const FURNITURE = {
+  나무침대:  { name: '나무 침대',   icon: '🛏', price: 800,  category: '가구', desc: '오프라인 수입 +10%',       bonus: { offlineMult: 1.10 }, size: [2, 1] },
+  책상:      { name: '책상',        icon: '🪑', price: 600,  category: '가구', desc: '일일 퀘스트 +1개',          bonus: { questSlot: 1 },      size: [1, 1] },
+  어항:      { name: '어항',        icon: '🐠', price: 1200, category: '가구', desc: '박제 물고기 전시 슬롯 +3',  bonus: { taxidermySlot: 3 },   size: [1, 1] },
+  벽난로:    { name: '벽난로',      icon: '🔥', price: 1500, category: '가구', desc: '요리 속도 +8%',             bonus: { cookTimeMult: 0.92 }, size: [1, 1] },
+  책장:      { name: '책장',        icon: '📚', price: 700,  category: '가구', desc: '탐험 어빌리티 요구치 -5',   bonus: { exploreReq: -5 },     size: [1, 2] },
+  황금어항:  { name: '황금 어항',   icon: '🏆', price: 5000, category: '가구', desc: '박제 전시 슬롯 +6, 판매가 +5%', bonus: { taxidermySlot: 6, sellBonus: 0.05 }, size: [2, 1], upgradeMats: { 황금괴: 2 } },
+  수정테이블:{ name: '수정 테이블', icon: '💎', price: 3000, category: '가구', desc: '강화 성공률 +5%',           bonus: { enhanceBonus: 0.05 }, size: [2, 1], upgradeMats: { 정제수정: 3 } },
+  화분:      { name: '화분',        icon: '🪴', price: 300,  category: '장식', desc: '집 꾸미기 — 채집 속도 +3%', bonus: { gatherTimeMult: 0.97 }, size: [1, 1] },
+  액자:      { name: '액자',        icon: '🖼', price: 200,  category: '장식', desc: '집 꾸미기 — 업적 패 전시',   bonus: {},                     size: [1, 1] },
+  항아리:    { name: '항아리',      icon: '🏺', price: 250,  category: '장식', desc: '집 꾸미기 — 분위기 소품',    bonus: {},                     size: [1, 1] },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

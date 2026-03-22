@@ -100,6 +100,14 @@ function buildMap() {
   t[17][14] = TILE.PATH;
   t[17][15] = TILE.PATH;
 
+  // ── Cottage zone: cols 21-27, rows 14-17 ─────────────────────────────────
+  for (let r = 14; r <= 17; r++)
+    for (let c = 21; c <= 27; c++)
+      t[r][c] = TILE.BUILDING;
+  // Cottage entrance path
+  t[17][23] = TILE.PATH;
+  t[17][24] = TILE.PATH;
+
   // ── Sand beach: rows 18-20, cols 0-44 ─────────────────────────────────────
   for (let r = 18; r <= 20; r++)
     for (let c = 0; c <= 44; c++)
@@ -230,6 +238,13 @@ export const DOOR_TRIGGERS = [
     wx: 14.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
     range: 1.8 * TILE_SIZE,
     exitWx: 14.5 * TILE_SIZE, exitWy: 20 * TILE_SIZE,
+  },
+  {
+    id: 'cottage',
+    label: '🏠 내 오두막 입장',
+    wx: 23.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
+    range: 1.8 * TILE_SIZE,
+    exitWx: 23.5 * TILE_SIZE, exitWy: 20 * TILE_SIZE,
   },
 ];
 

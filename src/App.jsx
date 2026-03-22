@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import LZString from 'lz-string';
 import './App.css';
 import GameCanvas from './GameCanvas';
 import { playFishCatch, playFishingStart, playOreMined, playCookComplete, playSellSound, playEnterRoom, playNpcInteract, playLevelUp } from './soundManager';
@@ -19,7 +20,7 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
-  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS } from './gameData';
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
@@ -47,6 +48,9 @@ import { useKeyboard } from './hooks/useKeyboard';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import ChatBox from './components/ChatBox';
+
+// Tournament rarity bonus: points added on top of fish size per rarity tier
+const TOURNAMENT_RARITY_BONUS = { 흔함: 0, 보통: 10, 희귀: 25, 전설: 60, 신화: 150 };
 
 function LoginScreen({ onLogin }) {
   const [name, setName] = useState('');
@@ -223,6 +227,8 @@ export default function App() {
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [showBank, setShowBank] = useState(false);
   const [showAppearance, setShowAppearance] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showCottage, setShowCottage] = useState(false);
   const [appearanceDraft, setAppearanceDraft] = useState(null); // { hairColor, bodyColor, skinColor }
   const [bankInput, setBankInput] = useState('');
 
@@ -324,7 +330,8 @@ export default function App() {
   // Save to localStorage keyed by nickname
   useEffect(() => {
     if (!nickname) return;
-    localStorage.setItem(saveKey(nickname), JSON.stringify({ ...gs, lastSaveTime: Date.now(), saveVersion: SAVE_VERSION }));
+    const json = JSON.stringify({ ...gs, lastSaveTime: Date.now(), saveVersion: SAVE_VERSION });
+    localStorage.setItem(saveKey(nickname), LZString.compressToUTF16(json));
   }, [gs, nickname]);
 
 
@@ -381,7 +388,8 @@ export default function App() {
     const hoursElapsed = elapsedMs / (60 * 60 * 1000);
     if (hoursElapsed < 0.01) return; // less than 36 seconds, skip
     const bankAffinity = gs.npcAffinity?.은행원 ?? 0;
-    const interestRate = 0.02 + (bankAffinity >= 50 ? 0.01 : bankAffinity >= 20 ? 0.005 : 0);
+    // Base 2.5%/hr + 0.5%/hr at lv20 + 1%/hr at lv50 (anti-inflation cap: max 4%/hr)
+    const interestRate = Math.min(0.04, 0.025 + (bankAffinity >= 50 ? 0.01 : bankAffinity >= 20 ? 0.005 : 0));
     const interest = Math.floor(deposit * interestRate * hoursElapsed);
     if (interest <= 0) return;
     setGs(prev => ({ ...prev, money: prev.money + interest, bankLastInterest: now }));
@@ -621,10 +629,10 @@ export default function App() {
       table = applyBoosts(table, { 희귀: mult, 전설: mult * 1.5, 신화: mult * 2 });
     }
 
-    // Party member rarity bonus (party-specific, on top of generic player boost)
+    // Party member rarity bonus (10% per member, up to 40% at 4-person party)
     const partyCount = partyMembersRef.current?.length ?? 0;
     if (partyCount >= 1) {
-      const partyRareBoost = Math.min(0.25, partyCount * 0.10); // up to 25% per party member
+      const partyRareBoost = Math.min(0.40, partyCount * 0.10);
       table = applyBoosts(table, { 희귀: 1 + partyRareBoost, 전설: 1 + partyRareBoost * 1.5, 신화: 1 + partyRareBoost * 2 });
     }
 
@@ -632,7 +640,15 @@ export default function App() {
     const wMult = weatherRef.current?.fishMult ?? 1.0;
     if (wMult !== 1.0) table = table.map(e => ({ ...e, w: e.w * wMult }));
 
-    const name = weightedPick(table);
+    // Filter out seasonal fish that don't match current season
+    const currentSeasonId = getCurrentSeason()?.id ?? null;
+    const filteredTable = table.filter(e => {
+      const reqS = FISH[e.f]?.reqSeason;
+      return !reqS || reqS === currentSeasonId;
+    });
+    const pickTable = filteredTable.length > 0 ? filteredTable : table;
+
+    const name = weightedPick(pickTable);
     const fd = FISH[name];
     if (!fd) return;
     const size = parseFloat((Math.random() * (fd.maxSz - fd.minSz) + fd.minSz).toFixed(1));
@@ -788,9 +804,10 @@ export default function App() {
     // Server-wide stat
     incrementServerStat('totalFishCaught');
 
-    // Tournament: track weekly fish count per player
+    // Tournament: track weekly total (size + rarity bonus)
     if (nicknameRef.current) {
-      tournamentScoreRef.current += 1;
+      const rarityBonus = TOURNAMENT_RARITY_BONUS[fd.rarity] ?? 0;
+      tournamentScoreRef.current = Math.round(tournamentScoreRef.current + size + rarityBonus);
       submitTournamentScore(nicknameRef.current, tournamentScoreRef.current);
     }
     // Server cooperative quest: contribute fish caught
@@ -865,7 +882,7 @@ export default function App() {
     broadcastAnnouncement(`${nicknameRef.current}님이 ${size}cm ${name}을(를) 낚았습니다! ${fd.rarity === '신화' ? '🌟 신화어 출현!' : '⭐ 전설어!'}`);
     if (gameRef.current) gameRef.current.rareEffect = { age: 0, color: fd.rarity === '신화' ? '#ff88ff' : '#ffdd44', rarity: fd.rarity, fishName: name, size };
     incrementServerStat('totalFishCaught');
-    if (nicknameRef.current) { tournamentScoreRef.current += 1; submitTournamentScore(nicknameRef.current, tournamentScoreRef.current); }
+    if (nicknameRef.current) { const rb = TOURNAMENT_RARITY_BONUS[fd.rarity] ?? 0; tournamentScoreRef.current = Math.round(tournamentScoreRef.current + size + rb); submitTournamentScore(nicknameRef.current, tournamentScoreRef.current); }
     incrementServerQuestProgress('fishCaught');
     if (myGuildIdRef.current) {
       contributeGuildQuest(myGuildIdRef.current, 'fishCaught', 1);
@@ -924,7 +941,7 @@ export default function App() {
     grantAbility('채굴', ORE_ABILITY_GAIN[oreName] ?? 0.40);
     grantAbility('체력', STAMINA_GAIN);
     advanceQuest('ore');
-    gainNpcAffinity('채굴사', 0.5);
+    gainNpcAffinity('채굴사', 0.8);
     // 광석 정밀 채굴 미니게임: 수정/금광석에서 20% 확률 트리거
     if ((oreName === '수정' || oreName === '금광석') && Math.random() < 0.20 && !miningMinigame) {
       setMiningMinigame({ oreName });
@@ -1019,6 +1036,7 @@ export default function App() {
        '!판매  – 물고기 전체 판매 (상점 근처)',
        '!인벤  – 인벤토리 열기/닫기',
        '!랭킹  – 랭킹 보기',
+       '!토너먼트 – 주간 낚시 토너먼트 순위 보기',
        '!스탯  – 캐릭터 스탯 보기',
        '!퀘스트 – 오늘의 퀘스트 확인',
        '!탐험  – 새 탐험 구역 발견 시도',
@@ -1044,6 +1062,11 @@ export default function App() {
 
     if (cmd === '!랭킹') {
       setShowRank(v => !v);
+      return;
+    }
+
+    if (cmd === '!토너먼트') {
+      setShowTournament(v => !v);
       return;
     }
 
@@ -1849,7 +1872,7 @@ export default function App() {
     playSellSound(total);
     grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
     advanceQuest('sell', total);
-    gainNpcAffinity('상인', Math.max(1, Math.floor(total / 200)));
+    gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
   };
 
   const sellOne = (id) => {
@@ -1988,7 +2011,7 @@ export default function App() {
         addMsg('🏨 미나: "편히 쉬고 가세요! 내일 퀘스트도 화이팅~"', 'info');
         addMsg(`💤 여관에서 휴식했습니다. 체력 어빌리티 +${0.5 + innStaminaBonus}!`, 'catch');
         grantAbility('체력', 0.5 + innStaminaBonus);
-        gainNpcAffinity('여관주인', 1);
+        gainNpcAffinity('여관주인', 1.5);
         setGs(prev => {
           const prevStats = prev.achStats ?? {};
           return { ...prev, innRestAt: Date.now(), achStats: { ...prevStats, innVisits: (prevStats.innVisits ?? 0) + 1 } };
@@ -2016,7 +2039,7 @@ export default function App() {
       setTimeout(() => checkNpcQuest('철수'), 0);
     } else if (npcName === '은행원') {
       setShowBank(true);
-      gainNpcAffinity('은행원', 1);
+      gainNpcAffinity('은행원', 1.5);
       setTimeout(() => checkNpcQuest('은행원'), 0);
     }
   }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, stateRef]);
@@ -2080,6 +2103,7 @@ export default function App() {
           bodyColor={gs.bodyColor}
           skinColor={gs.skinColor}
           gender={gs.gender}
+          spotDecos={gs.spotDecos}
         />
         {/* IndoorCanvas overlays when inside a room */}
         {indoorRoom && (
@@ -2094,6 +2118,8 @@ export default function App() {
             bodyColor={gs.bodyColor}
             skinColor={gs.skinColor}
             gender={gs.gender}
+            cottageData={gs.cottage}
+            FURNITURE={FURNITURE}
           />
         )}
 
@@ -2140,6 +2166,9 @@ export default function App() {
           showMobileMenu={showMobileMenu}
           setAppearanceDraft={setAppearanceDraft}
           setShowAppearance={setShowAppearance}
+          setShowSettings={setShowSettings}
+          setShowTournament={setShowTournament}
+          setShowCottage={setShowCottage}
         />
       </div>
 
@@ -2225,6 +2254,10 @@ export default function App() {
         setResistanceGame={setResistanceGame}
         miningMinigame={miningMinigame}
         setMiningMinigame={setMiningMinigame}
+        showSettings={showSettings}
+        setShowSettings={setShowSettings}
+        showCottage={showCottage}
+        setShowCottage={setShowCottage}
       />
     </div>
   );

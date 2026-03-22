@@ -21,13 +21,13 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
     const now2 = Date.now();
     const awayMs = Math.max(0, now2 - (saved.lastSaveTime ?? now2));
     const awayMins = Math.floor(awayMs / 60000);
-    const maxMins = 120;
+    const maxMins = 150; // 최대 2.5시간
     const effectiveMins = Math.min(awayMins, maxMins);
     const bankAff = saved.npcAffinity?.은행원 ?? 0;
     const innOffMult = innAff >= 80 ? 1.5 : 1.0;
     const bankOffMult = bankAff >= 80 ? 2.0 : 1.0;
     const offlineMult = innOffMult * bankOffMult;
-    const offlineReward = Math.floor(effectiveMins * 8 * offlineMult);
+    const offlineReward = Math.floor(effectiveMins * 10 * offlineMult);
     if (bonus > 0) {
       if (streak >= 7) {
         setGs({ ...base, money: saved.money + bonus,
@@ -55,7 +55,7 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
       if (innOffMult > 1) multParts.push('여관주인 ×1.5');
       if (bankOffMult > 1) multParts.push('은행원 ×2');
       const multLabel = multParts.length > 0 ? ` (${multParts.join(', ')})` : '';
-      setTimeout(() => addMsgRef.current(`💤 자리 비운 ${awayMins}분 동안 +${offlineReward}G 획득!${multLabel} (최대 2시간)`, 'catch'), 1800);
+      setTimeout(() => addMsgRef.current(`💤 자리 비운 ${awayMins}분 동안 +${offlineReward}G 획득!${multLabel} (최대 2.5시간)`, 'catch'), 1800);
     }
     // 상인 lv80: 특별 미끼(전설미끼) 매일 지급
     const merchantAff = saved.npcAffinity?.상인 ?? 0;

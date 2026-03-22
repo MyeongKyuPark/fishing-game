@@ -15,6 +15,7 @@ export default function TopBar({
   setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex,
   setShowGuild, setShowMarket, setShowMobileMenu, showMobileMenu,
   setAppearanceDraft, setShowAppearance,
+  setShowSettings, setShowTournament, setShowCottage,
 }) {
   return (
     <>
@@ -205,6 +206,9 @@ export default function TopBar({
         <button tabIndex={-1} onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
         <button tabIndex={-1} onClick={() => setShowQuest(v => !v)}>📋 퀘스트</button>
         <button tabIndex={-1} onClick={() => setShowDex(v => !v)}>📖 도감</button>
+        <button tabIndex={-1} onClick={() => setShowTournament(v => !v)}>🏆 토너먼트</button>
+        <button tabIndex={-1} onClick={() => setShowCottage && setShowCottage(v => !v)}>🏠 오두막</button>
+        <button tabIndex={-1} onClick={() => setShowSettings(v => !v)}>⚙️ 설정</button>
         {indoorRoom && <button tabIndex={-1} style={{ color: '#ffaaaa', borderColor: 'rgba(255,100,100,0.4)' }} onClick={handleExitRoom}>🚪 나가기</button>}
         {indoorRoom === 'mine' && <button tabIndex={-1} style={{ color: '#aaffcc', borderColor: 'rgba(100,255,150,0.4)' }} onClick={() => handleCommand('!광질')}>⛏ 광질</button>}
       </div>

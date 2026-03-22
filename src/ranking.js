@@ -298,3 +298,39 @@ export async function spawnServerBoss(name, hp) {
     });
   } catch (e) { console.warn('boss spawn failed', e); }
 }
+
+// ── Cottage sharing ───────────────────────────────────────────────────────────
+/** Upload this player's cottage data so others can visit */
+export async function saveCottagePublic(nickname, cottageData) {
+  try {
+    const ref = doc(db, 'cottages', encodeURIComponent(nickname));
+    await setDoc(ref, {
+      nickname,
+      furniture: cottageData.furniture ?? [],
+      achieveDisplay: cottageData.achieveDisplay ?? [],
+      trophyWall: cottageData.trophyWall ?? [],
+      updatedAt: serverTimestamp(),
+    });
+  } catch (e) { console.warn('cottage save failed', e); }
+}
+
+/** Fetch another player's cottage data by nickname */
+export async function fetchCottage(nickname) {
+  try {
+    const snap = await getDoc(doc(db, 'cottages', encodeURIComponent(nickname)));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) { console.warn('cottage fetch failed', e); return null; }
+}
+
+/** Increment visit counter for a cottage */
+export async function incrementCottageVisit(nickname) {
+  try {
+    const ref = doc(db, 'cottages', encodeURIComponent(nickname));
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return;
+      tx.set(ref, { ...snap.data(), visits: (snap.data().visits ?? 0) + 1 }, { merge: false });
+    });
+  } catch (e) { console.warn('cottage visit failed', e); }
+}
+

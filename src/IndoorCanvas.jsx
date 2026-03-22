@@ -140,6 +140,26 @@ const ROOMS = {
     exitTx: 5, exitTy: 9,
     entryTx: 5, entryTy: 7,
   },
+  cottage: {
+    label: '🏠 내 오두막',
+    w: 12, h: 10,
+    tiles: [
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+      ['W','S','S','F','F','F','F','F','S','S','S','W'],
+      ['W','S','S','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','F','T','T','F','F','F','F','F','W'],
+      ['W','F','F','F','T','T','F','F','F','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','R','R','R','R','R','R','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','W','W','W','W','D','W','W','W','W','W','W'],
+    ],
+    floor: '#d4a870', wall: '#7a5030', rug: '#9b4444', table: '#8b6040', shelf: '#7a5030',
+    npcs: [],
+    exitTx: 5, exitTy: 9,
+    entryTx: 5, entryTy: 7,
+  },
 };
 
 function isWalkable(tile) {
@@ -535,7 +555,37 @@ function drawMineLanterns(ctx, offX, offY, now) {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcInteract, onNearNpcChange, hairColor, bodyColor, skinColor, gender }) {
+// Emoji icon → canvas font rendering helper
+function drawEmoji(ctx, emoji, x, y, size = 20) {
+  ctx.font = `${size}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, x, y);
+}
+
+// Draw cottage furniture items on the grid
+function drawCottageFurniture(ctx, offX, offY, furniture, FURN) {
+  if (!furniture || !FURN) return;
+  const gridW = 4; // layout: 4 cols
+  furniture.forEach((f, i) => {
+    const fd = FURN[f.key];
+    if (!fd) return;
+    const gx = (i % gridW);
+    const gy = Math.floor(i / gridW);
+    // Place in rows 1-2, spread across room
+    const tx = 1 + gx * 2.5;
+    const ty = 1 + gy * 1.5;
+    const sx = offX + (tx + 0.5) * TS;
+    const sy = offY + (ty + 0.5) * TS;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(sx, sy + 10, 12, 5, 0, 0, Math.PI * 2); ctx.fill();
+    // Icon
+    drawEmoji(ctx, fd.icon, sx, sy, 22);
+  });
+}
+
+export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcInteract, onNearNpcChange, hairColor, bodyColor, skinColor, gender, cottageData, FURNITURE }) {
   const canvasRef = useRef(null);
   const playerRef = useRef(null);
   const onExitRef = useRef(onExit);
@@ -552,6 +602,10 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
   useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
   useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
   useEffect(() => { genderRef.current = gender ?? 'male'; }, [gender]);
+  const cottageDataRef = useRef(cottageData);
+  useEffect(() => { cottageDataRef.current = cottageData; }, [cottageData]);
+  const FURNITURERef = useRef(FURNITURE);
+  useEffect(() => { FURNITURERef.current = FURNITURE; }, [FURNITURE]);
 
   const room = ROOMS[roomId];
 
@@ -683,6 +737,11 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
         const nsy = offY + (npc.ty + 0.5) * TS;
         const dist = Math.hypot(player.x - (npc.tx + 0.5) * TS, player.y - (npc.ty + 0.5) * TS);
         drawIndoorNPC(ctx, nsx, nsy, npc, dist < 3 * TS, now);
+      }
+
+      // Cottage furniture overlay
+      if (roomId === 'cottage') {
+        drawCottageFurniture(ctx, offX, offY, cottageDataRef.current?.furniture, FURNITURERef.current);
       }
 
       // Player
