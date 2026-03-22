@@ -1743,8 +1743,8 @@ export default function App() {
       if (fishIdx === -1) { addMsg(`인벤토리에 ${fishName}이/가 없습니다.`, 'error'); return; }
       const fishInfo = FISH[fishName];
       const expGain = Math.max(1, Math.ceil((fishInfo?.price ?? 20) / 40));
-      const curExp = (s.petExp ?? {})[activePet] ?? 0;
-      const curLevel = (s.petLevels ?? {})[activePet] ?? 1;
+      const curExp = typeof (s.petExp ?? {})[activePet] === 'number' ? (s.petExp ?? {})[activePet] : 0;
+      const curLevel = typeof (s.petLevels ?? {})[activePet] === 'number' ? (s.petLevels ?? {})[activePet] : 1;
       const newExp = curExp + expGain;
       let newLevel = curLevel;
       for (let lv = curLevel; lv < PET_MAX_LEVEL; lv++) {

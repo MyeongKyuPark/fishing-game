@@ -941,7 +941,7 @@ export default function Sidebar(props) {
                           const isActive = gs.activePet === key;
                           const remainMs = Math.max(0, egg.hatchAt - now);
                           const remainMin = Math.ceil(remainMs / 60000);
-                          const level = petLevels[key] ?? 1;
+                          const level = typeof petLevels[key] === 'number' ? petLevels[key] : 1;
                           return (
                             <div key={key} className="rod-card">
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2602,8 +2602,8 @@ export default function Sidebar(props) {
               ) : (() => {
                 const petKey = gs.activePet;
                 const pet = PETS[petKey];
-                const level = (gs.petLevels ?? {})[petKey] ?? 1;
-                const exp = (gs.petExp ?? {})[petKey] ?? 0;
+                const level = typeof (gs.petLevels ?? {})[petKey] === 'number' ? (gs.petLevels ?? {})[petKey] : 1;
+                const exp = typeof (gs.petExp ?? {})[petKey] === 'number' ? (gs.petExp ?? {})[petKey] : 0;
                 if (level >= PET_MAX_LEVEL) {
                   return <div className="empty">{pet?.icon} {pet?.name}은 이미 최대 레벨입니다!</div>;
                 }
