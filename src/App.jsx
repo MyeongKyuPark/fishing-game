@@ -11,7 +11,7 @@ import RankSidebar from './RankSidebar';
 import ChannelLobby from './ChannelLobby';
 import { saveFishRecord, saveOverallFishRecord, broadcastAnnouncement, incrementServerStat,
   submitTournamentScore, incrementServerQuestProgress,
-  saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore } from './ranking';
+  saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore, savePrestigeRecord } from './ranking';
 import { sendPartyInvite, joinParty, leaveParty, sendPartyMessage } from './multiplay';
 import { JOBS, getAvailableJobs } from './jobData';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
@@ -48,6 +48,9 @@ import { useKeyboard } from './hooks/useKeyboard';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import ChatBox from './components/ChatBox';
+import AdminPanel from './AdminPanel';
+import AuctionHouse from './AuctionHouse';
+import SeasonPass from './SeasonPass';
 
 // Tournament rarity bonus: points added on top of fish size per rarity tier
 const TOURNAMENT_RARITY_BONUS = { 흔함: 0, 보통: 10, 희귀: 25, 전설: 60, 신화: 150 };
@@ -164,6 +167,8 @@ export default function App() {
   const prevOtherPlayersRef = useRef([]);
   const lastPosRef = useRef({});
   const cmdTimestampsRef = useRef([]); // spam prevention
+  const seasonResetDoneRef = useRef(false); // prevent multiple resets per session
+  const chapter5PlayedRef = useRef(false); // prevent re-trigger on snapshot reconnect
   const addMsgRef = useRef((text, type) => setMessages(prev => [...prev.slice(-120), { text, type }]));
   const [achPopup, setAchPopup] = useState(null);
   const achPopupQueueRef = useRef([]);
@@ -249,6 +254,9 @@ export default function App() {
   const [showCottage, setShowCottage] = useState(false);
   const [showMailbox, setShowMailbox] = useState(false);
   const [showSeasonLeague, setShowSeasonLeague] = useState(false);
+  const [showPrestigeConfirm, setShowPrestigeConfirm] = useState(false);
+  const [showAuction, setShowAuction] = useState(false);
+  const [showSeasonPass, setShowSeasonPass] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [tutorialStep, setTutorialStep] = useState(0); // 0=hidden, 1-4=steps
   const [catchPopup, setCatchPopup] = useState(null); // { name, size, price, rarity }
@@ -430,6 +438,62 @@ export default function App() {
     }, remaining);
     return () => clearTimeout(t);
   }, [gs.innBuff, addMsg]);
+
+  // Phase 9-6: Chapter 5 server event handler
+  useEffect(() => {
+    if (!serverEvent || serverEvent.type !== 'chapter5') return;
+    if (stateRef.current?.seenChapter5) return;
+    if (chapter5PlayedRef.current) return; // guard against onSnapshot reconnect re-trigger
+    chapter5PlayedRef.current = true;
+    const lines = [
+      { text: '🌊 [서버 이벤트] 타이드헤이븐의 모든 주민들이 광장에 모였습니다!', delay: 0 },
+      { text: '[민준] 여러분 덕분에 우리 마을이 여기까지 왔습니다. 감사합니다!', delay: 1500 },
+      { text: '[수연] 함께 요리하고 함께 낚시하며 쌓아온 시간... 정말 행복했어요.', delay: 3000 },
+      { text: '[철수] 광산 깊이 5층까지 개척한 여러분은 진정한 탐험가입니다!', delay: 4500 },
+      { text: '[미나] 타이드헤이븐에 와주셔서 감사해요. 이 마을은 여러분의 집입니다.', delay: 6000 },
+      { text: '[은행원] 마을의 경제를 지켜주신 모든 분들께 특별 이자 보너스를 드립니다! 🎊', delay: 7500 },
+      { text: "✨ '타이드헤이븐의 전설' 칭호를 획득했습니다!", delay: 9000 },
+    ];
+    lines.forEach(({ text, delay }) => {
+      setTimeout(() => addMsgRef.current(text, 'catch'), delay);
+    });
+    setTimeout(() => {
+      setGs(prev => ({ ...prev, seenChapter5: true }));
+    }, 9500);
+  }, [serverEvent]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Season pass monthly reset check
+  useEffect(() => {
+    if (!nickname) return;
+    if (seasonResetDoneRef.current) return; // run once per session to avoid clock-skew re-reset
+    seasonResetDoneRef.current = true;
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${now.getMonth() + 1}`; // fix: month is 1-12
+    if (gs.lastSeasonReset !== currentMonth) {
+      setGs(prev => ({
+        ...prev,
+        seasonPassXP: 0,
+        seasonPassTier: 0,
+        seasonPassClaimedTiers: [],
+        lastSeasonReset: currentMonth,
+      }));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nickname]);
+
+  // Prestige crash recovery: if app reloaded mid-prestige, complete the reset
+  useEffect(() => {
+    if (!nickname) return;
+    if (!gs.prestigePending) return;
+    setGs(prev => ({
+      ...prev,
+      prestigePending: false,
+      abilities: Object.fromEntries(Object.keys(prev.abilities ?? {}).map(k => [k, { value: 0, grade: 0 }])),
+      selectedJob: null,
+    }));
+    addMsg('이전에 중단된 프레스티지를 완료했습니다.', 'system');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nickname]);
 
   // Bank interest: 2%/h base, +0.5%/h at 은행원 lv20, +0.5% more at lv50, capped at 24h
   useEffect(() => {
@@ -731,7 +795,8 @@ export default function App() {
     const jobSellBonus = 1 + (JOBS[s?.selectedJob]?.bonus?.sellBonus ?? 0);
     const seasonPriceBonus = 1 + (getCurrentSeason()?.fishPriceBonus ?? 0);
     const srvSellBonus = (srvEvent?.type === 'sellBonus') ? (1 + (srvEvent.effectValue ?? 0.2)) : 1.0;
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus);
+    const prestigeSellBonus = 1 + (s?.prestigePermanentSellBonus ?? 0);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -787,6 +852,8 @@ export default function App() {
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       const prevRecord = prev.fishRecords?.[name]?.size ?? 0;
       const isNewRecord = size > prevRecord;
+      const newSpXP = (prev.seasonPassXP ?? 0) + 1;
+      const newSpTier = Math.min(10, Math.floor(newSpXP / 50));
       return {
         ...prev,
         fishInventory: [...prev.fishInventory, { name, size, price: finalPrice, id }],
@@ -795,6 +862,8 @@ export default function App() {
         fishRecords: isNewRecord
           ? { ...prev.fishRecords, [name]: { size, caughtAt: Date.now() } }
           : prev.fishRecords,
+        seasonPassXP: newSpXP,
+        seasonPassTier: newSpTier,
       };
     });
     const prevRecord = stateRef.current?.fishRecords?.[name]?.size ?? 0;
@@ -997,11 +1066,14 @@ export default function App() {
       const oreSpecies = Object.keys(newOreLog).filter(k => newOreLog[k] > 0).length;
       const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + 1, oreSpecies };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      const newSpXP2 = (prev.seasonPassXP ?? 0) + 1;
       return {
         ...prev,
         oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + 1 },
         oreLog: newOreLog,
         achStats: updatedStats,
+        seasonPassXP: newSpXP2,
+        seasonPassTier: Math.min(10, Math.floor(newSpXP2 / 50)),
       };
     });
     addMsg(`⛏ ${oreName} 1개 채굴!`, 'mine');
@@ -1162,6 +1234,16 @@ export default function App() {
 
     if (cmd === '!시즌리그') {
       setShowSeasonLeague(v => !v);
+      return;
+    }
+
+    if (cmd === '!거래소') {
+      setShowAuction(v => !v);
+      return;
+    }
+
+    if (cmd === '!시즌패스') {
+      setShowSeasonPass(v => !v);
       return;
     }
 
@@ -1488,7 +1570,9 @@ export default function App() {
     if (cmd === '!탐험') {
       const abilities = stateRef.current?.abilities;
       const explored = stateRef.current?.exploredZones ?? [];
-      const unlockable = checkZoneUnlock(abilities, explored);
+      const guildLv = guildInfo?.level ?? 0;
+      const curSeasonId = getCurrentSeason()?.id ?? null;
+      const unlockable = checkZoneUnlock(abilities, explored, guildLv, curSeasonId);
       if (unlockable.length === 0) {
         const allExplored = EXPLORE_ZONES.every(z => explored.includes(z.id));
         if (allExplored) { addMsg('🗺 모든 탐험 구역을 이미 발견했습니다!'); }
@@ -1513,6 +1597,33 @@ export default function App() {
           });
           if (z.questHint) {
             setTimeout(() => addMsgRef.current(`💡 힌트: ${z.questHint}`, 'catch'), (z.story.length + 1) * 1200);
+          }
+        }
+        // Chapter 4 trigger: 고대유적 first visit + all 5 NPC quests complete
+        if (z.id === '고대유적') {
+          const s = stateRef.current;
+          if (!s?.seenChapter4) {
+            const npcKeys = ['민준', '수연', '미나', '철수', '은행원'];
+            const allQuestsDone = npcKeys.every(k => {
+              const step = s?.npcQuestStep?.[k] ?? 0;
+              return step >= (NPC_QUESTS[k]?.length ?? 0);
+            });
+            if (allQuestsDone) {
+              const ch4Lines = [
+                '[민준] 이곳은... 타이드헤이븐의 창시자들이 남긴 고대 유적이야.',
+                '[수연] 전설에 따르면, 이 바다는 한때 신화의 어종들로 가득했다고 해.',
+                '[철수] 이 석판에 새겨진 문자... \'바다를 지키는 자에게 영원한 조류가 함께하리라.\'',
+                '[미나] 우리 마을이 이 유적 위에 세워진 거였군요. 이제야 모든 게 연결되네요.',
+                '[은행원] 이 발견을 기록해 두겠습니다. 타이드헤이븐의 진정한 역사가 시작되는 순간이군요.',
+              ];
+              const baseDelay = (z.story.length + 2) * 1200;
+              ch4Lines.forEach((line, i) => {
+                setTimeout(() => addMsgRef.current(line, 'catch'), baseDelay + i * 1800);
+              });
+              setTimeout(() => {
+                setGs(prev => ({ ...prev, seenChapter4: true }));
+              }, baseDelay + ch4Lines.length * 1800);
+            }
           }
         }
       }
@@ -2158,6 +2269,35 @@ export default function App() {
     }
   }, [addMsg, stateRef]);
 
+  const handlePrestige = useCallback(() => {
+    const playerState = gameRef.current?.player?.state;
+    if (playerState && playerState !== 'idle') {
+      addMsg('낚시/채굴/채집 중에는 프레스티지를 사용할 수 없습니다.', 'system');
+      setShowPrestigeConfirm(false);
+      return;
+    }
+    // Read from stateRef (current snapshot) to avoid stale closure; capture for Firebase write
+    const s = stateRef.current ?? {};
+    const newCount = (s.prestigeCount ?? 0) + 1;
+    const newBonus = (s.prestigePermanentSellBonus ?? 0) + 0.02;
+    // Mark pending BEFORE reset so crash recovery (useEffect above) can complete it
+    setGs(prev => ({ ...prev, prestigePending: true }));
+    setGs(prev => {
+      const resetAbils = Object.fromEntries(Object.keys(prev.abilities ?? {}).map(k => [k, { value: 0, grade: 0 }]));
+      return {
+        ...prev,
+        prestigeCount: newCount,
+        prestigePermanentSellBonus: newBonus,
+        prestigePending: false,
+        abilities: resetAbils,
+        selectedJob: null,
+      };
+    });
+    addMsg(`🌟 뉴 타이드+ 달성! 영구 판매가 +2% 획득. (프레스티지 ${newCount}회)`, 'catch');
+    if (nicknameRef.current) savePrestigeRecord(nicknameRef.current, newCount);
+    setShowPrestigeConfirm(false);
+  }, [addMsg, stateRef]);
+
   const handleNpcInteract = useCallback((npcName) => {
     playNpcInteract();
     if (npcName === '민준') {
@@ -2171,12 +2311,17 @@ export default function App() {
       const totalMult = baseMult + cookAbil * 0.01;
       const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
       if (raw.length === 0) { addMsg('🍳 수연: "요리할 생선이 없네요!"'); return; }
-      setGs(prev => ({
-        ...prev,
-        fishInventory: prev.fishInventory.map(f =>
-          f.cooked ? f : { ...f, price: Math.round(f.price * totalMult), cooked: true }
-        ),
-      }));
+      setGs(prev => {
+        const newSpXP3 = (prev.seasonPassXP ?? 0) + 2;
+        return {
+          ...prev,
+          fishInventory: prev.fishInventory.map(f =>
+            f.cooked ? f : { ...f, price: Math.round(f.price * totalMult), cooked: true }
+          ),
+          seasonPassXP: newSpXP3,
+          seasonPassTier: Math.min(10, Math.floor(newSpXP3 / 50)),
+        };
+      });
       addMsg(`🍳 수연이 생선 ${raw.length}마리를 요리해줬어요! (x${totalMult.toFixed(2)})`, 'catch');
       playCookComplete();
       const cookAffinityMult2 = (stateRef.current?.npcAffinity?.요리사 ?? 0) >= 20 ? 1.20 : 1.0;
@@ -2290,6 +2435,11 @@ export default function App() {
     setTimeout(() => setGoldFloats(prev => prev.filter(f => f.id !== id)), 1400);
   }, [gs.money]);
 
+
+  // Admin panel route
+  if (window.location.hash === '#admin') {
+    return <AdminPanel />;
+  }
 
   return (
     <div className="root">
@@ -2573,7 +2723,77 @@ export default function App() {
         setShowMailbox={setShowMailbox}
         showSeasonLeague={showSeasonLeague}
         setShowSeasonLeague={setShowSeasonLeague}
+        onPrestige={() => {
+          const playerState = gameRef.current?.player?.state;
+          if (playerState && playerState !== 'idle') {
+            addMsg('낚시/채굴/채집 중에는 프레스티지를 사용할 수 없습니다.', 'system');
+            return;
+          }
+          setShowPrestigeConfirm(true);
+        }}
       />
+
+      {/* Prestige confirm modal */}
+      {showPrestigeConfirm && (
+        <div className="overlay" onClick={() => setShowPrestigeConfirm(false)}>
+          <div className="panel" onClick={e => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div className="panel-head">
+              <span>🌟 뉴 타이드+ 명예 초기화</span>
+              <button tabIndex={-1} onClick={() => setShowPrestigeConfirm(false)}>✕</button>
+            </div>
+            <div className="section">
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginBottom: 12 }}>
+                <b style={{ color: '#ff8888' }}>초기화되는 항목:</b>
+                <ul style={{ paddingLeft: 18, marginTop: 4, lineHeight: 1.8 }}>
+                  <li>모든 어빌리티 (0으로 초기화)</li>
+                  <li>직업 트리 (해제)</li>
+                </ul>
+              </div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginBottom: 12 }}>
+                <b style={{ color: '#88ff88' }}>유지되는 항목:</b>
+                <ul style={{ paddingLeft: 18, marginTop: 4, lineHeight: 1.8 }}>
+                  <li>골드, 장비, 도감, NPC 친밀도</li>
+                  <li>업적, 펫, 오두막</li>
+                </ul>
+              </div>
+              <div style={{ fontSize: 13, color: '#ffd700', marginBottom: 16 }}>
+                <b>획득:</b> 영구 판매가 +2%, 프레스티지 카운트 +1<br />
+                현재 {gs.prestigeCount ?? 0}회 → {(gs.prestigeCount ?? 0) + 1}회
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn-buy" style={{ flex: 1, background: 'linear-gradient(135deg, #7733cc, #3366cc)' }}
+                  onClick={handlePrestige}>
+                  🌟 확인 (초기화)
+                </button>
+                <button className="btn-dis" style={{ flex: 1 }} onClick={() => setShowPrestigeConfirm(false)}>
+                  취소
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auction House modal */}
+      {showAuction && (
+        <AuctionHouse
+          onClose={() => setShowAuction(false)}
+          gs={gs}
+          setGs={setGs}
+          nickname={nickname}
+          addMsg={addMsg}
+        />
+      )}
+
+      {/* Season Pass modal */}
+      {showSeasonPass && (
+        <SeasonPass
+          onClose={() => setShowSeasonPass(false)}
+          gs={gs}
+          setGs={setGs}
+          addMsg={addMsg}
+        />
+      )}
     </div>
   );
 }

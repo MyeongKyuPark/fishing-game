@@ -84,10 +84,10 @@ service cloud.firestore {
       allow write: if docId == 'global';
     }
 
-    // ── Server events (admin-created, read-only for clients) ──────────────────
+    // ── Server events (admin-created; write requires Firebase Auth) ──────────
     match /server_events/{docId} {
       allow read: if true;
-      allow write: if false; // admin only via Firebase console/admin SDK
+      allow write: if request.auth != null; // Firebase Auth required — password never bundled in client
     }
 
     // ── Party system ──────────────────────────────────────────────────────────
@@ -175,6 +175,26 @@ service cloud.firestore {
     match /server_boss/{docId} {
       allow read: if true;
       allow write: if true; // admin spawns, players deal damage via transaction
+    }
+
+    // ── Auction House ────────────────────────────────────────────────────────────
+    match /auction_house/{docId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['seller', 'itemType', 'itemName', 'qty', 'price', 'createdAt'])
+                   && isValidNickname(request.resource.data.seller)
+                   && request.resource.data.price is number
+                   && request.resource.data.price > 0
+                   && request.resource.data.price <= 10000000
+                   && request.resource.data.qty is number
+                   && request.resource.data.qty >= 1
+                   && request.resource.data.itemType in ['fish', 'ore', 'herb', 'potion', 'crop'];
+      allow delete: if true; // buyer purchase or seller cancel
+    }
+
+    // ── Admin audit log (서버 전용 쓰기 — 클라이언트 쓰기 차단) ──────────────────
+    match /admin_audit_log/{docId} {
+      allow read: if false;
+      allow write: if false; // writes only via Firebase Admin SDK (server-side)
     }
   }
 }

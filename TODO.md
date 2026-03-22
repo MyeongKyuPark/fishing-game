@@ -374,4 +374,100 @@
 
 ---
 
-*마지막 업데이트: 2026-03-22*
+## Phase 9 — Live Service Platform
+
+### 9-1. Prestige / New Tide+ System
+- ✅ DEFAULT_STATE.prestigeCount (0), prestigePermanentSellBonus (0)
+- ✅ Prestige trigger condition: all 5 NPC story quests complete + seenChapter4 === true
+- ✅ Atomic prestige reset: abilities → 0, prestigeCount +1, prestigePermanentSellBonus += 0.02
+- ✅ prestigePending flag in DEFAULT_STATE for crash recovery
+- ✅ Prestige bonus applied to sell price formula (× (1 + prestigePermanentSellBonus))
+- ✅ Prestige-exclusive titles in titleData.js (새벽의 낚시꾼 prestige≥1, 전설의 어부 prestige≥3, 불멸의 어부 prestige≥5)
+- ✅ Prestige confirm modal in App.jsx showing exactly what resets vs persists
+- ✅ Prestige leaderboard tab in Leaderboard.jsx
+
+### 9-2. Admin Event Dashboard
+- ✅ AdminPanel.jsx — password-protected #admin route (VITE_ADMIN_PASSWORD env var)
+- ✅ Event CRUD UI against existing server_events Firebase collection
+- ✅ Admin audit log writes to Firebase admin_audit_log/{timestamp} on each action
+- ✅ Drop rate override: write fishRateOverride to server_events for client to pick up
+
+### 9-3. Season Pass (30-day)
+- ✅ DEFAULT_STATE.seasonPassXP (0), seasonPassTier (0), seasonPassClaimedTiers ([]), lastSeasonReset ("")
+- ✅ SEASON_PASS_REWARDS array in gameData.js (10 tiers: cosmetics, bait, gold)
+- ✅ Season pass XP gains: fishing (+1), mining (+1), cooking (+2), daily quest complete (+5)
+- ✅ SeasonPass.jsx panel: tier progress bar, reward list, claim button
+- ✅ Monthly reset logic: compare lastSeasonReset month/year to now, reset if different month
+
+### 9-4. Content Batch
+- ✅ 10 new fish in gameData.js FISH array:
+    빛붕어(lightCrucian, common, 200-350G), 자갈치(cobbleFish, common, 180-300G),
+    무지개퍼치(rainbowPerch, common, 220-380G), 황금장어(goldenEel, uncommon, 600-900G),
+    삼치(mackerel, uncommon, 500-750G), 보석복어(jewelPufferfish, uncommon, 700-1000G),
+    달빛가오리(moonRay, uncommon, 800-1200G), 고대철갑상어(ancientSturgeon, rare, 2000-3500G),
+    용아귀(dragonAnglerfish, rare, 2500-4000G), 타이드헤이븐리바이어던(tidalLeviathan, legendary, 15000-25000G)
+- ✅ 2 new exploration zones in explorationData.js:
+    침몰한 신전 (Sunken Temple, requires guild level 3, ancient gem drop + deep fish bonus ×1.5)
+    얼어붙은 연못 (Frozen Tundra Pond, winter-only reqSeason:"겨울얼음낚시", ice fish bonus ×1.3)
+
+### 9-5. Auction House
+- ✅ AuctionHouse.jsx — browse listings, list item, my-sales tabs
+- ✅ Firebase auction_house/{listingId} collection writes in App.jsx
+- ✅ Atomic buy using Firebase runTransaction (gold deduct + mark sold + mailbox notify)
+- ✅ 30s localStorage cache for browse (avoid live subscription)
+- ✅ Economy guardrails: max 5 listings per player, price 50%-300% of base sell price
+- ✅ Inventory pre-listing validation (not equipped, not in active delivery order)
+
+### 9-6. NPC Story Conclusion (Ch 4-5)
+- ✅ DEFAULT_STATE.seenChapter4 (false), seenChapter5 (false)
+- ✅ Chapter 4: triggered in ancient ruins zone first visit after all 5 NPC quests complete
+- ✅ Chapter 5: server-wide event triggerable from admin panel (type: "chapter5")
+- ✅ "타이드헤이븐의 전설" title in titleData.js for players with seenChapter5 === true
+
+### 9-7. Technical Health
+- ✅ GameCanvas.jsx: skip RAF when document.hidden (document.addEventListener visibilitychange)
+- ✅ App.jsx: auction house listing cache with 30s TTL in localStorage
+- ✅ Season pass XP sync: stored in localStorage state (no per-action Firebase writes)
+- ✅ Firebase: auction_house collection used; season_pass stays in localStorage
+
+### 9-8. Mobile PWA Enhancement
+- ✅ Service worker: already caches app shell + static assets (exclude Firebase API calls)
+- ✅ PWA manifest: display: standalone, theme/background colors set, icons configured
+- ✅ Visual-viewport keyboard fix: verified already done in Phase 7
+- ✅ Offline indicator: "오프라인" badge verified in TopBar.jsx
+
+---
+
+---
+
+## 기술 부채 & 미래 작업 (Eng Review 2026-03-22)
+
+- ✅ 시즌패스 코스메틱 보상 실제 지급 — 티어 5/9의 스킨 아이템을 ownedCosmetics 또는 ownedOutfits에 추가하는 로직 구현 (현재 수령 버튼은 있지만 실제로 아무것도 지급 안 됨)
+- ✅ 거래소 Admin 패널 Firebase 보안 규칙 강화 — auction_house/admin_audit_log 컬렉션에 Firebase Security Rules 작성 (현재는 클라이언트 비밀번호만 보호)
+- ✅ 프레스티지 낚시 중 차단 — 낚시/채굴/채집 진행 중에는 프레스티지 버튼 비활성화 처리
+- ✅ 거래소 허브/작물/포션 아이템 지원 — 현재 물고기/광석만 거래 가능
+
+## 보안 & 버그 (적대적 리뷰 2026-03-22)
+
+### CRITICAL
+- ✅ AdminPanel 비밀번호 클라이언트 번들 노출 — `VITE_ADMIN_PASSWORD` 제거, Firebase Auth `signInWithEmailAndPassword`로 이전. firestore.rules `server_events` write에 `request.auth != null` 적용
+- ✅ 거래소 취소 시 소유권 서버 검증 없음 — `handleCancel`을 `runTransaction`으로 교체, seller 불일치 시 예외 발생
+
+### HIGH
+- ✅ 거래소 구매 골드 차감이 트랜잭션 밖에서 실행 — `isBuying` 더블클릭 가드 추가, `PENDING_BUY_KEY` localStorage로 크래시 복구 지원, 트랜잭션 내 만료 검증 추가
+- ✅ 거래소 등록 시 Firebase 쓰기 후 인벤토리 제거 — `PENDING_LISTING_KEY` localStorage 플래그로 setDoc 전/후 마킹
+- ✅ GameCanvas RAF 이중 스케줄링 — `onVisibilityChange`에 `if (rafId) return` 가드 추가, 비가시 시 cancelAnimationFrame 호출, loop 조기 반환 시 `rafId = undefined`
+- ✅ 프레스티지 stateRef 레이스 컨디션 — `stateRef.current`에서 newCount 선계산 후 setGs·Firebase 기록에 동일값 사용
+- ✅ 시즌패스 월 키 오프바이원 + 클럭스큐 데이터 손실 — `getMonth() + 1` 수정, `seasonResetDoneRef`로 세션당 1회 실행 보장
+
+### MEDIUM
+- ✅ `prestigePending` 복구 플래그 미구현 — 리셋 전 `prestigePending: true` 별도 dispatch 추가, nickname useEffect에서 `prestigePending` 감지 시 복구 완료 처리
+- ✅ 시즌패스 티어 4곳에서 중복 계산 — `SeasonPass.jsx`에서 `gs.seasonPassTier` 대신 `Math.min(10, Math.floor(xp / 50))`로 항상 파생
+- ✅ 거래소 nanoid 충돌 가능 — `crypto.randomUUID()`로 교체, `nanoid()` 함수 제거
+- ✅ 챕터5 이벤트 effect 재발동 — `chapter5PlayedRef`로 onSnapshot 재연결 시 중복 실행 차단
+
+### LOW (INVESTIGATE)
+- ✅ 거래소 만료 목록이 서버에서 삭제되지 않음 — `handleBuy` 트랜잭션 내 `expiresAt` 서버 측 검증 추가
+- ✅ `checkZoneUnlock`의 `reqAbil` falsy 체크 취약 — `!z.reqAbil || Object.keys(z.reqAbil).length === 0` 명시적 체크로 변경
+
+*마지막 업데이트: 2026-03-22 → 수정 완료 2026-03-22*

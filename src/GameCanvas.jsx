@@ -175,8 +175,25 @@ export default function GameCanvas({
   useEffect(() => {
     let rafId;
     let lastT = performance.now();
+    let isVisible = !document.hidden;
+
+    function onVisibilityChange() {
+      isVisible = !document.hidden;
+      if (isVisible) {
+        if (rafId) return; // already running — guard against double scheduling
+        lastT = performance.now();
+        rafId = requestAnimationFrame(loop);
+      } else {
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = undefined;
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     function loop(ts) {
+      if (!isVisible) { rafId = undefined; return; }
       const dt = Math.min(ts - lastT, 50);
       lastT = ts;
 
@@ -590,7 +607,10 @@ export default function GameCanvas({
     }
 
     rafId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      cancelAnimationFrame(rafId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []); // intentional empty deps – all state accessed via refs
 
   return (

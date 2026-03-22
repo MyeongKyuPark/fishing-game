@@ -99,6 +99,43 @@ export const EXPLORE_ZONES = [
     questHint: '심해 탐험 구역에서 신화 물고기를 한 마리 낚아보세요.',
   },
   {
+    id: '침몰한신전',
+    name: '침몰한 신전',
+    icon: '🏯',
+    desc: '고대의 수중 사원. 희귀 어종과 고대 보석이 잠들어 있다.',
+    reqGuildLevel: 3,
+    reqAbil: {},
+    reqLabel: '길드 레벨 3 이상',
+    benefit: '심해 어종 ×1.5, 5% 확률 고대 보석',
+    fishBoost: { 희귀: 1.5, 전설: 1.5, 신화: 1.5 },
+    ancientGemChance: 0.05,
+    story: [
+      '🏯 바다 깊이 가라앉은 고대 사원의 문이 열립니다.',
+      '💬 민준: "이 신전은 수천 년 전 해신에게 바쳐진 성소예요. 길드원들과 함께 탐험하세요!"',
+      '💬 철수: "벽에 새겨진 문자... 고대 보석을 바치면 바다의 신이 축복을 내린다고 해요."',
+      '✨ 침몰한 신전 효과 활성화: 희귀/전설/신화 물고기 ×1.5, 5% 확률 고대 보석 획득!',
+    ],
+    questHint: '침몰한 신전에서 고대 보석을 3개 획득해보세요.',
+  },
+  {
+    id: '얼어붙은연못',
+    name: '얼어붙은 연못',
+    icon: '❄️',
+    desc: '겨울에만 접근 가능한 신비로운 얼음 연못. 특별한 빙설 어종이 서식한다.',
+    reqSeason: '겨울얼음낚시',
+    reqAbil: {},
+    reqLabel: '겨울 시즌 한정',
+    benefit: '빙설 어종 ×1.3, 모든 낚시 속도 +20%',
+    fishBoost: { 흔함: 1.1, 보통: 1.2, 희귀: 1.3 },
+    story: [
+      '❄️ 두꺼운 얼음 아래에서 신비로운 빛이 흘러나옵니다.',
+      '💬 미나: "겨울에만 나타나는 얼음 연못이에요! 특별한 물고기들이 살고 있대요."',
+      '💬 수연: "빙어왕은 여기서만 나온다는 전설이 있어요! 빨리 낚아채세요~"',
+      '❄️ 얼어붙은 연못 효과 활성화: 빙설 어종 출현율 상승, 낚시 속도 보너스!',
+    ],
+    questHint: '얼어붙은 연못에서 빙어왕을 낚아보세요.',
+  },
+  {
     id: '계절이벤트구역',
     name: '계절 이벤트 구역',
     icon: '🎪',
@@ -119,10 +156,13 @@ export const EXPLORE_ZONES = [
   },
 ];
 
-export function checkZoneUnlock(abilities, exploredZones) {
+export function checkZoneUnlock(abilities, exploredZones, guildLevel = 0, currentSeasonId = null) {
   // Returns newly unlockable zone ids
   return EXPLORE_ZONES.filter(z => {
     if (exploredZones.includes(z.id)) return false;
+    if (z.reqGuildLevel && guildLevel < z.reqGuildLevel) return false;
+    if (z.reqSeason && currentSeasonId !== z.reqSeason) return false;
+    if (!z.reqAbil || Object.keys(z.reqAbil).length === 0) return true;
     return Object.entries(z.reqAbil).every(([abil, req]) => (abilities?.[abil]?.value ?? 0) >= req);
   });
 }
