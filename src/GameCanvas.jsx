@@ -155,14 +155,18 @@ export default function GameCanvas({
         e.preventDefault();
         if (gameRef.current) gameRef.current.keys[e.key] = true;
       }
-      if (e.key === ' ' && gameRef.current?.player?.state === 'bite') {
+      if (e.key === ' ') {
         if (document.activeElement?.tagName !== 'INPUT') {
           e.preventDefault();
-          gameRef.current.reelIn = true;
+          if (gameRef.current) gameRef.current.keys[' '] = true;
+          if (gameRef.current?.player?.state === 'bite') gameRef.current.reelIn = true;
         }
       }
-      if (e.key === 'Enter' && nearDoorRef.current) {
-        onEnterRoomRef.current?.(nearDoorRef.current.id);
+      if (e.key === 'Enter') {
+        if (document.activeElement?.tagName !== 'INPUT') {
+          if (gameRef.current) gameRef.current.keys['Enter'] = true;
+          if (nearDoorRef.current) onEnterRoomRef.current?.(nearDoorRef.current.id);
+        }
       }
     };
     const up = (e) => { if (gameRef.current) delete gameRef.current.keys[e.key]; };
