@@ -1447,11 +1447,12 @@ export default function Sidebar(props) {
                         <button
                           style={{ background: 'rgba(255,220,50,0.25)', color: '#ffdd44', border: '1px solid rgba(255,220,50,0.5)', borderRadius: 6, padding: '3px 12px', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}
                           onClick={() => {
-                            setGs(prev => ({
-                              ...prev,
-                              money: prev.money + q.reward,
-                              questClaimed: { ...(prev.questClaimed ?? {}), [q.id]: true },
-                            }));
+                            setGs(prev => {
+                              const prevStats = prev.achStats ?? {};
+                              const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + q.reward) };
+                              setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                              return { ...prev, money: prev.money + q.reward, questClaimed: { ...(prev.questClaimed ?? {}), [q.id]: true }, achStats: updatedStats };
+                            });
                             addMsg(`🎁 퀘스트 보상 수령: +${q.reward}G!`, 'catch');
                             if (gameRef.current) gameRef.current.questCompleteEffect = { age: 0 };
                           }}
