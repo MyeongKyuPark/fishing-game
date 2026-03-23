@@ -648,18 +648,24 @@ export default function App() {
       table = applyBoosts(table, { 희귀: 1 + potionRareBonus, 전설: 1 + potionRareBonus * 1.5, 신화: 1 + potionRareBonus * 2 });
     }
 
-    // Pet + Job rare boost
+    // Pet + Job + Hat + Outfit rare boost
     const petRareBonus = gameRef.current?.petBonus?.rareBonus ?? 0;
     const jobRareBonus = JOBS[s?.selectedJob]?.bonus?.rareBonus ?? 0;
-    const totalRareBonus = petRareBonus + jobRareBonus;
+    const hatRareBonus = HATS[s?.hat]?.bonus?.rareBonus ?? 0;
+    const outfitRareBonus = FISHING_OUTFITS[s?.outfit]?.bonus?.rareBonus ?? 0;
+    const totalRareBonus = petRareBonus + jobRareBonus + hatRareBonus + outfitRareBonus;
     if (totalRareBonus > 0) {
       table = applyBoosts(table, { 희귀: 1 + totalRareBonus, 전설: 1 + totalRareBonus * 1.5, 신화: 1 + totalRareBonus * 2 });
     }
 
-    // Bait boost
+    // Bait boost (amplified by spot deco bait efficiency)
     const baitKey = s?.equippedBait;
     const baitData = baitKey ? BAIT[baitKey] : null;
-    if (baitData) table = applyBoosts(table, baitData.boost);
+    if (baitData) {
+      const baitEff = (s?.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.baitEfficiency ?? 1.0), 1.0);
+      const effBoost = Object.fromEntries(Object.entries(baitData.boost).map(([k, v]) => [k, 1 + (v - 1) * baitEff]));
+      table = applyBoosts(table, effBoost);
+    }
 
     // Apply exploration zone fish boosts
     const explored = s?.exploredZones ?? [];
@@ -729,9 +735,11 @@ export default function App() {
     const seaBonus = zoneDef?.seaBonus ?? (gameRef.current?.player?.seaFishing ? 1.5 : 1.0);
     const petSellBonus = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
     const jobSellBonus = 1 + (JOBS[s?.selectedJob]?.bonus?.sellBonus ?? 0);
+    const hatSellBonus = 1 + (HATS[s?.hat]?.bonus?.sellBonus ?? 0);
+    const outfitSellBonus = 1 + (FISHING_OUTFITS[s?.outfit]?.bonus?.sellBonus ?? 0);
     const seasonPriceBonus = 1 + (getCurrentSeason()?.fishPriceBonus ?? 0);
     const srvSellBonus = (srvEvent?.type === 'sellBonus') ? (1 + (srvEvent.effectValue ?? 0.2)) : 1.0;
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * hatSellBonus * outfitSellBonus * seasonPriceBonus * srvSellBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -899,7 +907,8 @@ export default function App() {
     damageServerBoss(1);
 
     const seasonStaminaMult = getCurrentSeason()?.staminaGainMult ?? 1.0;
-    grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
+    const outfitFishAbilGain = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.fishAbilGain ?? 1.0;
+    grantAbility('낚시', (FISH_ABILITY_GAIN[fd.rarity] ?? 0.30) * outfitFishAbilGain);
     grantAbility('체력', STAMINA_GAIN * seasonStaminaMult);
     advanceQuest('fish');
 
@@ -975,7 +984,8 @@ export default function App() {
     }
     damageServerBoss(1);
     const seasonStaminaMult = getCurrentSeason()?.staminaGainMult ?? 1.0;
-    grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
+    const outfitFishAbilGain2 = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.fishAbilGain ?? 1.0;
+    grantAbility('낚시', (FISH_ABILITY_GAIN[fd.rarity] ?? 0.30) * outfitFishAbilGain2);
     grantAbility('화술', Math.floor(finalPrice / 100) * SELL_ABILITY_PER_100G * (1 + speechAbil * 0.005));
     grantAbility('체력', STAMINA_GAIN * seasonStaminaMult);
     advanceQuest('fish');
@@ -1013,7 +1023,8 @@ export default function App() {
     const cheolsuAffinity = stateRef.current?.npcAffinity?.채굴사 ?? 0;
     const cheolsuWindfall = cheolsuAffinity >= 50 ? 0.05 : 0;
     const jobWindfallMult = JOBS[stateRef.current?.selectedJob]?.bonus?.windfallMult ?? 1.0;
-    const windfallChance = (0.03 + (curDepth - 1) * 0.015 + cheolsuWindfall + (gameRef.current?.petBonus?.windfallBonus ?? 0)) * jobWindfallMult;
+    const outfitWindfallBonus = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.windfallBonus ?? 0;
+    const windfallChance = (0.03 + (curDepth - 1) * 0.015 + cheolsuWindfall + (gameRef.current?.petBonus?.windfallBonus ?? 0) + outfitWindfallBonus) * jobWindfallMult;
     const windfall = Math.random() < windfallChance;
     if (windfall) {
       const extra = randInt(4, 9);
@@ -1205,7 +1216,8 @@ export default function App() {
       }
       const baseMult = COOKWARE[cw]?.mult ?? 1;
       const cookAbil = stateRef.current?.abilities?.요리?.value ?? 0;
-      const totalMult = baseMult + cookAbil * 0.01; // up to +1.0x at 100
+      const outfitCookMult = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.cookPriceMult ?? 0;
+      const totalMult = baseMult + cookAbil * 0.01 + outfitCookMult; // up to +1.0x at 100
       const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
       if (raw.length === 0) { addMsg('요리할 생선이 없습니다.'); return; }
       setGs(prev => ({
@@ -1267,8 +1279,11 @@ export default function App() {
         const jobFishMult = JOBS[s.selectedJob]?.bonus?.fishTimeMult ?? 1.0;
         const innBuffMult = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
         const seasonFishBonus = getCurrentSeason()?.fishSpeedBonus ?? 0;
+        const hatFishMult = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
+        const outfitFishMult = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
+        const spotDecoFishMult = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * hatFishMult * outfitFishMult * spotDecoFishMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1329,8 +1344,11 @@ export default function App() {
       const jobFishMult2 = JOBS[s.selectedJob]?.bonus?.fishTimeMult ?? 1.0;
       const innBuffMult2 = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
       const seasonFishBonus2 = getCurrentSeason()?.fishSpeedBonus ?? 0;
+      const hatFishMult2 = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
+      const outfitFishMult2 = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
+      const spotDecoFishMult2 = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * hatFishMult2 * outfitFishMult2 * spotDecoFishMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1392,7 +1410,9 @@ export default function App() {
       const jobMineMult = JOBS[s.selectedJob]?.bonus?.mineTimeMult ?? 1.0;
       const depthTimeMult = MINE_DEPTH_TIME[mineDepth - 1] ?? 1.0;
       const cheolsuMineBonus = cheolsu >= 20 ? 0.08 : 0; // 채굴사 lv20: 채굴 속도 +8%
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult);
+      const hatMineMult = HATS[s.hat]?.bonus?.mineTimeMult ?? 1.0;
+      const outfitMineMult = FISHING_OUTFITS[s.outfit]?.bonus?.mineTimeMult ?? 1.0;
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult);
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();
@@ -1701,7 +1721,8 @@ export default function App() {
       // 요리사 affinity 50+ (제자): 15% chance to cook double
       const cookDoubleChance = (stateRef.current?.npcAffinity?.요리사 ?? 0) >= 50 ? 0.15 : 0;
       const cookedDouble = Math.random() < cookDoubleChance;
-      const dishEarned = recipe.price * (cookedDouble ? 2 : 1);
+      const outfitDishMult = 1 + (FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.cookPriceMult ?? 0);
+      const dishEarned = Math.round(recipe.price * outfitDishMult * (cookedDouble ? 2 : 1));
       // Consume ingredients and add gold
       setGs(prev => {
         const newCrops = { ...(prev.cropInventory ?? {}) };
