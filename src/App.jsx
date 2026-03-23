@@ -196,6 +196,8 @@ export default function App() {
   // Server boss
   const [serverBoss, setServerBoss] = useState(null);
   const prevBossHpRef = useRef(null);
+  const prevServerQuestRef = useRef(null);
+  const [seasonRanking, setSeasonRanking] = useState([]);
 
   // Marketplace
   const [showMarket, setShowMarket] = useState(false);
@@ -393,6 +395,20 @@ export default function App() {
     setMessages(prev => [...prev.slice(-120), { text, type }]);
   }, []);
   useEffect(() => { addMsgRef.current = addMsg; }, [addMsg]);
+
+  useOfflineReward({ nickname, setGs, addMsgRef });
+
+  useWebSocket({
+    nickname, roomId, myGuildId, partyId,
+    gameRef, stateRef, addMsgRef, otherPlayersRef, prevOtherPlayersRef, lastPosRef,
+    weatherRef, fishSurgeRef, serverEventRef, partyMembersRef, partyIdRef, myGuildIdRef,
+    prevBossHpRef, prevServerQuestRef, prevServerStatsRef, nicknameRef, roomIdRef,
+    setGuildList, setGuildCompetition, setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
+    setMarketListings, setMyListings, setServerAnnouncements, setServerEvent, setServerQuest,
+    setServerBoss, setTournamentRanking, setSeasonRanking, setServerStats, setFishSurgeEvent,
+    setPartyMessages, setPendingInvite, setGs, setWeather, setIsOnline, setShowAnnounce,
+    addMsg, gs, weather,
+  });
 
   const showNextAchPopup = useCallback(() => {
     if (achPopupQueueRef.current.length === 0) { achPopupActiveRef.current = false; return; }

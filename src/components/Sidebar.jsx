@@ -593,8 +593,16 @@ export default function Sidebar(props) {
                               return { ...prev, money: prev.money - cost, oreInventory: ores,
                                 pickaxeEnhance: { ...(prev.pickaxeEnhance ?? {}), [pxKey]: success ? enhLv + 1 : enhLv } };
                             });
-                            if (success) { addMsg(`⛏ ${px.name} +${enhLv + 1} 강화 성공!`, 'catch'); grantAbility('강화', ENHANCE_ABILITY_GAIN); }
-                            else addMsg(`⛏ 강화 실패... (+${enhLv} 유지)`, 'error');
+                            if (success) {
+                              addMsg(`⛏ ${px.name} +${enhLv + 1} 강화 성공!`, 'catch');
+                              grantAbility('강화', ENHANCE_ABILITY_GAIN);
+                              setGs(prev2 => {
+                                const ps = prev2.achStats ?? {};
+                                const us = { ...ps, enhanceCount: (ps.enhanceCount ?? 0) + 1 };
+                                setTimeout(() => checkAndGrantAchievements(us), 0);
+                                return { ...prev2, achStats: us };
+                              });
+                            } else addMsg(`⛏ 강화 실패... (+${enhLv} 유지)`, 'error');
                           }}
                         >
                           {enhLv >= 100 ? '최대 강화' : `강화 (+${enhLv} → +${enhLv + 1})`}
@@ -697,8 +705,15 @@ export default function Sidebar(props) {
                                 return { ...prev, processedOreInventory: proc, jewelryInventory: jewelry, jewelLog: newJewelLog };
                               });
                               grantAbility('제련', 5);
-                              if (success) addMsg(`${recipe.icon} ${recipe.name} 제작 성공!`, 'catch');
-                              else addMsg(`제작 실패… 재료 소모됨`, 'error');
+                              if (success) {
+                                addMsg(`${recipe.icon} ${recipe.name} 제작 성공!`, 'catch');
+                                setGs(prev2 => {
+                                  const ps = prev2.achStats ?? {};
+                                  const us = { ...ps, smeltCount: (ps.smeltCount ?? 0) + 1 };
+                                  setTimeout(() => checkAndGrantAchievements(us), 0);
+                                  return { ...prev2, achStats: us };
+                                });
+                              } else addMsg(`제작 실패… 재료 소모됨`, 'error');
                             }}>제작</button>
                             {owned && (
                               <button className={equipped ? 'btn-dis' : 'btn-eq'} disabled={equipped} onClick={() => {
