@@ -2225,6 +2225,12 @@ export default function App() {
         if (reward.costume && !(next.ownedCostumes ?? []).includes(reward.costume)) {
           next = { ...next, ownedCostumes: [...(next.ownedCostumes ?? []), reward.costume] };
         }
+        if (reward.money) {
+          const prevStats = next.achStats ?? {};
+          const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, next.money) };
+          setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+          next = { ...next, achStats: updatedStats };
+        }
         return next;
       });
       addMsg(`📜 [${npcKey} 의뢰] ${quest.dialogue[1]}`, 'catch');
@@ -2237,7 +2243,7 @@ export default function App() {
       addMsg(`💬 ${nextQuest.dialogue[0]}`, 'info');
       addMsg(`📌 ${nextQuest.hint(s)}`, 'info');
     }
-  }, [addMsg, stateRef]);
+  }, [addMsg, stateRef, checkAndGrantAchievements]);
 
   const handleNpcInteract = useCallback((npcName) => {
     playNpcInteract();
