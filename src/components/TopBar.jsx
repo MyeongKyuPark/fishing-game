@@ -319,7 +319,10 @@ export default function TopBar({
                 <span className="mobile-menu-icon">🏪</span><span>상점</span>
               </button>
               <button className="mobile-menu-item" onClick={() => { setShowStats(true); setShowMobileMenu(false); }}>
-                <span className="mobile-menu-icon">📊</span><span>어빌리티</span>
+                <span className="mobile-menu-icon">📊</span><span>상태</span>
+              </button>
+              <button className="mobile-menu-item" onClick={() => { setShowDex(true); setShowMobileMenu(false); }}>
+                <span className="mobile-menu-icon">📖</span><span>도감</span>
               </button>
               <button className="mobile-menu-item" onClick={() => { setShowRank(true); setShowMobileMenu(false); }}>
                 <span className="mobile-menu-icon">🏆</span><span>랭킹</span>
