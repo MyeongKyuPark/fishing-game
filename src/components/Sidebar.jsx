@@ -2265,6 +2265,7 @@ export default function Sidebar(props) {
                               const newOre = { ...gs.processedOreInventory };
                               if (skin.upgradeMats) Object.entries(skin.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
                               setGs(prev => ({ ...prev, money: prev.money - skin.price, ownedRodSkins: [...(prev.ownedRodSkins ?? []), key], activeRodSkin: key, processedOreInventory: newOre }));
+                              if (skin.price > 0) gainNpcAffinity('상인', 1);
                               addMsg(`🎨 ${skin.name} 획득!`, 'catch');
                             }}>
                             {canUnlock ? (skin.price > 0 ? `${skin.price}G` : '해금') : (skin.reqMythic && !reqMythicMet ? '조건 미달' : '재료 부족')}
@@ -2298,6 +2299,7 @@ export default function Sidebar(props) {
                         onClick={() => {
                           if (!canBuy) return;
                           setGs(prev => ({ ...prev, money: prev.money - deco.price, spotDecos: [...(prev.spotDecos ?? []), key] }));
+                          if (deco.price > 0) gainNpcAffinity('상인', 1);
                           addMsg(`${deco.icon} ${deco.name} 설치!`, 'catch');
                         }}>
                         {canBuy ? `${deco.price}G` : (!canAfford ? '💰 부족' : '이미 보유')}
@@ -2342,6 +2344,7 @@ export default function Sidebar(props) {
                               money: prev.money - pet.eggPrice,
                               petEggs: { ...(prev.petEggs ?? {}), [key]: { boughtAt, hatchAt } },
                             }));
+                            gainNpcAffinity('상인', 2);
                             addMsg(`🥚 ${pet.name} 알 구매! ${hatchMin}분 후 부화됩니다.`, 'catch');
                           }}>
                           {canAfford ? `${pet.eggPrice}G 구매` : '💰 골드 부족'}
