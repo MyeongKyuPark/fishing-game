@@ -34,7 +34,7 @@ export default function Sidebar(props) {
   const {
     gs, setGs, nickname,
     addMsg, handleCommand, grantAbility, advanceQuest, gainNpcAffinity, checkAndGrantAchievements,
-    sellAll, sellOne, equipBait, totalFishVal,
+    sellAll, sellOne, equipBait, equipRod, equipBoots, equipCookware, equipMarineGear, equipPickaxe, equipGatherTool, totalFishVal,
     showInv, setShowInv,
     showShop, setShowShop, sellQty, setSellQty,
     showStats, setShowStats, statsTab, setStatsTab,
@@ -64,6 +64,7 @@ export default function Sidebar(props) {
   } = props;
 
   const [invFilter, setInvFilter] = useState('전체');
+  const [equipPicker, setEquipPicker] = useState(null);
   const [buyToast, setBuyToast] = useState(null);
   const [settingsState, setSettingsState] = useState(() => getSettings());
   const [bgmVol, setBgmVolState] = useState(() => getBgmVolume());
@@ -300,17 +301,143 @@ export default function Sidebar(props) {
               const dexDone   = dexFish + dexHerb + dexOre + dexDish + dexSmelt + dexJewel + dexPotion + dexCrop;
               const dexPct    = dexTotal > 0 ? Math.round(dexDone / dexTotal * 100) : 0;
 
-              // Slot renderer
-              const Slot = ({ icon, label, color, sub, locked }) => (
-                <div className={`doll-slot ${locked ? 'doll-slot-locked' : label ? 'doll-slot-filled' : 'doll-slot-empty'}`}>
-                  <div className="doll-slot-icon">{icon}</div>
-                  {label
-                    ? <div className="doll-slot-name" style={{ color: color ?? '#ccc' }}>{label}</div>
-                    : <div className="doll-slot-name doll-slot-none">{locked ? '준비 중' : '없음'}</div>
-                  }
-                  {sub && <div className="doll-slot-sub">{sub}</div>}
-                </div>
-              );
+              // Build picker configs for each equippable slot
+              const pickerConfigs = {
+                rod: {
+                  label: '낚싯대',
+                  items: (gs.ownedRods ?? [gs.rod]).map(key => ({
+                    key,
+                    name: RODS[key]?.name ?? key,
+                    color: RODS[key]?.color,
+                    sub: (gs.rodEnhance?.[key] ?? 0) > 0 ? `+${gs.rodEnhance[key]} 강화` : (RODS[key]?.desc ?? null),
+                    equipped: gs.rod === key,
+                  })),
+                  onEquip: (key) => { equipRod(key); setEquipPicker(null); },
+                  canUnequip: false,
+                },
+                bait: {
+                  label: '미끼',
+                  items: [
+                    ...(gs.ownedBait ?? []).map(key => ({
+                      key, name: (BAIT[key] ?? BAIT_RECIPES[key])?.name ?? key,
+                      color: (BAIT[key] ?? BAIT_RECIPES[key])?.color,
+                      sub: (BAIT[key] ?? BAIT_RECIPES[key])?.desc ?? null,
+                      equipped: gs.equippedBait === key,
+                    })),
+                    ...Object.entries(gs.baitInventory ?? {})
+                      .filter(([k, n]) => n > 0 && !(gs.ownedBait ?? []).includes(k))
+                      .map(([key, count]) => ({
+                        key, name: (BAIT[key] ?? BAIT_RECIPES[key])?.name ?? key,
+                        color: (BAIT[key] ?? BAIT_RECIPES[key])?.color,
+                        sub: `×${count}`,
+                        equipped: gs.equippedBait === key,
+                      })),
+                  ],
+                  onEquip: (key) => { equipBait(key); setEquipPicker(null); },
+                  canUnequip: true,
+                  onUnequip: () => { setGs(prev => ({ ...prev, equippedBait: null })); setEquipPicker(null); addMsg('🪝 미끼 해제'); },
+                },
+                boots: {
+                  label: '신발',
+                  items: (gs.ownedBoots ?? ['기본신발']).map(key => ({
+                    key, name: BOOTS[key]?.name ?? key,
+                    color: BOOTS[key]?.color,
+                    sub: BOOTS[key]?.speedBonus > 0 ? `+${BOOTS[key].speedBonus} 속도` : (BOOTS[key]?.desc ?? null),
+                    equipped: gs.boots === key,
+                  })),
+                  onEquip: (key) => { equipBoots(key); setEquipPicker(null); },
+                  canUnequip: false,
+                },
+                cookware: {
+                  label: '요리도구',
+                  items: (gs.ownedCookware ?? []).map(key => ({
+                    key, name: COOKWARE[key]?.name ?? key,
+                    color: COOKWARE[key]?.color,
+                    sub: COOKWARE[key]?.mult ? `×${COOKWARE[key].mult} 요리배율` : null,
+                    equipped: gs.cookware === key,
+                  })),
+                  onEquip: (key) => { equipCookware(key); setEquipPicker(null); },
+                  canUnequip: false,
+                },
+                hat: {
+                  label: '모자',
+                  items: (gs.ownedHats ?? []).map(key => ({
+                    key, name: HATS[key]?.name ?? key,
+                    color: HATS[key]?.color,
+                    sub: HATS[key]?.desc ?? null,
+                    equipped: gs.hat === key,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, hat: key })); setEquipPicker(null); addMsg(`🎩 ${HATS[key]?.name} 장착`); },
+                  canUnequip: true,
+                  onUnequip: () => { setGs(prev => ({ ...prev, hat: null })); setEquipPicker(null); addMsg('🎩 모자 해제'); },
+                },
+                outfit: {
+                  label: '의상',
+                  items: (gs.ownedOutfits ?? ['기본낚시복']).map(key => ({
+                    key, name: FISHING_OUTFITS[key]?.name ?? key,
+                    color: FISHING_OUTFITS[key]?.color,
+                    sub: FISHING_OUTFITS[key]?.desc ?? null,
+                    equipped: gs.outfit === key,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, outfit: key })); setEquipPicker(null); addMsg(`🧥 ${FISHING_OUTFITS[key]?.name ?? key} 착용`); },
+                  canUnequip: false,
+                },
+                rodSkin: {
+                  label: '낚싯대 스킨',
+                  items: (gs.ownedRodSkins ?? ['기본스킨']).map(key => ({
+                    key, name: ROD_SKINS[key]?.name ?? key,
+                    color: ROD_SKINS[key]?.color,
+                    sub: null,
+                    equipped: gs.activeRodSkin === key,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, activeRodSkin: key })); setEquipPicker(null); addMsg(`🎣 ${ROD_SKINS[key]?.name ?? key} 스킨 적용`); },
+                  canUnequip: false,
+                },
+                ring: {
+                  label: '반지',
+                  items: [...new Map((gs.jewelryInventory ?? []).filter(j => JEWELRY_RECIPES[j.name]?.slot === 'ring').map(j => [j.name, j])).values()].map(j => ({
+                    key: j.name, name: j.name,
+                    color: JEWELRY_RECIPES[j.name]?.color,
+                    sub: JEWELRY_RECIPES[j.name]?.desc ?? null,
+                    equipped: gs.equippedJewelry?.ring === j.name,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, equippedJewelry: { ...(prev.equippedJewelry ?? {}), ring: key } })); setEquipPicker(null); addMsg(`💍 ${key} 장착`); },
+                  canUnequip: true,
+                  onUnequip: () => { setGs(prev => ({ ...prev, equippedJewelry: { ...(prev.equippedJewelry ?? {}), ring: null } })); setEquipPicker(null); addMsg('💍 반지 해제'); },
+                },
+                necklace: {
+                  label: '목걸이',
+                  items: [...new Map((gs.jewelryInventory ?? []).filter(j => JEWELRY_RECIPES[j.name]?.slot === 'necklace').map(j => [j.name, j])).values()].map(j => ({
+                    key: j.name, name: j.name,
+                    color: JEWELRY_RECIPES[j.name]?.color,
+                    sub: JEWELRY_RECIPES[j.name]?.desc ?? null,
+                    equipped: gs.equippedJewelry?.necklace === j.name,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, equippedJewelry: { ...(prev.equippedJewelry ?? {}), necklace: key } })); setEquipPicker(null); addMsg(`📿 ${key} 장착`); },
+                  canUnequip: true,
+                  onUnequip: () => { setGs(prev => ({ ...prev, equippedJewelry: { ...(prev.equippedJewelry ?? {}), necklace: null } })); setEquipPicker(null); addMsg('📿 목걸이 해제'); },
+                },
+              };
+
+              // Clickable slot renderer
+              const Slot = ({ slotKey, icon, label, color, sub, locked }) => {
+                const isOpen = equipPicker === slotKey;
+                const hasConfig = !!pickerConfigs[slotKey];
+                return (
+                  <div
+                    className={`doll-slot ${locked ? 'doll-slot-locked' : label ? 'doll-slot-filled' : 'doll-slot-empty'}${hasConfig && !locked ? ' doll-slot-clickable' : ''}${isOpen ? ' doll-slot-active' : ''}`}
+                    onClick={hasConfig && !locked ? () => setEquipPicker(isOpen ? null : slotKey) : undefined}
+                  >
+                    <div className="doll-slot-icon">{icon}</div>
+                    {label
+                      ? <div className="doll-slot-name" style={{ color: color ?? '#ccc' }}>{label}</div>
+                      : <div className="doll-slot-name doll-slot-none">{locked ? '준비 중' : '없음'}</div>
+                    }
+                    {sub && <div className="doll-slot-sub">{sub}</div>}
+                    {hasConfig && !locked && <div className="doll-slot-hint">탭</div>}
+                  </div>
+                );
+              };
 
               return (
                 <>
@@ -329,31 +456,31 @@ export default function Sidebar(props) {
                 <div className="doll-wrap">
                   {/* Left column — body slots */}
                   <div className="doll-col doll-col-left">
-                    <Slot icon="🎩"
+                    <Slot slotKey="hat" icon="🎩"
                       label={gs.hat ? HATS[gs.hat]?.name : null}
                       color={gs.hat ? HATS[gs.hat]?.color : undefined}
                       sub={gs.hat ? HATS[gs.hat]?.desc : null}
                     />
-                    <Slot icon="🧥"
+                    <Slot slotKey="outfit" icon="🧥"
                       label={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.name : null}
                       color={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.color : undefined}
                       sub={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.desc : null}
                     />
-                    <Slot icon="💍"
+                    <Slot slotKey="ring" icon="💍"
                       label={gs.equippedJewelry?.ring ?? null}
                       color={JEWELRY_RECIPES[gs.equippedJewelry?.ring]?.color}
                       sub={gs.equippedJewelry?.ring ? JEWELRY_RECIPES[gs.equippedJewelry.ring]?.desc : null}
                     />
-                    <Slot icon="🎣"
+                    <Slot slotKey="rodSkin" icon="🎨"
                       label={gs.activeRodSkin !== '기본스킨' ? ROD_SKINS[gs.activeRodSkin]?.name : null}
                       color={gs.activeRodSkin !== '기본스킨' ? ROD_SKINS[gs.activeRodSkin]?.color : undefined}
                     />
-                    <Slot icon="📿"
+                    <Slot slotKey="necklace" icon="📿"
                       label={gs.equippedJewelry?.necklace ?? null}
                       color={JEWELRY_RECIPES[gs.equippedJewelry?.necklace]?.color}
                       sub={gs.equippedJewelry?.necklace ? JEWELRY_RECIPES[gs.equippedJewelry.necklace]?.desc : null}
                     />
-                    <Slot icon="👟"
+                    <Slot slotKey="boots" icon="👟"
                       label={bootData?.name ?? gs.boots}
                       color={bootData?.color}
                       sub={bootData?.speedBonus > 0 ? `+${bootData.speedBonus} 속도` : null}
@@ -376,22 +503,56 @@ export default function Sidebar(props) {
 
                   {/* Right column — activity slots */}
                   <div className="doll-col doll-col-right">
-                    <Slot icon="🎣"
+                    <Slot slotKey="rod" icon="🎣"
                       label={rodData?.name ?? gs.rod}
                       color={rodData?.color}
                       sub={enhLv > 0 ? `+${enhLv} 강화` : null}
                     />
-                    <Slot icon="🪝"
+                    <Slot slotKey="bait" icon="🪝"
                       label={baitData?.name ?? null}
                       color={baitData?.color}
                     />
-                    <Slot icon="🍳"
+                    <Slot slotKey="cookware" icon="🍳"
                       label={cwData?.name ?? null}
                       color={cwData?.color}
                       sub={cwData ? `×${cwData.mult} 요리` : null}
                     />
                   </div>
                 </div>
+
+                {/* Equipment picker panel */}
+                {equipPicker && pickerConfigs[equipPicker] && (() => {
+                  const cfg = pickerConfigs[equipPicker];
+                  return (
+                    <div className="equip-picker">
+                      <div className="equip-picker-head">
+                        <span className="equip-picker-title">🔄 {cfg.label} 교체</span>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {cfg.canUnequip && cfg.onUnequip && (
+                            <button tabIndex={-1} className="equip-picker-unequip" onClick={cfg.onUnequip}>해제</button>
+                          )}
+                          <button tabIndex={-1} className="equip-picker-close" onClick={() => setEquipPicker(null)}>✕</button>
+                        </div>
+                      </div>
+                      {cfg.items.length === 0 ? (
+                        <div style={{ fontSize: 12, color: '#888', textAlign: 'center', padding: '10px 0' }}>보유 중인 {cfg.label}이 없습니다</div>
+                      ) : (
+                        <div className="equip-picker-list">
+                          {cfg.items.map(item => (
+                            <div key={item.key} className={`equip-picker-item${item.equipped ? ' equip-picker-item-on' : ''}`}>
+                              <div className="equip-picker-item-name" style={{ color: item.color ?? '#ccc' }}>{item.name}</div>
+                              {item.sub && <div className="equip-picker-item-sub">{item.sub}</div>}
+                              {item.equipped
+                                ? <span className="equip-picker-badge">장착중</span>
+                                : <button tabIndex={-1} className="equip-picker-btn" onClick={() => cfg.onEquip(item.key)}>장착</button>
+                              }
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 </>
               );
             })()}
