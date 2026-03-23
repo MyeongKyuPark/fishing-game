@@ -2509,7 +2509,6 @@ export default function Sidebar(props) {
                               else if (order.itemType === 'crop') ns.cropInventory = { ...(ns.cropInventory ?? {}), [order.item]: Math.max(0, ((ns.cropInventory ?? {})[order.item] ?? 0) - order.qty) };
                               else if (order.itemType === 'processed') ns.processedOreInventory = { ...(ns.processedOreInventory ?? {}), [order.item]: Math.max(0, ((ns.processedOreInventory ?? {})[order.item] ?? 0) - order.qty) };
                               totalMoney += order.reward.money;
-                              ns.npcAffinity = { ...ns.npcAffinity, [order.npc]: (ns.npcAffinity?.[order.npc] ?? 0) + order.reward.affinity };
                               const idx = updatedOrders.findIndex(o => o.id === order.id);
                               if (idx >= 0) updatedOrders[idx] = { ...updatedOrders[idx], completed: true };
                               else updatedOrders.push({ ...order, completed: true });
@@ -2519,6 +2518,7 @@ export default function Sidebar(props) {
                             ns.deliveryDate = today;
                             return ns;
                           });
+                          for (const order of fulfillable) gainNpcAffinity(order.npc, order.reward.affinity);
                           const totalGold = fulfillable.reduce((s, o) => s + o.reward.money, 0);
                           addMsg(`📦 일괄 납품 완료! ${fulfillable.length}개 주문 → +${totalGold}G`, 'catch');
                         }}
@@ -2553,14 +2553,12 @@ export default function Sidebar(props) {
                               else if (order.itemType === 'crop') newState.cropInventory = { ...(prev.cropInventory ?? {}), [order.item]: Math.max(0, ((prev.cropInventory ?? {})[order.item] ?? 0) - order.qty) };
                               else if (order.itemType === 'processed') newState.processedOreInventory = { ...(prev.processedOreInventory ?? {}), [order.item]: Math.max(0, ((prev.processedOreInventory ?? {})[order.item] ?? 0) - order.qty) };
                               newState.money = prev.money + order.reward.money;
-                              // Mark order completed & save today's orders
                               const savedOrders = orders.map(o => o.id === order.id ? { ...o, completed: true } : o);
                               newState.deliveryOrders = savedOrders;
                               newState.deliveryDate = today;
-                              const npcKey = order.npc;
-                              newState.npcAffinity = { ...prev.npcAffinity, [npcKey]: (prev.npcAffinity?.[npcKey] ?? 0) + order.reward.affinity };
                               return newState;
                             });
+                            gainNpcAffinity(order.npc, order.reward.affinity);
                             addMsg(`📦 납품 완료! ${order.item} ${order.qty}개 → +${order.reward.money}G, ${order.npc} 친밀도 +${order.reward.affinity}`, 'catch');
                           }}>
                           {completed ? '완료됨' : canFulfill ? '납품하기' : '재료 부족'}
