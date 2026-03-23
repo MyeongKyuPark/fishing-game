@@ -3449,11 +3449,12 @@ export default function Sidebar(props) {
                   const amt = Math.floor(Number(bankInput));
                   if (!amt || amt <= 0) { addMsg('금액을 입력하세요.', 'error'); return; }
                   if (amt > (gs.bankDeposit ?? 0)) { addMsg('🏦 예금 잔액 부족', 'error'); return; }
-                  setGs(prev => ({
-                    ...prev,
-                    money: prev.money + amt,
-                    bankDeposit: (prev.bankDeposit ?? 0) - amt,
-                  }));
+                  setGs(prev => {
+                    const prevStats = prev.achStats ?? {};
+                    const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + amt) };
+                    setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                    return { ...prev, money: prev.money + amt, bankDeposit: (prev.bankDeposit ?? 0) - amt, achStats: updatedStats };
+                  });
                   addMsg(`🏦 ${amt.toLocaleString()}G 출금 완료!`, 'catch');
                   setBankInput('');
                 }}>출금</button>

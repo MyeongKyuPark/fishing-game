@@ -788,7 +788,12 @@ export default function App() {
     // 2% treasure chest
     if (Math.random() < 0.02) {
       const treasure = randInt(200, 800);
-      setGs(prev => ({ ...prev, money: prev.money + treasure }));
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + treasure) };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+        return { ...prev, money: prev.money + treasure, achStats: updatedStats };
+      });
       addMsg(`💰 낚시 중 보물상자 발견! +${treasure}G`, 'catch');
       if (gameRef.current?.player)
         gameRef.current.player.floatText = { text: `보물상자 +${treasure}G`, age: 0, color: '#ffdd00' };
