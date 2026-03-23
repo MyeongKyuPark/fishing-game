@@ -1263,9 +1263,13 @@ export default function Sidebar(props) {
                               <button className="btn-buy" style={{ fontSize: 11 }} onClick={() => {
                                 setGs(prev => {
                                   const newCrop = { ...(prev.cropInventory ?? {}), [itemName]: 0 };
-                                  return { ...prev, money: prev.money + total, cropInventory: newCrop };
+                                  const prevStats = prev.achStats ?? {};
+                                  const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+                                  setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                                  return { ...prev, money: prev.money + total, cropInventory: newCrop, achStats: updatedStats };
                                 });
                                 addMsg(`💰 ${itemName} ${count}개 판매 +${total}G`, 'catch');
+                                grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
                                 advanceQuest('sell', total);
                                 gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                               }}>
@@ -2375,8 +2379,14 @@ export default function Sidebar(props) {
                             <span style={{ color: '#ffcc44', fontSize: 12, flex: 1 }}>{total.toLocaleString()}G</span>
                             <button tabIndex={-1} className="btn-eq" style={{ fontSize: 11 }} onClick={() => setSellQty(prev => ({ ...prev, [qtyKey]: count }))}>전체</button>
                             <button tabIndex={-1} className="btn-buy" onClick={() => {
-                              setGs(prev => ({ ...prev, money: prev.money + total, oreInventory: { ...prev.oreInventory, [ore]: count - qty } }));
+                              setGs(prev => {
+                                const prevStats = prev.achStats ?? {};
+                                const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+                                setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                                return { ...prev, money: prev.money + total, oreInventory: { ...prev.oreInventory, [ore]: count - qty }, achStats: updatedStats };
+                              });
                               addMsg(`💰 ${ore} ${qty}개 → ${total}G!`, 'catch');
+                              grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
                               advanceQuest('sell', total);
                               gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                               setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
@@ -2415,8 +2425,14 @@ export default function Sidebar(props) {
                             <span style={{ color: '#ffcc44', fontSize: 12, flex: 1 }}>{total.toLocaleString()}G</span>
                             <button tabIndex={-1} className="btn-eq" style={{ fontSize: 11 }} onClick={() => setSellQty(prev => ({ ...prev, [qtyKey]: count }))}>전체</button>
                             <button tabIndex={-1} className="btn-buy" onClick={() => {
-                              setGs(prev => ({ ...prev, money: prev.money + total, herbInventory: { ...(prev.herbInventory ?? {}), [herb]: count - qty } }));
+                              setGs(prev => {
+                                const prevStats = prev.achStats ?? {};
+                                const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+                                setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                                return { ...prev, money: prev.money + total, herbInventory: { ...(prev.herbInventory ?? {}), [herb]: count - qty }, achStats: updatedStats };
+                              });
                               addMsg(`💰 ${herb} ${qty}개 → ${total}G!`, 'catch');
+                              grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
                               advanceQuest('sell', total);
                               gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                               setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
@@ -2470,8 +2486,14 @@ export default function Sidebar(props) {
                               const toSell = items.slice(0, qty);
                               const ids = new Set(toSell.map(f => f.id));
                               const earned = toSell.reduce((s, f) => s + f.price, 0);
-                              setGs(prev => ({ ...prev, money: prev.money + earned, fishInventory: prev.fishInventory.filter(f => !ids.has(f.id)) }));
+                              setGs(prev => {
+                                const prevStats = prev.achStats ?? {};
+                                const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + earned, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + earned) };
+                                setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                                return { ...prev, money: prev.money + earned, fishInventory: prev.fishInventory.filter(f => !ids.has(f.id)), achStats: updatedStats };
+                              });
                               addMsg(`💰 ${species} ${qty}마리 → ${earned}G!`, 'catch');
+                              grantAbility('화술', Math.max(0.01, Math.floor(earned / 100) * SELL_ABILITY_PER_100G));
                               advanceQuest('sell', earned);
                               gainNpcAffinity('상인', Math.max(1, Math.floor(earned / 150)));
                               playSellSound(earned);
@@ -2722,9 +2744,13 @@ export default function Sidebar(props) {
                           <button tabIndex={-1} className="btn-buy" onClick={() => {
                             setGs(prev => {
                               const newCrop = { ...(prev.cropInventory ?? {}), [itemName]: 0 };
-                              return { ...prev, money: prev.money + total, cropInventory: newCrop };
+                              const prevStats = prev.achStats ?? {};
+                              const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+                              setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                              return { ...prev, money: prev.money + total, cropInventory: newCrop, achStats: updatedStats };
                             });
                             addMsg(`💰 ${itemName} ${count}개 → ${total}G!`, 'catch');
+                            grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
                             advanceQuest('sell', total);
                             gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                           }}>전체 판매 ({total}G)</button>

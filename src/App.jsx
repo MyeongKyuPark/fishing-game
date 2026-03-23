@@ -462,7 +462,13 @@ export default function App() {
     const interestRate = Math.min(0.04, 0.025 + (bankAffinity >= 50 ? 0.01 : bankAffinity >= 20 ? 0.005 : 0));
     const interest = Math.floor(deposit * interestRate * hoursElapsed);
     if (interest <= 0) return;
-    setGs(prev => ({ ...prev, money: prev.money + interest, bankLastInterest: now }));
+    setGs(prev => {
+      const newMoney = prev.money + interest;
+      const prevStats = prev.achStats ?? {};
+      const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, newMoney) };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      return { ...prev, money: newMoney, bankLastInterest: now, achStats: updatedStats };
+    });
     addMsg(`🏦 은행 이자 +${interest}G (${deposit.toLocaleString()}G × ${(interestRate * 100).toFixed(1)}%/시간 × ${hoursElapsed.toFixed(2)}시간)`, 'catch');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nickname, gs.bankDeposit]);
