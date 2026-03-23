@@ -606,8 +606,22 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
   useEffect(() => { cottageDataRef.current = cottageData; }, [cottageData]);
   const FURNITURERef = useRef(FURNITURE);
   useEffect(() => { FURNITURERef.current = FURNITURE; }, [FURNITURE]);
+  const nearNpcRef = useRef(null);
 
   const room = ROOMS[roomId];
+
+  // Direct keydown listener for NPC interaction (independent of gameRef.current.keys)
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      if (!nearNpcRef.current) return;
+      e.preventDefault();
+      onNpcInteractRef.current?.(nearNpcRef.current.name);
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
 
   // Init player at entry
   useEffect(() => {
@@ -696,19 +710,15 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
         if (d < 2.5 * TS && d < nearNpcDist) { nearNpc = npc; nearNpcDist = d; }
       }
 
+      // Always update nearNpcRef so keydown listener can access it
+      nearNpcRef.current = nearNpc;
+
       // Notify parent of nearNpc changes
       const curName = nearNpc?.name ?? null;
       if (curName !== prevNearNpcName) {
         onNearNpcChangeRef.current?.(nearNpc ?? null);
         prevNearNpcName = curName;
       }
-
-      // Enter key interaction (edge trigger)
-      const enterDown = !!(keys.Enter || keys[' ']);
-      if (enterDown && !enterWasDown && nearNpc) {
-        onNpcInteractRef.current?.(nearNpc.name);
-      }
-      enterWasDown = enterDown;
 
       // ── Render ──
       // Dark background
