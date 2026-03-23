@@ -513,6 +513,7 @@ export const ROD_SKINS = {
   황금스킨: { name: '황금 스킨', color: '#ffd700', desc: '황금빛 낚싯대 외형', price: 2000, upgradeMats: { 황금괴: 1 } },
   수정스킨: { name: '수정 스킨', color: '#88ccff', desc: '수정색 낚싯대 외형', price: 1500, upgradeMats: { 정제수정: 2 } },
   불꽃스킨: { name: '불꽃 스킨', color: '#ff4444', desc: '불꽃 낚싯대 외형', price: 3000, upgradeMats: { 폭풍석: 3 } },
+  광부스킨: { name: '광부 스킨', color: '#cc7733', desc: '철수의 의뢰 보상 — 광부의 낚싯대', price: 0, questOnly: true },
   용의가호스킨: { name: '용의 가호 스킨', color: '#ff88ff', desc: '용고기를 5마리 잡으면 해금', price: 0, reqMythic: '용고기', reqCount: 5 },
 };
 

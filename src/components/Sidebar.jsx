@@ -2204,7 +2204,7 @@ export default function Sidebar(props) {
             {/* ── Rod Skins ── */}
             <div className="section">
               <div className="section-title">🎨 낚싯대 스킨</div>
-              {Object.entries(ROD_SKINS).map(([key, skin]) => {
+              {Object.entries(ROD_SKINS).filter(([key, skin]) => !skin.questOnly || (gs.ownedRodSkins ?? []).includes(key)).map(([key, skin]) => {
                 const owned = (gs.ownedRodSkins ?? ['기본스킨']).includes(key);
                 const equipped = gs.activeRodSkin === key;
                 const canAfford = gs.money >= skin.price;

@@ -2180,6 +2180,12 @@ export default function App() {
         }
         if (reward.rodSkin && !(next.rodSkins ?? []).includes(reward.rodSkin)) {
           next = { ...next, rodSkins: [...(next.rodSkins ?? []), reward.rodSkin] };
+          // Map display name → ROD_SKINS key so the skin can be equipped from the shop panel
+          const rodSkinKeyMap = { '황금낚싯대 스킨': '황금스킨', '광부낚싯대 스킨': '광부스킨' };
+          const equipKey = rodSkinKeyMap[reward.rodSkin];
+          if (equipKey && !(next.ownedRodSkins ?? ['기본스킨']).includes(equipKey)) {
+            next = { ...next, ownedRodSkins: [...(next.ownedRodSkins ?? ['기본스킨']), equipKey] };
+          }
         }
         if (reward.costume && !(next.ownedCostumes ?? []).includes(reward.costume)) {
           next = { ...next, ownedCostumes: [...(next.ownedCostumes ?? []), reward.costume] };
