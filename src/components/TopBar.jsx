@@ -17,6 +17,11 @@ export default function TopBar({
   setAppearanceDraft, setShowAppearance,
   setShowSettings, setShowTournament, setShowCottage,
 }) {
+  const questHasClaim = (gs.dailyQuests ?? []).some(
+    q => (gs.questProgress?.[q.id] ?? 0) >= q.goal && !gs.questClaimed?.[q.id]
+  );
+  const questBtnStyle = questHasClaim ? { animation: 'questGlow 0.8s ease-in-out infinite alternate' } : {};
+
   return (
     <>
       {/* HUD */}
@@ -179,7 +184,7 @@ export default function TopBar({
         <button tabIndex={-1} data-tooltip="상점 (S)" onClick={() => setShowShop(v => !v)}>🏪 상점</button>
         <button tabIndex={-1} data-tooltip="상태창 (A)" onClick={() => setShowStats(v => !v)}>📊 상태</button>
         <button tabIndex={-1} data-tooltip="랭킹 (R)" onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
-        <button tabIndex={-1} data-tooltip="일일 퀘스트 (Q)" onClick={() => setShowQuest(v => !v)}>📋 퀘스트</button>
+        <button tabIndex={-1} data-tooltip="일일 퀘스트 (Q)" onClick={() => setShowQuest(v => !v)} style={questBtnStyle}>📋 퀘스트{questHasClaim ? ' 🔔' : ''}</button>
         <button tabIndex={-1} data-tooltip="물고기 도감 (D)" onClick={() => setShowDex(v => !v)}>📖 도감</button>
         <button tabIndex={-1} data-tooltip="주간 낚시 토너먼트" onClick={() => { setShowTournament(v => !v); setGs(prev => ({ ...prev, seenFeatures: [...new Set([...(prev.seenFeatures ?? []), 'tournament'])] })); }}>
           🏆 토너먼트{!(gs.seenFeatures ?? []).includes('tournament') ? <span style={{ fontSize: 9, background: '#ff4444', color: '#fff', borderRadius: 4, padding: '1px 4px', marginLeft: 3, verticalAlign: 'middle' }}>NEW</span> : ''}
@@ -218,17 +223,19 @@ export default function TopBar({
                 <span>🍳</span><span className="action-btn-label">요리</span>
               </button>
             )}
-            <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
-              <span>🛑</span><span className="action-btn-label">그만</span>
-            </button>
+            {activity && (
+              <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
+                <span>🛑</span><span className="action-btn-label">그만</span>
+              </button>
+            )}
             <button className="action-btn" tabIndex={-1} onClick={() => setShowMobileMenu(v => !v)}>
               <span>☰</span><span className="action-btn-label">메뉴</span>
             </button>
           </div>
           {/* Secondary row: less-used + context-sensitive */}
           <div className="action-btns-secondary">
-            <button className="action-btn action-btn-sm" tabIndex={-1} onClick={() => setShowQuest(v => !v)}>
-              <span>📋</span><span className="action-btn-label">퀘스트</span>
+            <button className="action-btn action-btn-sm" tabIndex={-1} onClick={() => setShowQuest(v => !v)} style={questBtnStyle}>
+              <span>📋</span><span className="action-btn-label">퀘스트{questHasClaim ? '!' : ''}</span>
             </button>
             <button className="action-btn action-btn-sm" tabIndex={-1} onClick={() => setShowDex(v => !v)}>
               <span>📖</span><span className="action-btn-label">도감</span>
