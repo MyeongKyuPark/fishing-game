@@ -89,9 +89,16 @@ export default function Sidebar(props) {
         );
         const sellSpecies = (name) => {
           const total = groups[name].reduce((s, f) => s + f.price, 0);
-          setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: prev.fishInventory.filter(f => f.name !== name) }));
+          setGs(prev => {
+            const prevStats = prev.achStats ?? {};
+            const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+            setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+            return { ...prev, money: prev.money + total, fishInventory: prev.fishInventory.filter(f => f.name !== name), achStats: updatedStats };
+          });
           addMsg(`💰 ${name} ${groups[name].length}마리 판매 +${total}G`, 'catch');
           grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
+          advanceQuest('sell', total);
+          gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
         };
         const INV_FILTERS = ['전체', '물고기', '광석', '허브', '작물', '기타'];
         const showFish  = invFilter === '전체' || invFilter === '물고기';
@@ -1245,6 +1252,7 @@ export default function Sidebar(props) {
                                 });
                                 addMsg(`💰 ${itemName} ${count}개 판매 +${total}G`, 'catch');
                                 advanceQuest('sell', total);
+                                gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                               }}>
                                 전체 판매 ({total}G)
                               </button>
@@ -2355,6 +2363,7 @@ export default function Sidebar(props) {
                               setGs(prev => ({ ...prev, money: prev.money + total, oreInventory: { ...prev.oreInventory, [ore]: count - qty } }));
                               addMsg(`💰 ${ore} ${qty}개 → ${total}G!`, 'catch');
                               advanceQuest('sell', total);
+                              gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                               setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
                             }}>판매</button>
                           </div>
@@ -2394,6 +2403,7 @@ export default function Sidebar(props) {
                               setGs(prev => ({ ...prev, money: prev.money + total, herbInventory: { ...(prev.herbInventory ?? {}), [herb]: count - qty } }));
                               addMsg(`💰 ${herb} ${qty}개 → ${total}G!`, 'catch');
                               advanceQuest('sell', total);
+                              gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                               setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
                             }}>판매</button>
                           </div>
@@ -2448,6 +2458,7 @@ export default function Sidebar(props) {
                               setGs(prev => ({ ...prev, money: prev.money + earned, fishInventory: prev.fishInventory.filter(f => !ids.has(f.id)) }));
                               addMsg(`💰 ${species} ${qty}마리 → ${earned}G!`, 'catch');
                               advanceQuest('sell', earned);
+                              gainNpcAffinity('상인', Math.max(1, Math.floor(earned / 150)));
                               playSellSound(earned);
                               setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
                             }}>판매</button>
@@ -2700,6 +2711,7 @@ export default function Sidebar(props) {
                             });
                             addMsg(`💰 ${itemName} ${count}개 → ${total}G!`, 'catch');
                             advanceQuest('sell', total);
+                            gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                           }}>전체 판매 ({total}G)</button>
                         </div>
                       );

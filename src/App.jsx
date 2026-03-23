@@ -2099,8 +2099,15 @@ export default function App() {
   const sellOne = (id) => {
     const fish = gs.fishInventory.find(f => f.id === id);
     if (!fish) return;
-    setGs(prev => ({ ...prev, money: prev.money + fish.price, fishInventory: prev.fishInventory.filter(f => f.id !== id) }));
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + fish.price, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + fish.price) };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      return { ...prev, money: prev.money + fish.price, fishInventory: prev.fishInventory.filter(f => f.id !== id), achStats: updatedStats };
+    });
     grantAbility('화술', Math.max(0.01, Math.floor(fish.price / 100) * SELL_ABILITY_PER_100G));
+    advanceQuest('sell', fish.price);
+    gainNpcAffinity('상인', Math.max(1, Math.floor(fish.price / 150)));
   };
 
   const handleLogin = (name, appearance) => {
