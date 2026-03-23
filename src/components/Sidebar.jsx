@@ -2564,10 +2564,15 @@ export default function Sidebar(props) {
                             ns.money = (ns.money ?? 0) + totalMoney;
                             ns.deliveryOrders = updatedOrders;
                             ns.deliveryDate = today;
+                            const prevStats = prev.achStats ?? {};
+                            const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + totalMoney, maxMoney: Math.max(prevStats.maxMoney ?? 0, ns.money) };
+                            setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                            ns.achStats = updatedStats;
                             return ns;
                           });
                           for (const order of fulfillable) gainNpcAffinity(order.npc, order.reward.affinity);
                           const totalGold = fulfillable.reduce((s, o) => s + o.reward.money, 0);
+                          advanceQuest('sell', totalGold);
                           addMsg(`📦 일괄 납품 완료! ${fulfillable.length}개 주문 → +${totalGold}G`, 'catch');
                         }}
                       >📦 일괄 납품 ({fulfillable.length}건)</button>
@@ -2604,9 +2609,14 @@ export default function Sidebar(props) {
                               const savedOrders = orders.map(o => o.id === order.id ? { ...o, completed: true } : o);
                               newState.deliveryOrders = savedOrders;
                               newState.deliveryDate = today;
+                              const prevStats = prev.achStats ?? {};
+                              const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + order.reward.money, maxMoney: Math.max(prevStats.maxMoney ?? 0, newState.money) };
+                              setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                              newState.achStats = updatedStats;
                               return newState;
                             });
                             gainNpcAffinity(order.npc, order.reward.affinity);
+                            advanceQuest('sell', order.reward.money);
                             addMsg(`📦 납품 완료! ${order.item} ${order.qty}개 → +${order.reward.money}G, ${order.npc} 친밀도 +${order.reward.affinity}`, 'catch');
                           }}>
                           {completed ? '완료됨' : canFulfill ? '납품하기' : '재료 부족'}

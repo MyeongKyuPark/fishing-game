@@ -1517,11 +1517,17 @@ export default function App() {
       const inv = s.fishInventory;
       if (inv.length === 0) { addMsg('판매할 물고기가 없습니다.'); return; }
       const total = inv.reduce((sum, f) => sum + f.price, 0);
-      setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: [] }));
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+        return { ...prev, money: prev.money + total, fishInventory: [], achStats: updatedStats };
+      });
       addMsg(`💰 물고기 ${inv.length}마리 → ${total}G!`, 'catch');
       playSellSound(total);
       grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
       advanceQuest('sell', total);
+      gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
       return;
     }
 
