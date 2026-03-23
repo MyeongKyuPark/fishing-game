@@ -29,13 +29,13 @@ import {
 
 export default function GameCanvas({
   gameRef, onFishCaught, onOreMined, onHerbGathered, onActivityChange,
-  onFishBite, onFishEscaped, nickname, title, titleColor,
+  nickname, title, titleColor,
   otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, onNearActionChange,
   hairColor, bodyColor, skinColor, gender,
   spotDecos,
 }) {
   const canvasRef = useRef(null);
-  const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange, onFishBite, onFishEscaped });
+  const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange });
   const showFullMapRef = useRef(false);
   const weatherParticlesRef = useRef([]);
   const minimapBoundsRef = useRef({ x: 0, y: 0, w: 100, h: 75 });
@@ -64,7 +64,7 @@ export default function GameCanvas({
   useEffect(() => { genderRef.current = gender ?? 'male'; }, [gender]);
 
   useEffect(() => {
-    cbRef.current = { onFishCaught, onOreMined, onHerbGathered, onActivityChange, onFishBite, onFishEscaped };
+    cbRef.current = { onFishCaught, onOreMined, onHerbGathered, onActivityChange };
   });
 
   // Init player state
@@ -159,7 +159,6 @@ export default function GameCanvas({
         if (document.activeElement?.tagName !== 'INPUT') {
           e.preventDefault();
           if (gameRef.current) gameRef.current.keys[' '] = true;
-          if (gameRef.current?.player?.state === 'bite') gameRef.current.reelIn = true;
         }
       }
       if (e.key === 'Enter') {
@@ -251,35 +250,19 @@ export default function GameCanvas({
           player.state = 'idle';
           player.activityStart = null;
           player.activityProgress = 0;
-          g.reelIn = false;
           cbRef.current.onActivityChange(null);
         } else if (player.activityStart !== null) {
-          if (player.state === 'bite' && g.reelIn) {
-            g.reelIn = false;
-            cbRef.current.onFishCaught(player.currentRod);
-            const fishMult = g.fishTimeMult ?? 1.0;
-            const [mn, mx] = RODS[player.currentRod].catchTimeRange.map(t => Math.max(1000, Math.round(t * fishMult)));
-            player.activityDuration = randInt(mn, mx);
-            player.activityStart = ts;
-            player.activityProgress = 0;
-            player.state = 'fishing';
-            cbRef.current.onActivityChange('fishing');
-          } else {
+          {
             player.activityProgress = Math.min((ts - player.activityStart) / player.activityDuration, 1);
 
             if (player.activityProgress >= 1) {
               if (player.state === 'fishing') {
-                player.state = 'bite';
-                player.activityDuration = 2500;
-                cbRef.current.onFishBite?.();
-                cbRef.current.onActivityChange('bite');
-              } else if (player.state === 'bite') {
-                g.reelIn = false;
-                cbRef.current.onFishEscaped?.();
+                cbRef.current.onFishCaught(player.currentRod);
                 const fishMult = g.fishTimeMult ?? 1.0;
                 const [mn, mx] = RODS[player.currentRod].catchTimeRange.map(t => Math.max(1000, Math.round(t * fishMult)));
                 player.activityDuration = randInt(mn, mx);
-                player.state = 'fishing';
+                player.activityStart = ts;
+                player.activityProgress = 0;
                 cbRef.current.onActivityChange('fishing');
               } else if (player.state === 'mining') {
                 cbRef.current.onOreMined(player.currentOre);

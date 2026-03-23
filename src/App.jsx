@@ -1140,15 +1140,6 @@ export default function App() {
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
 
-  const onFishBite = useCallback(() => {
-    addMsg('🎣 찌가 움직입니다! 낚아채세요!', 'catch');
-  }, [addMsg]);
-
-  const onFishEscaped = useCallback(() => {
-    addMsg('💨 낚싯줄이 풀렸습니다... 물고기가 도망쳤어요!', 'error');
-    if (gameRef.current?.player)
-      gameRef.current.player.floatText = { text: '놓쳤다!', age: 0, color: '#ff6644' };
-  }, []);
 
   // ── Command handler ───────────────────────────────────────────────────────
 
@@ -2403,9 +2394,7 @@ export default function App() {
           onOreMined={onOreMined}
           onHerbGathered={onHerbGathered}
           onActivityChange={onActivityChange}
-          onFishBite={onFishBite}
-          onFishEscaped={onFishEscaped}
-          nickname={nickname}
+nickname={nickname}
           title={myTitle.label}
           titleColor={myTitle.color}
           otherPlayersRef={otherPlayersRef}
