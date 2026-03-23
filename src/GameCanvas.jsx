@@ -205,9 +205,9 @@ export default function GameCanvas({
             g.clickTarget = null;
             player.vx = 0; player.vy = 0;
           } else {
-            const spd = MAX_SPEED + (g.speedBonus ?? 0);
-            player.vx = (dx / dist) * spd;
-            player.vy = (dy / dist) * spd;
+            const spd = ACCEL * dt / 16;
+            player.vx += (dx / dist) * spd;
+            player.vy += (dy / dist) * spd;
             if (Math.abs(dx) > Math.abs(dy)) player.facing = dx > 0 ? 'right' : 'left';
             else player.facing = dy > 0 ? 'down' : 'up';
           }
