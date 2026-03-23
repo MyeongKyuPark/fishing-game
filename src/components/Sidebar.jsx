@@ -277,7 +277,7 @@ export default function Sidebar(props) {
             {statsTab === '장비' && (() => {
               const rodData   = RODS[gs.rod];
               const bootData  = BOOTS[gs.boots];
-              const baitData  = gs.equippedBait ? BAIT[gs.equippedBait] : null;
+              const baitData  = gs.equippedBait ? (BAIT[gs.equippedBait] ?? BAIT_RECIPES[gs.equippedBait]) : null;
               const cwData    = gs.cookware ? COOKWARE[gs.cookware] : null;
               const enhLv     = gs.rodEnhance?.[gs.rod] ?? 0;
               // Compute overall 도감 completion %
@@ -1927,26 +1927,36 @@ export default function Sidebar(props) {
                         );
                       })}
                     </div>
-                    <button tabIndex={-1} className={canCraft ? 'btn-buy' : 'btn-dis'} disabled={!canCraft} style={{ fontSize: 11 }}
-                      onClick={() => {
-                        setGs(prev => {
-                          const herbs = { ...(prev.herbInventory ?? {}) };
-                          const ores = { ...prev.oreInventory };
-                          for (const [item, n] of Object.entries(recipe.input)) {
-                            if (['들풀','버섯','희귀허브'].includes(item)) herbs[item] = Math.max(0, (herbs[item] ?? 0) - n);
-                            else ores[item] = Math.max(0, (ores[item] ?? 0) - n);
-                          }
-                          const newBait = { ...(prev.baitInventory ?? {}), [recipe.name]: ((prev.baitInventory ?? {})[recipe.name] ?? 0) + 1 };
-                          const newDiyLog = { ...(prev.diyBaitLog ?? {}), [key]: ((prev.diyBaitLog ?? {})[key] ?? 0) + 1 };
-                          if (!prev.ownedBait.includes(recipe.name)) {
-                            return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog, ownedBait: [...prev.ownedBait, recipe.name] };
-                          }
-                          return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog };
-                        });
-                        addMsg(`${recipe.icon} ${recipe.name} 제작 완료!`, 'catch');
-                      }}>
-                      {canCraft ? '제작' : '재료 부족'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button tabIndex={-1} className={canCraft ? 'btn-buy' : 'btn-dis'} disabled={!canCraft} style={{ fontSize: 11 }}
+                        onClick={() => {
+                          setGs(prev => {
+                            const herbs = { ...(prev.herbInventory ?? {}) };
+                            const ores = { ...prev.oreInventory };
+                            for (const [item, n] of Object.entries(recipe.input)) {
+                              if (['들풀','버섯','희귀허브'].includes(item)) herbs[item] = Math.max(0, (herbs[item] ?? 0) - n);
+                              else ores[item] = Math.max(0, (ores[item] ?? 0) - n);
+                            }
+                            const newBait = { ...(prev.baitInventory ?? {}), [recipe.name]: ((prev.baitInventory ?? {})[recipe.name] ?? 0) + 1 };
+                            const newDiyLog = { ...(prev.diyBaitLog ?? {}), [key]: ((prev.diyBaitLog ?? {})[key] ?? 0) + 1 };
+                            if (!prev.ownedBait.includes(recipe.name)) {
+                              return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog, ownedBait: [...prev.ownedBait, recipe.name] };
+                            }
+                            return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog };
+                          });
+                          addMsg(`${recipe.icon} ${recipe.name} 제작 완료!`, 'catch');
+                        }}>
+                        {canCraft ? '제작' : '재료 부족'}
+                      </button>
+                      {stock > 0 && (
+                        <button tabIndex={-1}
+                          className={gs.equippedBait === key ? 'btn-eq' : 'sell-btn'}
+                          style={{ fontSize: 11 }}
+                          onClick={() => equipBait(key)}>
+                          {gs.equippedBait === key ? '장착중' : '장착'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}

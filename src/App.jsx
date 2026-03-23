@@ -20,7 +20,7 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
-  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE } from './gameData';
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE, BAIT_RECIPES } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
@@ -661,10 +661,15 @@ export default function App() {
     // Bait boost (amplified by spot deco bait efficiency)
     const baitKey = s?.equippedBait;
     const baitData = baitKey ? BAIT[baitKey] : null;
+    const diyBaitData = baitKey ? BAIT_RECIPES[baitKey] : null;
     if (baitData) {
       const baitEff = (s?.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.baitEfficiency ?? 1.0), 1.0);
       const effBoost = Object.fromEntries(Object.entries(baitData.boost).map(([k, v]) => [k, 1 + (v - 1) * baitEff]));
       table = applyBoosts(table, effBoost);
+    }
+    if (diyBaitData?.rareBonus) {
+      const r = diyBaitData.rareBonus;
+      table = applyBoosts(table, { 희귀: 1 + r, 전설: 1 + r * 1.5, 신화: 1 + r * 2 });
     }
 
     // Apply exploration zone fish boosts
@@ -772,6 +777,12 @@ export default function App() {
       setGs(prev => {
         const bi = { ...(prev.baitInventory ?? {}), [baitKey]: Math.max(0, (prev.baitInventory?.[baitKey] ?? 1) - 1) };
         return { ...prev, baitInventory: bi, equippedBait: bi[baitKey] <= 0 ? null : prev.equippedBait };
+      });
+    } else if (diyBaitData?.oneTime) {
+      const invKey = diyBaitData.name;
+      setGs(prev => {
+        const bi = { ...(prev.baitInventory ?? {}), [invKey]: Math.max(0, (prev.baitInventory?.[invKey] ?? 1) - 1) };
+        return { ...prev, baitInventory: bi, equippedBait: bi[invKey] <= 0 ? null : prev.equippedBait };
       });
     }
     const id = Date.now() + Math.random();
@@ -1276,6 +1287,7 @@ export default function App() {
         const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
         const enhEffect = rodEnhanceEffect(enhLevel);
         const potionFishBonus = (s.activePotion?.effect?.fishSpeedBonus ?? 0);
+        const diyFishBonus = BAIT_RECIPES[s.equippedBait]?.fishSpeedBonus ?? 0;
         const petFishMult = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
         const jobFishMult = JOBS[s.selectedJob]?.bonus?.fishTimeMult ?? 1.0;
         const innBuffMult = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
@@ -1284,7 +1296,7 @@ export default function App() {
         const outfitFishMult = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
         const spotDecoFishMult = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * hatFishMult * outfitFishMult * spotDecoFishMult
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * hatFishMult * outfitFishMult * spotDecoFishMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1341,6 +1353,7 @@ export default function App() {
       const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
       const enhEffect = rodEnhanceEffect(enhLevel);
       const potionFishBonus2 = (s.activePotion?.effect?.fishSpeedBonus ?? 0);
+      const diyFishBonus2 = BAIT_RECIPES[s.equippedBait]?.fishSpeedBonus ?? 0;
       const petFishMult2 = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
       const jobFishMult2 = JOBS[s.selectedJob]?.bonus?.fishTimeMult ?? 1.0;
       const innBuffMult2 = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
@@ -1349,7 +1362,7 @@ export default function App() {
       const outfitFishMult2 = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
       const spotDecoFishMult2 = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * hatFishMult2 * outfitFishMult2 * spotDecoFishMult2
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * hatFishMult2 * outfitFishMult2 * spotDecoFishMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
