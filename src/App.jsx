@@ -11,7 +11,7 @@ import RankSidebar from './RankSidebar';
 import ChannelLobby from './ChannelLobby';
 import { saveFishRecord, saveOverallFishRecord, broadcastAnnouncement, incrementServerStat,
   submitTournamentScore, incrementServerQuestProgress,
-  saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore } from './ranking';
+  saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore, damageServerBoss } from './ranking';
 import { sendPartyInvite, joinParty, leaveParty, sendPartyMessage } from './multiplay';
 import { JOBS, getAvailableJobs } from './jobData';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
