@@ -2265,12 +2265,18 @@ export default function App() {
       const totalMult = baseMult + cookAbil * 0.01;
       const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
       if (raw.length === 0) { addMsg('🍳 수연: "요리할 생선이 없네요!"'); return; }
-      setGs(prev => ({
-        ...prev,
-        fishInventory: prev.fishInventory.map(f =>
-          f.cooked ? f : { ...f, price: Math.round(f.price * totalMult), cooked: true }
-        ),
-      }));
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, cookCount: (prevStats.cookCount ?? 0) + raw.length };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+        return {
+          ...prev,
+          fishInventory: prev.fishInventory.map(f =>
+            f.cooked ? f : { ...f, price: Math.round(f.price * totalMult), cooked: true }
+          ),
+          achStats: updatedStats,
+        };
+      });
       addMsg(`🍳 수연이 생선 ${raw.length}마리를 요리해줬어요! (x${totalMult.toFixed(2)})`, 'catch');
       playCookComplete();
       const cookAffinityMult2 = (stateRef.current?.npcAffinity?.요리사 ?? 0) >= 20 ? 1.20 : 1.0;
@@ -2321,7 +2327,7 @@ export default function App() {
       gainNpcAffinity('은행원', 1.5);
       setTimeout(() => checkNpcQuest('은행원'), 0);
     }
-  }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, stateRef]);
+  }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, checkAndGrantAchievements, stateRef]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
