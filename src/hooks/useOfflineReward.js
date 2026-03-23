@@ -47,13 +47,15 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
     const offlineMult = innOffMult * bankOffMult * furnitureOffMult;
     const offlineReward = Math.floor(effectiveMins * 10 * offlineMult);
     if (bonus > 0) {
+      const bonusAchStats = { ...baseAchStats, maxMoney: Math.max(baseAchStats.maxMoney ?? 0, saved.money + bonus) };
+      setTimeout(() => checkAndGrantAchievementsRef?.current?.(bonusAchStats), 600);
       if (streak >= 7) {
-        setGs({ ...base, money: saved.money + bonus,
+        setGs({ ...base, money: saved.money + bonus, achStats: bonusAchStats,
           baitInventory: { ...(base.baitInventory ?? {}), 전설미끼: ((base.baitInventory ?? {})['전설미끼'] ?? 0) + 1 },
           ownedBait: base.ownedBait?.includes('전설미끼') ? base.ownedBait : [...(base.ownedBait ?? []), '전설미끼'],
         });
       } else {
-        setGs({ ...base, money: saved.money + bonus });
+        setGs({ ...base, money: saved.money + bonus, achStats: bonusAchStats });
       }
       setTimeout(() => {
         addMsgRef.current(`🎁 오늘의 출석 보너스 +${bonus}G! (${streak}일 연속 접속)`, 'catch');
