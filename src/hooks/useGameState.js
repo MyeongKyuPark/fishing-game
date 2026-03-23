@@ -156,6 +156,7 @@ export const DEFAULT_STATE = {
   diyBaitLog: {},       // { baitKey: n }
   // Phase 8-2: 레시피 발견 시스템
   discoveredRecipes: [], // [dishKey, ...] — 발견된 요리 레시피 목록
+  equippedTitle: null,   // null = 자동 (최고 달성 칭호), string = 장착한 칭호 label
 };
 
 export const SAVE_VERSION = 2;
@@ -286,6 +287,7 @@ export function loadSave(nickname) {
       deliveryDate: s.deliveryDate ?? '',
       diyBaitLog: s.diyBaitLog ?? {},
       discoveredRecipes: s.discoveredRecipes ?? [],
+      equippedTitle: s.equippedTitle ?? null,
     };
   } catch { return DEFAULT_STATE; }
 }

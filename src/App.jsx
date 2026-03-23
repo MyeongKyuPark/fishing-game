@@ -24,7 +24,7 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
-import { getTitle, TITLES } from './titleData';
+import { getTitle, getActiveTitleBonus, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm } from './mapData';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
@@ -497,7 +497,8 @@ export default function App() {
     const newPlayerMult = isNewPlayer ? 2 : 1;
     const petAbilMult = gameRef.current?.petBonus?.abilGainMult ?? 1;
     const jobSpeechMult = (abilName === '화술') ? (JOBS[stateRef.current?.selectedJob]?.bonus?.speechGainMult ?? 1) : 1;
-    const result = gainAbility(current, amount * newPlayerMult * petAbilMult * jobSpeechMult, partyBonus);
+    const titleAbilMult = 1 + (getActiveTitleBonus(stateRef.current).abilExpBonus ?? 0);
+    const result = gainAbility(current, amount * newPlayerMult * petAbilMult * jobSpeechMult * titleAbilMult, partyBonus);
     if (result.reachedMax && current.value < 100) {
       const def = ABILITY_DEFS[abilName];
       setTimeout(() => addMsg(`🌟 ${def?.icon ?? ''} ${abilName} 100.00 달성! 스킬창에서 그레이드업 가능!`, 'catch'), 0);
@@ -595,9 +596,10 @@ export default function App() {
   useEffect(() => { checkAndGrantAchievementsRef.current = checkAndGrantAchievements; }, [checkAndGrantAchievements]);
 
   const gainNpcAffinity = useCallback((npcKey, amount) => {
+    const titleNpcMult = getActiveTitleBonus(stateRef.current).npcAffinityMult ?? 1.0;
     setGs(prev => {
       const current = prev.npcAffinity?.[npcKey] ?? 0;
-      const newVal = Math.min(100, current + amount);
+      const newVal = Math.min(100, current + amount * titleNpcMult);
       const npcThresholds = NPCS[npcKey]?.thresholds ?? [];
       const crossed = npcThresholds.find(t => current < t.at && newVal >= t.at);
       if (crossed) {
@@ -771,7 +773,9 @@ export default function App() {
     const furnitureSellBonus = 1 + (s?.cottage?.furniture ?? []).reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.sellBonus ?? 0), 0);
     const seasonPriceBonus = 1 + (getCurrentSeason()?.fishPriceBonus ?? 0);
     const srvSellBonus = (srvEvent?.type === 'sellBonus') ? (1 + (srvEvent.effectValue ?? 0.2)) : 1.0;
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * hatSellBonus * outfitSellBonus * furnitureSellBonus * seasonPriceBonus * srvSellBonus);
+    const titleBonusObj = getActiveTitleBonus(s);
+    const titleSellBonus = 1 + (titleBonusObj.sellBonus ?? 0) + (titleBonusObj.fishSellBonus ?? 0);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * hatSellBonus * outfitSellBonus * furnitureSellBonus * seasonPriceBonus * srvSellBonus * titleSellBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -1318,8 +1322,9 @@ export default function App() {
         const hatFishMult = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
         const outfitFishMult = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
         const spotDecoFishMult = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
+        const titleFishMult = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * hatFishMult * outfitFishMult * spotDecoFishMult
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * hatFishMult * outfitFishMult * spotDecoFishMult * titleFishMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1385,8 +1390,9 @@ export default function App() {
       const hatFishMult2 = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
       const outfitFishMult2 = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
       const spotDecoFishMult2 = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
+      const titleFishMult2 = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * hatFishMult2 * outfitFishMult2 * spotDecoFishMult2
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * hatFishMult2 * outfitFishMult2 * spotDecoFishMult2 * titleFishMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1450,7 +1456,8 @@ export default function App() {
       const cheolsuMineBonus = cheolsu >= 20 ? 0.08 : 0; // 채굴사 lv20: 채굴 속도 +8%
       const hatMineMult = HATS[s.hat]?.bonus?.mineTimeMult ?? 1.0;
       const outfitMineMult = FISHING_OUTFITS[s.outfit]?.bonus?.mineTimeMult ?? 1.0;
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult);
+      const titleMineMult = getActiveTitleBonus(s).mineTimeMult ?? 1.0;
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * titleMineMult);
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();

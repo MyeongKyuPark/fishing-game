@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { loadSave, checkDailyBonus, getDailyQuests, SAVE_VERSION, saveKey } from './useGameState';
 import { FURNITURE } from '../gameData';
+import { getActiveTitleBonus } from '../titleData';
 
 export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef }) {
   useEffect(() => {
@@ -44,7 +45,8 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
     const innOffMult = innAff >= 80 ? 1.5 : 1.0;
     const bankOffMult = bankAff >= 80 ? 2.0 : 1.0;
     const furnitureOffMult = placedFurniture.reduce((acc, f) => acc * (FURNITURE[f.key]?.bonus?.offlineMult ?? 1.0), 1.0);
-    const offlineMult = innOffMult * bankOffMult * furnitureOffMult;
+    const titleOffBonus = getActiveTitleBonus(saved).offlineBonus ?? 0;
+    const offlineMult = innOffMult * bankOffMult * furnitureOffMult * (1 + titleOffBonus);
     const offlineReward = Math.floor(effectiveMins * 10 * offlineMult);
     if (bonus > 0) {
       const bonusAchStats = { ...baseAchStats, maxMoney: Math.max(baseAchStats.maxMoney ?? 0, saved.money + bonus) };

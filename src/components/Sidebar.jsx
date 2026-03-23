@@ -1475,7 +1475,7 @@ export default function Sidebar(props) {
 
       {/* Fish encyclopedia modal */}
       {showDex && (() => {
-        const DEX_TABS = ['어종', '채집', '광석', '요리', '제작', '포션', '작물'];
+        const DEX_TABS = ['어종', '채집', '광석', '요리', '제작', '포션', '작물', '칭호'];
         // Compute per-tab completion for overall %
         const fishTotal = Object.keys(FISH).length;
         const fishDone = (gs.caughtSpecies ?? []).length;
@@ -1493,8 +1493,10 @@ export default function Sidebar(props) {
         const potionDone = Object.keys(POTION_RECIPES).filter(k => (gs.potionLog ?? {})[k] > 0).length;
         const cropTotal = Object.keys(SEEDS).length;
         const cropDone = Object.keys(SEEDS).filter(s => (gs.cropLog ?? {})[SEEDS[s].yield.item] > 0).length;
-        const grandTotal = fishTotal + herbTotal + oreTotal + dishTotal + smeltTotal + jewelTotal + potionTotal + cropTotal;
-        const grandDone = fishDone + herbDone + oreDone + dishDone + smeltDone + jewelDone + potionDone + cropDone;
+        const titleTotal = TITLES.length;
+        const titleDone = TITLES.filter(t => t.condition(gs)).length;
+        const grandTotal = fishTotal + herbTotal + oreTotal + dishTotal + smeltTotal + jewelTotal + potionTotal + cropTotal + titleTotal;
+        const grandDone = fishDone + herbDone + oreDone + dishDone + smeltDone + jewelDone + potionDone + cropDone + titleDone;
         const completePct = grandTotal > 0 ? Math.round(grandDone / grandTotal * 100) : 0;
 
         return (
@@ -1789,6 +1791,74 @@ export default function Sidebar(props) {
                       );
                     })}
                     {cropDone >= cropTotal && <div style={{ fontSize: 11, color: '#66cc44', marginTop: 8 }}>🌾 모든 작물 수확 완료! "대지의 개척자" 업적 달성 가능</div>}
+                  </>
+                )}
+                {/* 칭호 탭 */}
+                {dexTab === '칭호' && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>획득: {titleDone} / {titleTotal}종</div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, marginBottom: 10 }}>
+                      <div style={{ width: `${titleDone / titleTotal * 100}%`, height: '100%', background: '#cc88ff', borderRadius: 4 }} />
+                    </div>
+                    {/* 자동 설정 버튼 */}
+                    <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, color: '#ccc' }}>현재 장착: <span style={{ color: getTitle(gs).color, fontWeight: 700 }}>[{getTitle(gs).label}]</span></div>
+                        {gs.equippedTitle
+                          ? <div style={{ fontSize: 10, color: '#aaa' }}>수동 장착 — 효과: {TITLES.find(t => t.label === gs.equippedTitle)?.effectDesc ?? ''}</div>
+                          : <div style={{ fontSize: 10, color: '#aaa' }}>자동 설정 (최고 달성 칭호)</div>
+                        }
+                      </div>
+                      {gs.equippedTitle && (
+                        <button tabIndex={-1} onClick={() => setGs(prev => ({ ...prev, equippedTitle: null }))}
+                          style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(200,200,255,0.3)', background: 'rgba(100,100,200,0.25)', color: '#aac', cursor: 'pointer' }}>
+                          자동으로
+                        </button>
+                      )}
+                    </div>
+                    {TITLES.slice().reverse().map(t => {
+                      const unlocked = t.condition(gs);
+                      const isEquipped = gs.equippedTitle === t.label;
+                      const isAuto = !gs.equippedTitle && getTitle(gs).label === t.label;
+                      return (
+                        <div key={t.label} style={{
+                          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', marginBottom: 6,
+                          borderRadius: 8, border: `1px solid ${unlocked ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'}`,
+                          background: isEquipped ? 'rgba(180,100,255,0.15)' : isAuto ? 'rgba(100,180,255,0.10)' : 'rgba(0,0,0,0.2)',
+                          opacity: unlocked ? 1 : 0.5,
+                        }}>
+                          <div style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{unlocked ? '🏅' : '🔒'}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: unlocked ? t.color : '#666' }}>
+                              [{t.label}]
+                              {isEquipped && <span style={{ marginLeft: 6, fontSize: 10, background: 'rgba(180,80,255,0.4)', borderRadius: 4, padding: '1px 5px', color: '#ddb' }}>장착 중</span>}
+                              {isAuto && <span style={{ marginLeft: 6, fontSize: 10, background: 'rgba(80,160,255,0.35)', borderRadius: 4, padding: '1px 5px', color: '#adf' }}>자동</span>}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#aaa', marginTop: 1 }}>🔓 {t.unlockDesc}</div>
+                            {unlocked && t.effectDesc !== '없음' && (
+                              <div style={{ fontSize: 10, color: '#ffdd88', marginTop: 1 }}>✨ {t.effectDesc}</div>
+                            )}
+                            {!unlocked && (
+                              <div style={{ fontSize: 10, color: '#ff8866', marginTop: 1 }}>🔒 미획득</div>
+                            )}
+                          </div>
+                          {unlocked && !isEquipped && (
+                            <button tabIndex={-1}
+                              onClick={() => setGs(prev => ({ ...prev, equippedTitle: t.label }))}
+                              style={{ fontSize: 11, padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(200,150,255,0.4)', background: 'rgba(140,80,220,0.3)', color: '#dcc', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              장착
+                            </button>
+                          )}
+                          {isEquipped && (
+                            <button tabIndex={-1}
+                              onClick={() => setGs(prev => ({ ...prev, equippedTitle: null }))}
+                              style={{ fontSize: 11, padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(255,100,100,0.4)', background: 'rgba(180,60,60,0.3)', color: '#faa', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              해제
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </>
                 )}
               </div>
