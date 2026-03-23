@@ -1229,7 +1229,8 @@ export default function App() {
       const baseMult = COOKWARE[cw]?.mult ?? 1;
       const cookAbil = stateRef.current?.abilities?.요리?.value ?? 0;
       const outfitCookMult = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.cookPriceMult ?? 0;
-      const totalMult = baseMult + cookAbil * 0.01 + outfitCookMult; // up to +1.0x at 100
+      const jobCookMult = JOBS[stateRef.current?.selectedJob]?.bonus?.cookPriceMult ?? 0;
+      const totalMult = baseMult + cookAbil * 0.01 + outfitCookMult + jobCookMult; // up to +1.0x at 100
       const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
       if (raw.length === 0) { addMsg('요리할 생선이 없습니다.'); return; }
       setGs(prev => ({
@@ -1353,7 +1354,8 @@ export default function App() {
       const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
       const enhEffect = rodEnhanceEffect(enhLevel);
       const potionFishBonus2 = (s.activePotion?.effect?.fishSpeedBonus ?? 0);
-      const diyFishBonus2 = BAIT_RECIPES[s.equippedBait]?.fishSpeedBonus ?? 0;
+      const diyBaitDef2 = BAIT_RECIPES[s.equippedBait];
+      const diyFishBonus2 = (!diyBaitDef2?.seaOnly || nearest.seaFishing) ? (diyBaitDef2?.fishSpeedBonus ?? 0) : 0;
       const petFishMult2 = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
       const jobFishMult2 = JOBS[s.selectedJob]?.bonus?.fishTimeMult ?? 1.0;
       const innBuffMult2 = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
@@ -1737,7 +1739,7 @@ export default function App() {
       // 요리사 affinity 50+ (제자): 15% chance to cook double
       const cookDoubleChance = (stateRef.current?.npcAffinity?.요리사 ?? 0) >= 50 ? 0.15 : 0;
       const cookedDouble = Math.random() < cookDoubleChance;
-      const outfitDishMult = 1 + (FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.cookPriceMult ?? 0);
+      const outfitDishMult = 1 + (FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.cookPriceMult ?? 0) + (JOBS[stateRef.current?.selectedJob]?.bonus?.cookPriceMult ?? 0);
       const dishEarned = Math.round(recipe.price * outfitDishMult * (cookedDouble ? 2 : 1));
       // Consume ingredients and add gold
       setGs(prev => {
