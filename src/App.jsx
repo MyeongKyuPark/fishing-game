@@ -396,7 +396,7 @@ export default function App() {
   }, []);
   useEffect(() => { addMsgRef.current = addMsg; }, [addMsg]);
 
-  useOfflineReward({ nickname, setGs, addMsgRef });
+  useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef });
 
   useWebSocket({
     nickname, roomId, myGuildId, partyId,
@@ -422,6 +422,7 @@ export default function App() {
   }, [showNextAchPopup]);
   const achPopupRef = useRef(enqueueAchPopup);
   useEffect(() => { achPopupRef.current = enqueueAchPopup; }, [enqueueAchPopup]);
+  const checkAndGrantAchievementsRef = useRef(null);
 
   // Expire active potion (after addMsg to avoid TDZ)
   useEffect(() => {
@@ -589,6 +590,7 @@ export default function App() {
       };
     });
   }, []);
+  useEffect(() => { checkAndGrantAchievementsRef.current = checkAndGrantAchievements; }, [checkAndGrantAchievements]);
 
   const gainNpcAffinity = useCallback((npcKey, amount) => {
     setGs(prev => {

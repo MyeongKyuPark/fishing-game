@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { loadSave, checkDailyBonus, getDailyQuests, SAVE_VERSION, saveKey } from './useGameState';
 import { FURNITURE } from '../gameData';
 
-export function useOfflineReward({ nickname, setGs, addMsgRef }) {
+export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef }) {
   useEffect(() => {
     if (!nickname) return;
     const saved = loadSave(nickname);
@@ -26,11 +26,15 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
     }
     const questProgress = isNewDay ? {} : (saved.questProgress ?? {});
     const questClaimed = isNewDay ? {} : (saved.questClaimed ?? {});
+    const loginStreak = Math.max(saved.achStats?.loginStreak ?? 0, streak);
+    const baseAchStats = { ...(saved.achStats ?? {}), loginStreak };
     const base = { ...saved, dailyQuests: quests, questProgress, questClaimed, questDate: today,
-      achStats: { ...(saved.achStats ?? {}), loginStreak: Math.max(saved.achStats?.loginStreak ?? 0, streak) } };
+      achStats: baseAchStats };
     if (!saved.firstLoginDate) {
       base.firstLoginDate = new Date().toISOString();
     }
+    // Fire achievement check for loginStreak after state is set
+    setTimeout(() => checkAndGrantAchievementsRef?.current?.(baseAchStats), 500);
     const now2 = Date.now();
     const awayMs = Math.max(0, now2 - (saved.lastSaveTime ?? now2));
     const awayMins = Math.floor(awayMs / 60000);
@@ -64,7 +68,12 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
       }
     }
     if (offlineReward > 0 && awayMins >= 5) {
-      setGs(prev => ({ ...prev, money: prev.money + offlineReward }));
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + offlineReward) };
+        setTimeout(() => checkAndGrantAchievementsRef?.current?.(updatedStats), 0);
+        return { ...prev, money: prev.money + offlineReward, achStats: updatedStats };
+      });
       const multParts = [];
       if (innOffMult > 1) multParts.push('여관주인 ×1.5');
       if (bankOffMult > 1) multParts.push('은행원 ×2');
