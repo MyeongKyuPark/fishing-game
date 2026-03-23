@@ -365,8 +365,10 @@ export function useWebSocket(params) {
       necklace: gs.equippedJewelry?.necklace ?? null,
       gatherTool: gs.gatherTool ?? '맨손',
       pickaxe: gs.pickaxe ?? '나무곡괭이',
+      hat: gs.hat ?? null,
+      activeRodSkin: gs.activeRodSkin ?? '기본스킨',
     };
-  }, [gs.boots, gs.equippedJewelry, gs.gatherTool, gs.pickaxe]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gs.boots, gs.equippedJewelry, gs.gatherTool, gs.pickaxe, gs.hat, gs.activeRodSkin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (gameRef.current) gameRef.current.farmPlots = gs.farmPlots ?? []; }, [gs.farmPlots]); // eslint-disable-line react-hooks/exhaustive-deps
 

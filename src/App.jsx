@@ -1451,7 +1451,8 @@ export default function App() {
       const potionGatherBonus = s.activePotion?.effect?.gatherSpeedBonus ?? 0;
       const seasonGatherBonus = getCurrentSeason()?.gatherSpeedBonus ?? 0;
       const petGatherMult = gameRef.current?.petBonus?.gatherTimeMult ?? 1.0;
-      const gatherMult = Math.max(0.3, (1 - gatherAbil * 0.004) * gatherToolMult * (1 - potionGatherBonus) * (1 - seasonGatherBonus) * petGatherMult);
+      const furnitureGatherMult = (s.cottage?.furniture ?? []).reduce((acc, f) => acc * (FURNITURE[f.key]?.bonus?.gatherTimeMult ?? 1.0), 1.0);
+      const gatherMult = Math.max(0.3, (1 - gatherAbil * 0.004) * gatherToolMult * (1 - potionGatherBonus) * (1 - seasonGatherBonus) * petGatherMult * furnitureGatherMult);
       if (gameRef.current) gameRef.current.gatherTimeMult = gatherMult;
       const [mn, mx2] = HERBS[herb].gatherRange.map(t2 => Math.max(800, Math.round(t2 * gatherMult)));
       player.activityStart = performance.now();
