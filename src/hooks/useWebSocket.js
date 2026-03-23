@@ -11,7 +11,7 @@ import { subscribeOtherPlayers, updatePlayerPresence, removePlayerPresence,
 import { subscribeGuildList, subscribeGuildCompetition, subscribeGuild, subscribeGuildMembers,
   subscribeGuildChat, subscribeGuildQuest } from '../guildData';
 import { subscribeMarket, subscribeMyListings } from '../marketData';
-import { subscribeAnnouncements, subscribeActiveServerEvent, subscribeServerStats,
+import { subscribeAnnouncements, subscribeActiveServerEvent,
   subscribeTournament, subscribeServerQuest, subscribeServerBoss,
   savePlayerTitle, broadcastAnnouncement, subscribeSeasonRankings } from '../ranking';
 import { STORY_CHAPTERS } from './useGameState';
@@ -26,7 +26,7 @@ export function useWebSocket(params) {
     // setters
     setGuildList, setGuildCompetition, setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
     setMarketListings, setMyListings, setServerAnnouncements, setServerEvent, setServerQuest,
-    setServerBoss, setTournamentRanking, setSeasonRanking, setServerStats, setFishSurgeEvent, setPartyMessages,
+    setServerBoss, setTournamentRanking, setSeasonRanking, setFishSurgeEvent, setPartyMessages,
     setPendingInvite, setGs, setWeather, setIsOnline, setShowAnnounce,
     // callbacks
     addMsg,
@@ -254,13 +254,7 @@ export function useWebSocket(params) {
     return () => clearTimeout(t);
   }, [nickname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Server stats ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!nickname || !roomId) return;
-    return subscribeServerStats(setServerStats);
-  }, [nickname, roomId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Weekly tournament ─────────────────────────────────────────────────────
+// ── Weekly tournament ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!nickname) return;
     return subscribeTournament(setTournamentRanking);

@@ -9,7 +9,7 @@ import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
 import RankSidebar from './RankSidebar';
 import ChannelLobby from './ChannelLobby';
-import { saveFishRecord, saveOverallFishRecord, broadcastAnnouncement, incrementServerStat,
+import { saveFishRecord, saveOverallFishRecord, broadcastAnnouncement,
   submitTournamentScore, incrementServerQuestProgress,
   saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore, damageServerBoss } from './ranking';
 import { sendPartyInvite, joinParty, leaveParty, sendPartyMessage } from './multiplay';
@@ -240,9 +240,7 @@ export default function App() {
   const [nearActionZone, setNearActionZone] = useState(null);
   const [nearIndoorNpc, setNearIndoorNpc] = useState(null);
   const prevTitleRef = useRef(null);
-  const prevServerStatsRef = useRef({});
   const [serverAnnouncements, setServerAnnouncements] = useState([]);
-  const [serverStats, setServerStats] = useState({});
   const [showDex, setShowDex] = useState(false);
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [showBank, setShowBank] = useState(false);
@@ -402,10 +400,10 @@ export default function App() {
     nickname, roomId, myGuildId, partyId,
     gameRef, stateRef, addMsgRef, otherPlayersRef, prevOtherPlayersRef, lastPosRef,
     weatherRef, fishSurgeRef, serverEventRef, partyMembersRef, partyIdRef, myGuildIdRef,
-    prevBossHpRef, prevServerQuestRef, prevServerStatsRef, nicknameRef, roomIdRef,
+    prevBossHpRef, prevServerQuestRef, nicknameRef, roomIdRef,
     setGuildList, setGuildCompetition, setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
     setMarketListings, setMyListings, setServerAnnouncements, setServerEvent, setServerQuest,
-    setServerBoss, setTournamentRanking, setSeasonRanking, setServerStats, setFishSurgeEvent,
+    setServerBoss, setTournamentRanking, setSeasonRanking, setFishSurgeEvent,
     setPartyMessages, setPendingInvite, setGs, setWeather, setIsOnline, setShowAnnounce,
     addMsg, gs, weather,
   });
@@ -474,19 +472,6 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nickname, gs.bankDeposit]);
 
-  // Server collective quest milestone announcements
-  useEffect(() => {
-    const prev = prevServerStatsRef.current;
-    const curr = serverStats;
-    const milestones = [1000, 5000, 10000, 50000, 100000];
-    for (const m of milestones) {
-      if ((prev.totalFishCaught ?? 0) < m && (curr.totalFishCaught ?? 0) >= m) {
-        addMsg(`🌍 서버 전체 물고기 ${m.toLocaleString()}마리 달성! 모든 플레이어 +500G 보상!`, 'catch');
-        setGs(prev2 => ({ ...prev2, money: prev2.money + 500 }));
-      }
-    }
-    prevServerStatsRef.current = curr;
-  }, [serverStats, addMsg]);
 
   // Grant ability EXP; shows grade-available message if reached 100
   const grantAbility = useCallback((abilName, amount) => {
@@ -931,7 +916,6 @@ export default function App() {
     });
 
     // Server-wide stat
-    incrementServerStat('totalFishCaught');
 
     // Tournament: track weekly total (size + rarity bonus)
     if (nicknameRef.current) {
@@ -1022,7 +1006,6 @@ export default function App() {
       setTimeout(() => addMsg('🐲 [심해 원정대] 해룡!! 심해를 지배하는 전설의 존재와 원정대가 맞닥뜨렸습니다!', 'catch'), 600);
       setTimeout(() => addMsg('🌟 원정대의 승리! 해룡이 낚싯줄에 굴복했습니다!', 'catch'), 2200);
     }
-    incrementServerStat('totalFishCaught');
     if (nicknameRef.current) { const rb = TOURNAMENT_RARITY_BONUS[fd.rarity] ?? 0; tournamentScoreRef.current = Math.round(tournamentScoreRef.current + size + rb); submitTournamentScore(nicknameRef.current, tournamentScoreRef.current); seasonScoreRef.current += 1; submitSeasonScore(nicknameRef.current, seasonScoreRef.current); }
     incrementServerQuestProgress('fishCaught');
     if (myGuildIdRef.current) {
@@ -2443,7 +2426,6 @@ nickname={nickname}
           currentSeason={currentSeason}
           activity={activity}
           isOnline={isOnline}
-          serverStats={serverStats}
           serverQuest={serverQuest}
           serverBoss={serverBoss}
           fishSurgeEvent={fishSurgeEvent}

@@ -45,7 +45,7 @@ export default function Sidebar(props) {
     showAppearance, setShowAppearance, appearanceDraft, setAppearanceDraft,
     inspectPlayer, setInspectPlayer,
     showTournament, setShowTournament, tournamentRanking,
-    serverQuest, serverBoss, serverStats, serverAnnouncements,
+    serverQuest, serverBoss, serverAnnouncements,
     showGuild, setShowGuild, guildTab, setGuildTab,
     myGuildId, setMyGuildId,
     guildInfo, guildMembers, guildList, guildChat, guildQuest, guildCompetition,

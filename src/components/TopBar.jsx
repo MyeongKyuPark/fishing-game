@@ -6,7 +6,7 @@ import { MINE_DEPTH_REQ, MINE_DEPTH_TIME } from '../hooks/useGameState';
 
 export default function TopBar({
   gs, setGs, nickname, myTitle, roomTitle, weather, currentSeason, activity, isOnline,
-  serverStats, serverQuest, serverBoss, fishSurgeEvent, serverEvent,
+  serverQuest, serverBoss, fishSurgeEvent, serverEvent,
   indoorRoom, nearDoor, nearActionZone, nearIndoorNpc, partyId, partyMembersRef, otherPlayersRef,
   pendingInvite, showAnnounce, serverAnnouncements,
   achPopup, gradeUpCelebration,
@@ -47,12 +47,7 @@ export default function TopBar({
             {activity === 'fishing' ? '🐟 낚시 중…' : activity === 'gathering' ? '🌿 채집 중…' : '⛏ 채굴 중…'}
           </div>
         )}
-        {serverStats.totalFishCaught > 0 && (
-          <div className="hud-chip" style={{ color: 'rgba(255,220,100,0.7)', fontSize: 10 }}>
-            🌐 서버 {serverStats.totalFishCaught?.toLocaleString()}마리
-          </div>
-        )}
-        {(() => {
+{(() => {
           const sqFish = serverQuest.fishCaught ?? 0;
           const MILESTONES = [1000, 5000, 10000, 50000, 100000];
           const nextMilestone = MILESTONES.find(m => sqFish < m);
