@@ -737,9 +737,10 @@ export default function App() {
     const jobSellBonus = 1 + (JOBS[s?.selectedJob]?.bonus?.sellBonus ?? 0);
     const hatSellBonus = 1 + (HATS[s?.hat]?.bonus?.sellBonus ?? 0);
     const outfitSellBonus = 1 + (FISHING_OUTFITS[s?.outfit]?.bonus?.sellBonus ?? 0);
+    const furnitureSellBonus = 1 + (s?.cottage?.furniture ?? []).reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.sellBonus ?? 0), 0);
     const seasonPriceBonus = 1 + (getCurrentSeason()?.fishPriceBonus ?? 0);
     const srvSellBonus = (srvEvent?.type === 'sellBonus') ? (1 + (srvEvent.effectValue ?? 0.2)) : 1.0;
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * hatSellBonus * outfitSellBonus * seasonPriceBonus * srvSellBonus);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * hatSellBonus * outfitSellBonus * furnitureSellBonus * seasonPriceBonus * srvSellBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -1508,7 +1509,8 @@ export default function App() {
     if (cmd === '!탐험') {
       const abilities = stateRef.current?.abilities;
       const explored = stateRef.current?.exploredZones ?? [];
-      const unlockable = checkZoneUnlock(abilities, explored);
+      const furnitureExploreReduction = (stateRef.current?.cottage?.furniture ?? []).reduce((sum, f) => sum + Math.abs(FURNITURE[f.key]?.bonus?.exploreReq ?? 0), 0);
+      const unlockable = checkZoneUnlock(abilities, explored, furnitureExploreReduction);
       if (unlockable.length === 0) {
         const allExplored = EXPLORE_ZONES.every(z => explored.includes(z.id));
         if (allExplored) { addMsg('🗺 모든 탐험 구역을 이미 발견했습니다!'); }
@@ -2043,7 +2045,8 @@ export default function App() {
     const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
     if (!canAfford) { addMsg(`💰 골드 부족 (${cost}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
-    const rate = pickaxeEnhanceSuccessRate(enhLevel, gs.abilities?.강화?.value ?? 0);
+    const furnitureEnhBonus = (gs.cottage?.furniture ?? []).reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.enhanceBonus ?? 0), 0);
+    const rate = Math.min(0.98, pickaxeEnhanceSuccessRate(enhLevel, gs.abilities?.강화?.value ?? 0) + furnitureEnhBonus);
     const success = Math.random() < rate;
     setGs(prev => {
       const ores = { ...prev.oreInventory };

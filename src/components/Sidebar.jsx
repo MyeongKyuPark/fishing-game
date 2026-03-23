@@ -487,7 +487,8 @@ export default function Sidebar(props) {
                     const cost = rodEnhanceCost(enhLv);
                     const mats = rodEnhanceMatsNeeded(enhLv);
                     const ganghwaAbil = gs.abilities?.강화?.value ?? 0;
-                    const rate = rodEnhanceSuccessRate(enhLv, ganghwaAbil);
+                    const furnitureEnhBonus = (gs.cottage?.furniture ?? []).reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.enhanceBonus ?? 0), 0);
+                    const rate = Math.min(0.98, rodEnhanceSuccessRate(enhLv, ganghwaAbil) + furnitureEnhBonus);
                     const canAfford = gs.money >= cost;
                     const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
                     const matsStr = Object.entries(mats).map(([k, n]) => `${k}×${n}`).join(' ');
@@ -515,7 +516,7 @@ export default function Sidebar(props) {
                           disabled={!canAfford || !hasMats || enhLv >= 100}
                           onClick={() => {
                             if (enhLv >= 100) return;
-                            const success = Math.random() < rodEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0);
+                            const success = Math.random() < Math.min(0.98, rodEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0) + furnitureEnhBonus);
                             setGs(prev => {
                               const ores = { ...prev.oreInventory };
                               for (const [ore, n] of Object.entries(mats)) ores[ore] = Math.max(0, (ores[ore] || 0) - n);
@@ -1074,7 +1075,8 @@ export default function Sidebar(props) {
                 <div className="section-title">탐험 구역 ({(gs.exploredZones ?? []).length} / {EXPLORE_ZONES.length} 발견)</div>
                 {EXPLORE_ZONES.map(zone => {
                   const unlocked = (gs.exploredZones ?? []).includes(zone.id);
-                  const canUnlock = Object.entries(zone.reqAbil).every(([abil, req]) => (gs.abilities?.[abil]?.value ?? 0) >= req);
+                  const furnitureExploreRed = (gs.cottage?.furniture ?? []).reduce((sum, f) => sum + Math.abs(FURNITURE[f.key]?.bonus?.exploreReq ?? 0), 0);
+                  const canUnlock = Object.entries(zone.reqAbil).every(([abil, req]) => (gs.abilities?.[abil]?.value ?? 0) >= Math.max(0, req - furnitureExploreRed));
                   return (
                     <div key={zone.id} className="rod-card" style={{ opacity: unlocked ? 1 : 0.7, borderColor: unlocked ? 'rgba(100,220,100,0.3)' : undefined }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>

@@ -1,6 +1,7 @@
 // ── Offline Reward Hook ───────────────────────────────────────────────────────
 import { useEffect } from 'react';
 import { loadSave, checkDailyBonus, getDailyQuests, SAVE_VERSION, saveKey } from './useGameState';
+import { FURNITURE } from '../gameData';
 
 export function useOfflineReward({ nickname, setGs, addMsgRef }) {
   useEffect(() => {
@@ -9,7 +10,10 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
     const { bonus, streak } = checkDailyBonus(nickname);
     const today = new Date().toDateString();
     const innAff = saved.npcAffinity?.여관주인 ?? 0;
-    const quests = getDailyQuests(innAff >= 50 ? 1 : 0);
+    // Furniture questSlot bonus: count total questSlot from placed furniture
+    const placedFurniture = saved.cottage?.furniture ?? [];
+    const furnitureQuestSlot = placedFurniture.reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.questSlot ?? 0), 0);
+    const quests = getDailyQuests((innAff >= 50 ? 1 : 0) + furnitureQuestSlot);
     const isNewDay = saved.questDate !== today;
     // Push notification on new day (daily quest reset)
     if (isNewDay && 'Notification' in window && Notification.permission === 'granted') {
@@ -35,7 +39,8 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
     const bankAff = saved.npcAffinity?.은행원 ?? 0;
     const innOffMult = innAff >= 80 ? 1.5 : 1.0;
     const bankOffMult = bankAff >= 80 ? 2.0 : 1.0;
-    const offlineMult = innOffMult * bankOffMult;
+    const furnitureOffMult = placedFurniture.reduce((acc, f) => acc * (FURNITURE[f.key]?.bonus?.offlineMult ?? 1.0), 1.0);
+    const offlineMult = innOffMult * bankOffMult * furnitureOffMult;
     const offlineReward = Math.floor(effectiveMins * 10 * offlineMult);
     if (bonus > 0) {
       if (streak >= 7) {
@@ -63,6 +68,7 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
       const multParts = [];
       if (innOffMult > 1) multParts.push('여관주인 ×1.5');
       if (bankOffMult > 1) multParts.push('은행원 ×2');
+      if (furnitureOffMult > 1) multParts.push(`가구 ×${furnitureOffMult.toFixed(2)}`);
       const multLabel = multParts.length > 0 ? ` (${multParts.join(', ')})` : '';
       setTimeout(() => addMsgRef.current(`💤 자리 비운 ${awayMins}분 동안 +${offlineReward}G 획득!${multLabel} (최대 2.5시간)`, 'catch'), 1800);
     }

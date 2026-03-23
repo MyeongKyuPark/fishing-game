@@ -119,10 +119,11 @@ export const EXPLORE_ZONES = [
   },
 ];
 
-export function checkZoneUnlock(abilities, exploredZones) {
+export function checkZoneUnlock(abilities, exploredZones, abilReduction = 0) {
   // Returns newly unlockable zone ids
+  // abilReduction: reduce each reqAbil by this amount (e.g. from 책장 furniture bonus)
   return EXPLORE_ZONES.filter(z => {
     if (exploredZones.includes(z.id)) return false;
-    return Object.entries(z.reqAbil).every(([abil, req]) => (abilities?.[abil]?.value ?? 0) >= req);
+    return Object.entries(z.reqAbil).every(([abil, req]) => (abilities?.[abil]?.value ?? 0) >= Math.max(0, req - abilReduction));
   });
 }
