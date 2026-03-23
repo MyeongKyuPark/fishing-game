@@ -584,9 +584,11 @@ export default function App() {
       for (const k of Object.keys(bonusBait)) { if (!newBaitOwned.includes(k)) newBaitOwned.push(k); }
       const newPotionInv = { ...(prev.potionInventory ?? {}) };
       for (const [k, v] of Object.entries(bonusPotion)) newPotionInv[k] = (newPotionInv[k] ?? 0) + v;
+      const achPrevStats = prev.achStats ?? {};
       return {
         ...prev, achievements: [...already, ...newIds], money: prev.money + bonusMoney,
         baitInventory: newBaitInv, ownedBait: newBaitOwned, potionInventory: newPotionInv,
+        achStats: { ...achPrevStats, maxMoney: Math.max(achPrevStats.maxMoney ?? 0, prev.money + bonusMoney) },
       };
     });
   }, []);
@@ -1790,7 +1792,7 @@ export default function App() {
         const prevStats = prev.achStats ?? {};
         const newDishLog = { ...(prev.dishLog ?? {}), [dishKey]: ((prev.dishLog ?? {})[dishKey] ?? 0) + 1 };
         const dishSpecies = Object.keys(newDishLog).filter(k => newDishLog[k] > 0).length;
-        const updatedStats = { ...prevStats, dishCooked: (prevStats.dishCooked ?? 0) + 1, cookCount: (prevStats.cookCount ?? 0) + 1, dishSpecies };
+        const updatedStats = { ...prevStats, dishCooked: (prevStats.dishCooked ?? 0) + 1, cookCount: (prevStats.cookCount ?? 0) + 1, dishSpecies, maxMoney: Math.max(prevStats.maxMoney ?? 0, (prev.money ?? 0) + dishEarned) };
         setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
         const newDiscovered = (prev.discoveredRecipes ?? []).includes(dishKey)
           ? prev.discoveredRecipes
