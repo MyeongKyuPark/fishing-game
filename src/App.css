@@ -934,6 +934,115 @@ canvas { touch-action: none; }
   color: rgba(255,255,255,0.4);
   text-align: center;
 }
+.doll-slot-clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.doll-slot-clickable:hover {
+  border-color: rgba(100,200,255,0.5) !important;
+  background: rgba(40,100,160,0.25) !important;
+}
+.doll-slot-active {
+  border-color: rgba(100,220,255,0.7) !important;
+  background: rgba(20,80,130,0.35) !important;
+  box-shadow: 0 0 0 2px rgba(100,200,255,0.2);
+}
+.doll-slot-hint {
+  font-size: 8px;
+  color: rgba(100,200,255,0.45);
+  margin-top: 1px;
+}
+
+/* Equipment picker panel */
+.equip-picker {
+  border-top: 1px solid rgba(100,200,255,0.2);
+  background: rgba(10,30,50,0.6);
+  padding: 8px 10px 10px;
+  animation: fadeIn 0.12s ease;
+}
+.equip-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.equip-picker-title {
+  font-size: 12px;
+  color: #88ccff;
+  font-weight: 700;
+}
+.equip-picker-close {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(255,255,255,0.1);
+  color: #aaa;
+  cursor: pointer;
+}
+.equip-picker-close:hover { background: rgba(255,255,255,0.18); }
+.equip-picker-unequip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,100,100,0.35);
+  background: rgba(255,80,80,0.1);
+  color: #ff8888;
+  cursor: pointer;
+}
+.equip-picker-unequip:hover { background: rgba(255,80,80,0.2); }
+.equip-picker-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.equip-picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  min-width: 74px;
+  max-width: 100px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  transition: background 0.1s;
+}
+.equip-picker-item-on {
+  background: rgba(60,140,220,0.18);
+  border-color: rgba(100,180,255,0.45);
+}
+.equip-picker-item-name {
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  line-height: 1.3;
+  word-break: keep-all;
+}
+.equip-picker-item-sub {
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+  text-align: center;
+}
+.equip-picker-badge {
+  font-size: 10px;
+  color: #88ffaa;
+  padding: 1px 7px;
+  background: rgba(80,200,120,0.15);
+  border-radius: 10px;
+  border: 1px solid rgba(80,200,120,0.3);
+}
+.equip-picker-btn {
+  font-size: 10px;
+  padding: 2px 10px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(80,160,240,0.3);
+  color: #88ccff;
+  cursor: pointer;
+}
+.equip-picker-btn:hover { background: rgba(80,160,240,0.5); }
 
 /* Center character display */
 .doll-center {
@@ -1021,6 +1130,10 @@ canvas { touch-action: none; }
   0%   { box-shadow: 0 0 0 0 rgba(68,255,136,0.6); }
   50%  { box-shadow: 0 0 0 8px rgba(68,255,136,0); }
   100% { box-shadow: 0 0 0 0 rgba(68,255,136,0); }
+}
+@keyframes questGlow {
+  0%   { background: rgba(40,160,80,0.5); box-shadow: 0 0 8px rgba(68,255,136,0.7); color: #afffca; }
+  100% { background: rgba(20,80,40,0.3);  box-shadow: 0 0 2px rgba(68,255,136,0.2); color: #fff; }
 }
 
 /* ── Server announcement overlay ── */

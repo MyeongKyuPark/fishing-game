@@ -1,15 +1,20 @@
 // ── Offline Reward Hook ───────────────────────────────────────────────────────
 import { useEffect } from 'react';
 import { loadSave, checkDailyBonus, getDailyQuests, SAVE_VERSION, saveKey } from './useGameState';
+import { FURNITURE } from '../gameData';
+import { getActiveTitleBonus } from '../titleData';
 
-export function useOfflineReward({ nickname, setGs, addMsgRef }) {
+export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef }) {
   useEffect(() => {
     if (!nickname) return;
     const saved = loadSave(nickname);
     const { bonus, streak } = checkDailyBonus(nickname);
     const today = new Date().toDateString();
     const innAff = saved.npcAffinity?.여관주인 ?? 0;
-    const quests = getDailyQuests(innAff >= 50 ? 1 : 0);
+    // Furniture questSlot bonus: count total questSlot from placed furniture
+    const placedFurniture = saved.cottage?.furniture ?? [];
+    const furnitureQuestSlot = placedFurniture.reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.questSlot ?? 0), 0);
+    const quests = getDailyQuests((innAff >= 50 ? 1 : 0) + furnitureQuestSlot);
     const isNewDay = saved.questDate !== today;
     // Push notification on new day (daily quest reset)
     if (isNewDay && 'Notification' in window && Notification.permission === 'granted') {
@@ -22,11 +27,15 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
     }
     const questProgress = isNewDay ? {} : (saved.questProgress ?? {});
     const questClaimed = isNewDay ? {} : (saved.questClaimed ?? {});
+    const loginStreak = Math.max(saved.achStats?.loginStreak ?? 0, streak);
+    const baseAchStats = { ...(saved.achStats ?? {}), loginStreak };
     const base = { ...saved, dailyQuests: quests, questProgress, questClaimed, questDate: today,
-      achStats: { ...(saved.achStats ?? {}), loginStreak: Math.max(saved.achStats?.loginStreak ?? 0, streak) } };
+      achStats: baseAchStats };
     if (!saved.firstLoginDate) {
       base.firstLoginDate = new Date().toISOString();
     }
+    // Fire achievement check for loginStreak after state is set
+    setTimeout(() => checkAndGrantAchievementsRef?.current?.(baseAchStats), 500);
     const now2 = Date.now();
     const awayMs = Math.max(0, now2 - (saved.lastSaveTime ?? now2));
     const awayMins = Math.floor(awayMs / 60000);
@@ -35,16 +44,20 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
     const bankAff = saved.npcAffinity?.은행원 ?? 0;
     const innOffMult = innAff >= 80 ? 1.5 : 1.0;
     const bankOffMult = bankAff >= 80 ? 2.0 : 1.0;
-    const offlineMult = innOffMult * bankOffMult;
+    const furnitureOffMult = placedFurniture.reduce((acc, f) => acc * (FURNITURE[f.key]?.bonus?.offlineMult ?? 1.0), 1.0);
+    const titleOffBonus = getActiveTitleBonus(saved).offlineBonus ?? 0;
+    const offlineMult = innOffMult * bankOffMult * furnitureOffMult * (1 + titleOffBonus);
     const offlineReward = Math.floor(effectiveMins * 10 * offlineMult);
     if (bonus > 0) {
+      const bonusAchStats = { ...baseAchStats, maxMoney: Math.max(baseAchStats.maxMoney ?? 0, saved.money + bonus) };
+      setTimeout(() => checkAndGrantAchievementsRef?.current?.(bonusAchStats), 600);
       if (streak >= 7) {
-        setGs({ ...base, money: saved.money + bonus,
+        setGs({ ...base, money: saved.money + bonus, achStats: bonusAchStats,
           baitInventory: { ...(base.baitInventory ?? {}), 전설미끼: ((base.baitInventory ?? {})['전설미끼'] ?? 0) + 1 },
           ownedBait: base.ownedBait?.includes('전설미끼') ? base.ownedBait : [...(base.ownedBait ?? []), '전설미끼'],
         });
       } else {
-        setGs({ ...base, money: saved.money + bonus });
+        setGs({ ...base, money: saved.money + bonus, achStats: bonusAchStats });
       }
       setTimeout(() => {
         addMsgRef.current(`🎁 오늘의 출석 보너스 +${bonus}G! (${streak}일 연속 접속)`, 'catch');
@@ -59,10 +72,16 @@ export function useOfflineReward({ nickname, setGs, addMsgRef }) {
       }
     }
     if (offlineReward > 0 && awayMins >= 5) {
-      setGs(prev => ({ ...prev, money: prev.money + offlineReward }));
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + offlineReward) };
+        setTimeout(() => checkAndGrantAchievementsRef?.current?.(updatedStats), 0);
+        return { ...prev, money: prev.money + offlineReward, achStats: updatedStats };
+      });
       const multParts = [];
       if (innOffMult > 1) multParts.push('여관주인 ×1.5');
       if (bankOffMult > 1) multParts.push('은행원 ×2');
+      if (furnitureOffMult > 1) multParts.push(`가구 ×${furnitureOffMult.toFixed(2)}`);
       const multLabel = multParts.length > 0 ? ` (${multParts.join(', ')})` : '';
       setTimeout(() => addMsgRef.current(`💤 자리 비운 ${awayMins}분 동안 +${offlineReward}G 획득!${multLabel} (최대 2.5시간)`, 'catch'), 1800);
     }

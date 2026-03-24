@@ -11,7 +11,7 @@ import { subscribeOtherPlayers, updatePlayerPresence, removePlayerPresence,
 import { subscribeGuildList, subscribeGuildCompetition, subscribeGuild, subscribeGuildMembers,
   subscribeGuildChat, subscribeGuildQuest } from '../guildData';
 import { subscribeMarket, subscribeMyListings } from '../marketData';
-import { subscribeAnnouncements, subscribeActiveServerEvent, subscribeServerStats,
+import { subscribeAnnouncements, subscribeActiveServerEvent,
   subscribeTournament, subscribeServerQuest, subscribeServerBoss,
   savePlayerTitle, broadcastAnnouncement, subscribeSeasonRankings } from '../ranking';
 import { STORY_CHAPTERS } from './useGameState';
@@ -26,7 +26,7 @@ export function useWebSocket(params) {
     // setters
     setGuildList, setGuildCompetition, setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
     setMarketListings, setMyListings, setServerAnnouncements, setServerEvent, setServerQuest,
-    setServerBoss, setTournamentRanking, setSeasonRanking, setServerStats, setFishSurgeEvent, setPartyMessages,
+    setServerBoss, setTournamentRanking, setSeasonRanking, setFishSurgeEvent, setPartyMessages,
     setPendingInvite, setGs, setWeather, setIsOnline, setShowAnnounce,
     // callbacks
     addMsg,
@@ -269,13 +269,7 @@ export function useWebSocket(params) {
     return () => clearTimeout(t);
   }, [nickname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Server stats ──────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!nickname || !roomId) return;
-    return subscribeServerStats(setServerStats);
-  }, [nickname, roomId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Weekly tournament ─────────────────────────────────────────────────────
+// ── Weekly tournament ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!nickname) return;
     return subscribeTournament(setTournamentRanking);
@@ -380,8 +374,10 @@ export function useWebSocket(params) {
       necklace: gs.equippedJewelry?.necklace ?? null,
       gatherTool: gs.gatherTool ?? '맨손',
       pickaxe: gs.pickaxe ?? '나무곡괭이',
+      hat: gs.hat ?? null,
+      activeRodSkin: gs.activeRodSkin ?? '기본스킨',
     };
-  }, [gs.boots, gs.equippedJewelry, gs.gatherTool, gs.pickaxe]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gs.boots, gs.equippedJewelry, gs.gatherTool, gs.pickaxe, gs.hat, gs.activeRodSkin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (gameRef.current) gameRef.current.farmPlots = gs.farmPlots ?? []; }, [gs.farmPlots]); // eslint-disable-line react-hooks/exhaustive-deps
 

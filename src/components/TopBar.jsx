@@ -6,7 +6,7 @@ import { MINE_DEPTH_REQ, MINE_DEPTH_TIME } from '../hooks/useGameState';
 
 export default function TopBar({
   gs, setGs, nickname, myTitle, roomTitle, weather, currentSeason, activity, isOnline,
-  serverStats, serverQuest, serverBoss, fishSurgeEvent, serverEvent,
+  serverQuest, serverBoss, fishSurgeEvent, serverEvent,
   indoorRoom, nearDoor, nearActionZone, nearIndoorNpc, partyId, partyMembersRef, otherPlayersRef,
   pendingInvite, showAnnounce, serverAnnouncements,
   achPopup, gradeUpCelebration,
@@ -17,6 +17,11 @@ export default function TopBar({
   setAppearanceDraft, setShowAppearance,
   setShowSettings, setShowTournament, setShowCottage,
 }) {
+  const questHasClaim = (gs.dailyQuests ?? []).some(
+    q => (gs.questProgress?.[q.id] ?? 0) >= q.goal && !gs.questClaimed?.[q.id]
+  );
+  const questBtnStyle = questHasClaim ? { animation: 'questGlow 0.8s ease-in-out infinite alternate' } : {};
+
   return (
     <>
       {/* HUD */}
@@ -47,12 +52,7 @@ export default function TopBar({
             {activity === 'fishing' ? '🐟 낚시 중…' : activity === 'gathering' ? '🌿 채집 중…' : '⛏ 채굴 중…'}
           </div>
         )}
-        {serverStats.totalFishCaught > 0 && (
-          <div className="hud-chip" style={{ color: 'rgba(255,220,100,0.7)', fontSize: 10 }}>
-            🌐 서버 {serverStats.totalFishCaught?.toLocaleString()}마리
-          </div>
-        )}
-        {(() => {
+{(() => {
           const sqFish = serverQuest.fishCaught ?? 0;
           const MILESTONES = [1000, 5000, 10000, 50000, 100000];
           const nextMilestone = MILESTONES.find(m => sqFish < m);
@@ -81,27 +81,7 @@ export default function TopBar({
         )}
       </div>}
 
-      {activity === 'bite' && (
-        <div style={{
-          position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%, -50%)',
-          zIndex: 20, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-          background: 'rgba(10,5,0,0.88)', borderRadius: 14, padding: '14px 28px',
-          border: '2px solid #ff5500', boxShadow: '0 0 24px rgba(255,100,0,0.5)',
-          animation: 'biteFlash 0.25s infinite alternate',
-        }}>
-          <div style={{ color: '#ffdd44', fontWeight: 700, fontSize: 16 }}>🎣 찌가 움직입니다!</div>
-          <button tabIndex={-1} style={{
-            background: 'rgba(220,60,0,0.9)', color: '#fff', border: '2px solid #ff9944',
-            borderRadius: 10, padding: '10px 28px', fontSize: 18, fontWeight: 700, cursor: 'pointer',
-            letterSpacing: 1,
-          }} onClick={() => { gameRef.current.reelIn = true; }}>
-            🪝 낚아채기!
-          </button>
-          <div style={{ color: 'rgba(255,220,150,0.6)', fontSize: 11 }}>Space · 클릭</div>
-        </div>
-      )}
-
-      {indoorRoom === 'mine' && (
+{indoorRoom === 'mine' && (
         <div style={{ position: 'absolute', top: 44, left: '50%', transform: 'translateX(-50%)', zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(10,10,20,0.88)', borderRadius: 10, padding: '5px 12px', border: '1px solid rgba(120,80,255,0.45)', whiteSpace: 'nowrap' }}>
           <span style={{ color: '#aabbcc', fontSize: 12 }}>⛏ 채굴 깊이</span>
           {[1, 2, 3, 4, 5].map(d => {
@@ -200,11 +180,16 @@ export default function TopBar({
 
       {/* Shortcut buttons (desktop only) */}
       <div className="shortcut-bar">
+        {nearIndoorNpc && indoorRoom && (
+          <button tabIndex={-1} style={{ color: '#ffffaa', borderColor: 'rgba(255,255,100,0.5)', background: 'rgba(80,80,20,0.7)', animation: 'blink 1.2s ease-in-out infinite' }} onClick={() => handleNpcInteract(nearIndoorNpc.name)}>
+            💬 {nearIndoorNpc.name} 대화
+          </button>
+        )}
         <button tabIndex={-1} data-tooltip="인벤토리 (I)" onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
         <button tabIndex={-1} data-tooltip="상점 (S)" onClick={() => setShowShop(v => !v)}>🏪 상점</button>
         <button tabIndex={-1} data-tooltip="상태창 (A)" onClick={() => setShowStats(v => !v)}>📊 상태</button>
         <button tabIndex={-1} data-tooltip="랭킹 (R)" onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
-        <button tabIndex={-1} data-tooltip="일일 퀘스트 (Q)" onClick={() => setShowQuest(v => !v)}>📋 퀘스트</button>
+        <button tabIndex={-1} data-tooltip="일일 퀘스트 (Q)" onClick={() => setShowQuest(v => !v)} style={questBtnStyle}>📋 퀘스트{questHasClaim ? ' 🔔' : ''}</button>
         <button tabIndex={-1} data-tooltip="물고기 도감 (D)" onClick={() => setShowDex(v => !v)}>📖 도감</button>
         <button tabIndex={-1} data-tooltip="주간 낚시 토너먼트" onClick={() => { setShowTournament(v => !v); setGs(prev => ({ ...prev, seenFeatures: [...new Set([...(prev.seenFeatures ?? []), 'tournament'])] })); }}>
           🏆 토너먼트{!(gs.seenFeatures ?? []).includes('tournament') ? <span style={{ fontSize: 9, background: '#ff4444', color: '#fff', borderRadius: 4, padding: '1px 4px', marginLeft: 3, verticalAlign: 'middle' }}>NEW</span> : ''}
@@ -243,17 +228,19 @@ export default function TopBar({
                 <span>🍳</span><span className="action-btn-label">요리</span>
               </button>
             )}
-            <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
-              <span>🛑</span><span className="action-btn-label">그만</span>
-            </button>
+            {activity && (
+              <button className="action-btn action-btn-stop" tabIndex={-1} onClick={() => handleCommand('!그만')}>
+                <span>🛑</span><span className="action-btn-label">그만</span>
+              </button>
+            )}
             <button className="action-btn" tabIndex={-1} onClick={() => setShowMobileMenu(v => !v)}>
               <span>☰</span><span className="action-btn-label">메뉴</span>
             </button>
           </div>
           {/* Secondary row: less-used + context-sensitive */}
           <div className="action-btns-secondary">
-            <button className="action-btn action-btn-sm" tabIndex={-1} onClick={() => setShowQuest(v => !v)}>
-              <span>📋</span><span className="action-btn-label">퀘스트</span>
+            <button className="action-btn action-btn-sm" tabIndex={-1} onClick={() => setShowQuest(v => !v)} style={questBtnStyle}>
+              <span>📋</span><span className="action-btn-label">퀘스트{questHasClaim ? '!' : ''}</span>
             </button>
             <button className="action-btn action-btn-sm" tabIndex={-1} onClick={() => setShowDex(v => !v)}>
               <span>📖</span><span className="action-btn-label">도감</span>
@@ -319,7 +306,10 @@ export default function TopBar({
                 <span className="mobile-menu-icon">🏪</span><span>상점</span>
               </button>
               <button className="mobile-menu-item" onClick={() => { setShowStats(true); setShowMobileMenu(false); }}>
-                <span className="mobile-menu-icon">📊</span><span>어빌리티</span>
+                <span className="mobile-menu-icon">📊</span><span>상태</span>
+              </button>
+              <button className="mobile-menu-item" onClick={() => { setShowDex(true); setShowMobileMenu(false); }}>
+                <span className="mobile-menu-icon">📖</span><span>도감</span>
               </button>
               <button className="mobile-menu-item" onClick={() => { setShowRank(true); setShowMobileMenu(false); }}>
                 <span className="mobile-menu-icon">🏆</span><span>랭킹</span>

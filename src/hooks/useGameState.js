@@ -168,6 +168,7 @@ export const DEFAULT_STATE = {
   seasonPassTier: 0,
   seasonPassClaimedTiers: [],
   lastSeasonReset: '',
+  equippedTitle: null,   // null = 자동 (최고 달성 칭호), string = 장착한 칭호 label
 };
 
 export const SAVE_VERSION = 2;
@@ -307,6 +308,7 @@ export function loadSave(nickname) {
       seasonPassTier: s.seasonPassTier ?? 0,
       seasonPassClaimedTiers: s.seasonPassClaimedTiers ?? [],
       lastSeasonReset: s.lastSeasonReset ?? '',
+      equippedTitle: s.equippedTitle ?? null,
     };
   } catch { return DEFAULT_STATE; }
 }
