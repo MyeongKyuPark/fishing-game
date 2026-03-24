@@ -713,12 +713,8 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
       // Always update nearNpcRef so keydown listener can access it
       nearNpcRef.current = nearNpc;
 
-      // Notify parent of nearNpc changes
-      const curName = nearNpc?.name ?? null;
-      if (curName !== prevNearNpcName) {
-        onNearNpcChangeRef.current?.(nearNpc ?? null);
-        prevNearNpcName = curName;
-      }
+      // Notify parent of nearNpc changes every frame (React deduplicates same-ref state)
+      onNearNpcChangeRef.current?.(nearNpc ?? null);
 
       // ── Render ──
       // Dark background
