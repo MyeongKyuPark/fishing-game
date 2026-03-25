@@ -519,6 +519,98 @@ export const FISHING_OUTFITS = {
   },
 };
 
+// ── Tops (상의 아이템) ────────────────────────────────────────────────────────
+export const TOPS = {
+  기본상의: {
+    name: '기본 상의', icon: '👕', price: 0, color: '#aaaaaa',
+    desc: '기본 상의',
+    bonus: {},
+  },
+  어부상의: {
+    name: '어부 상의', icon: '🧥', price: 1000, color: '#4488cc',
+    desc: '낚시 속도 +7%, 희귀도 +3%',
+    bonus: { fishTimeMult: 0.93, rareBonus: 0.03 },
+    upgradeMats: { 구리광석: 2 },
+  },
+  탐험가상의: {
+    name: '탐험가 상의', icon: '🥋', price: 2500, color: '#886633',
+    desc: '낚시 속도 +10%, 낚시 경험치 +10%',
+    bonus: { fishTimeMult: 0.90, fishAbilGain: 1.10 },
+    upgradeMats: { 철광석: 3 },
+  },
+  강철갑옷: {
+    name: '강철 갑옷', icon: '🛡', price: 3500, color: '#778899',
+    desc: '채굴 속도 +10%, 판매가 +5%',
+    bonus: { mineTimeMult: 0.90, sellBonus: 0.05 },
+    upgradeMats: { 정제철: 2 },
+  },
+  황금어부상의: {
+    name: '황금 어부 상의', icon: '✨', price: 9000, color: '#ffd700',
+    desc: '낚시 속도 +12%, 채굴 속도 +8%, 희귀도 +5%',
+    bonus: { fishTimeMult: 0.88, mineTimeMult: 0.92, rareBonus: 0.05 },
+    upgradeMats: { 황금괴: 2, 수정: 2 },
+  },
+};
+
+// ── Bottoms (하의 아이템) ─────────────────────────────────────────────────────
+export const BOTTOMS = {
+  기본하의: {
+    name: '기본 하의', icon: '👖', price: 0, color: '#aaaaaa',
+    desc: '기본 하의',
+    bonus: {},
+  },
+  낚시바지: {
+    name: '낚시 바지', icon: '👖', price: 700, color: '#4488cc',
+    desc: '낚시 속도 +5%',
+    bonus: { fishTimeMult: 0.95 },
+  },
+  광부바지: {
+    name: '광부 바지', icon: '🩱', price: 1200, color: '#cc8844',
+    desc: '채굴 속도 +7%',
+    bonus: { mineTimeMult: 0.93 },
+    upgradeMats: { 철광석: 2 },
+  },
+  탐험가바지: {
+    name: '탐험가 바지', icon: '🩲', price: 2800, color: '#336655',
+    desc: '낚시 속도 +8%, 채굴 속도 +5%',
+    bonus: { fishTimeMult: 0.92, mineTimeMult: 0.95 },
+    upgradeMats: { 구리광석: 3 },
+  },
+  전설바지: {
+    name: '전설 바지', icon: '💜', price: 7000, color: '#cc44ff',
+    desc: '낚시 속도 +10%, 희귀도 +4%, 판매가 +6%',
+    bonus: { fishTimeMult: 0.90, rareBonus: 0.04, sellBonus: 0.06 },
+    upgradeMats: { 황금괴: 2, 수정: 2 },
+  },
+};
+
+// ── Belts (벨트 아이템) ───────────────────────────────────────────────────────
+export const BELTS = {
+  가죽벨트: {
+    name: '가죽 벨트', icon: '🪢', price: 400, color: '#8b6914',
+    desc: '판매가 +5%',
+    bonus: { sellBonus: 0.05 },
+  },
+  상인벨트: {
+    name: '상인 벨트', icon: '💰', price: 1500, color: '#cc9933',
+    desc: '판매가 +10%',
+    bonus: { sellBonus: 0.10 },
+    upgradeMats: { 구리광석: 2 },
+  },
+  낚시벨트: {
+    name: '낚시 벨트', icon: '🎣', price: 2200, color: '#4488cc',
+    desc: '낚시 속도 +5%, 희귀도 +3%',
+    bonus: { fishTimeMult: 0.95, rareBonus: 0.03 },
+    upgradeMats: { 구리광석: 2, 철광석: 1 },
+  },
+  황금벨트: {
+    name: '황금 벨트', icon: '👑', price: 9000, color: '#ffd700',
+    desc: '판매가 +15%, 희귀도 +5%',
+    bonus: { sellBonus: 0.15, rareBonus: 0.05 },
+    upgradeMats: { 황금괴: 3, 수정: 2 },
+  },
+};
+
 // ── Rod skins (낚싯대 스킨) ───────────────────────────────────────────────────
 export const ROD_SKINS = {
   기본스킨: { name: '기본 스킨', color: '#8b6914', desc: '기본 낚싯대 외형', price: 0 },

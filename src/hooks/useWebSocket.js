@@ -368,6 +368,11 @@ export function useWebSocket(params) {
 
   useEffect(() => {
     if (!gameRef.current) return;
+    gameRef.current.worldZone = gs.worldZone ?? '마을';
+  }, [gs.worldZone]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!gameRef.current) return;
     gameRef.current.equippedItems = {
       boots: gs.boots ?? '기본신발',
       ring: gs.equippedJewelry?.ring ?? null,

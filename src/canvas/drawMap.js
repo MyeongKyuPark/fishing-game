@@ -1,11 +1,14 @@
 import { TILE_SIZE, MAP_W, MAP_H, TILE, TILE_COLOR, WALKABLE } from '../gameData';
-import { MAP_TILES, FISHING_CHAIRS, COOKING_TX, COOKING_TY, MINE_ENTRANCE } from '../mapData';
+import { MAP_TILES, COOKING_TX, COOKING_TY, MINE_ENTRANCE } from '../mapData';
 import { PW, PH } from '../game/constants';
 import { FARM_PLOT_POSITIONS, TREE_POSITIONS } from '../game/decorationData';
 
+let _activeTiles = MAP_TILES;
+export function setActiveTiles(tiles) { _activeTiles = tiles; }
+
 export function getTile(tx, ty) {
   if (tx < 0 || ty < 0 || tx >= MAP_W || ty >= MAP_H) return TILE.WATER;
-  return MAP_TILES[ty][tx];
+  return _activeTiles[ty][tx];
 }
 
 export function canWalk(x, y, hasMarine = false) {

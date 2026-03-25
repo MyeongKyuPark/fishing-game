@@ -21,13 +21,14 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
-  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE, BAIT_RECIPES } from './gameData';
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, TOPS, BOTTOMS, BELTS, ROD_SKINS, SPOT_DECOS, FURNITURE, BAIT_RECIPES } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
 import { getTitle, getActiveTitleBonus, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
-import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm } from './mapData';
+import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm, setActiveZone, ZONE_TILES } from './mapData';
+import { setActiveTiles } from './canvas/drawMap';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
 import { PETS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
 import { NPCS, getAffinityLevel, getShopDiscount } from './npcData';
@@ -49,6 +50,7 @@ import { useKeyboard } from './hooks/useKeyboard';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import ChatBox from './components/ChatBox';
+import NpcDialogue from './components/NpcDialogue';
 import AdminPanel from './AdminPanel';
 import AuctionHouse from './AuctionHouse';
 import SeasonPass from './SeasonPass';
@@ -259,6 +261,7 @@ export default function App() {
   const [showAuction, setShowAuction] = useState(false);
   const [showSeasonPass, setShowSeasonPass] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [npcDialog, setNpcDialog] = useState(null); // npcKey string | null
   const [tutorialStep, setTutorialStep] = useState(0); // 0=hidden, 1-4=steps
   const [catchPopup, setCatchPopup] = useState(null); // { name, size, price, rarity }
   const [windfallPopup, setWindfallPopup] = useState(null); // { oreName, count }
@@ -726,12 +729,15 @@ export default function App() {
       table = applyBoosts(table, { 희귀: 1 + potionRareBonus, 전설: 1 + potionRareBonus * 1.5, 신화: 1 + potionRareBonus * 2 });
     }
 
-    // Pet + Job + Hat + Outfit rare boost
+    // Pet + Job + Equipment rare boost
     const petRareBonus = gameRef.current?.petBonus?.rareBonus ?? 0;
     const jobRareBonus = JOBS[s?.selectedJob]?.bonus?.rareBonus ?? 0;
     const hatRareBonus = HATS[s?.hat]?.bonus?.rareBonus ?? 0;
     const outfitRareBonus = FISHING_OUTFITS[s?.outfit]?.bonus?.rareBonus ?? 0;
-    const totalRareBonus = petRareBonus + jobRareBonus + hatRareBonus + outfitRareBonus;
+    const topRareBonus = TOPS[s?.top]?.bonus?.rareBonus ?? 0;
+    const bottomRareBonus = BOTTOMS[s?.bottom]?.bonus?.rareBonus ?? 0;
+    const beltRareBonus = s?.belt ? (BELTS[s.belt]?.bonus?.rareBonus ?? 0) : 0;
+    const totalRareBonus = petRareBonus + jobRareBonus + hatRareBonus + outfitRareBonus + topRareBonus + bottomRareBonus + beltRareBonus;
     if (totalRareBonus > 0) {
       table = applyBoosts(table, { 희귀: 1 + totalRareBonus, 전설: 1 + totalRareBonus * 1.5, 신화: 1 + totalRareBonus * 2 });
     }
@@ -824,9 +830,14 @@ export default function App() {
     const seasonPriceBonus = 1 + (getCurrentSeason()?.fishPriceBonus ?? 0);
     const srvSellBonus = (srvEvent?.type === 'sellBonus') ? (1 + (srvEvent.effectValue ?? 0.2)) : 1.0;
     const prestigeSellBonus = 1 + (s?.prestigePermanentSellBonus ?? 0);
+    const hatSellBonus = 1 + (HATS[s?.hat]?.bonus?.sellBonus ?? 0);
+    const outfitSellBonus = 1 + (FISHING_OUTFITS[s?.outfit]?.bonus?.sellBonus ?? 0);
+    const topSellBonus = 1 + (TOPS[s?.top]?.bonus?.sellBonus ?? 0);
+    const bottomSellBonus = 1 + (BOTTOMS[s?.bottom]?.bonus?.sellBonus ?? 0);
+    const beltSellBonus = s?.belt ? (1 + (BELTS[s.belt]?.bonus?.sellBonus ?? 0)) : 1.0;
     const titleBonusObj = getActiveTitleBonus(s);
     const titleSellBonus = 1 + (titleBonusObj.sellBonus ?? 0) + (titleBonusObj.fishSellBonus ?? 0);
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * hatSellBonus * outfitSellBonus * furnitureSellBonus * seasonPriceBonus * srvSellBonus * titleSellBonus * prestigeSellBonus);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus * hatSellBonus * outfitSellBonus * topSellBonus * bottomSellBonus * beltSellBonus * titleSellBonus * furnitureSellBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -1387,10 +1398,13 @@ export default function App() {
         const seasonFishBonus = getCurrentSeason()?.fishSpeedBonus ?? 0;
         const hatFishMult = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
         const outfitFishMult = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
+        const topFishMult = TOPS[s.top]?.bonus?.fishTimeMult ?? 1.0;
+        const bottomFishMult = BOTTOMS[s.bottom]?.bonus?.fishTimeMult ?? 1.0;
+        const beltFishMult = s.belt ? (BELTS[s.belt]?.bonus?.fishTimeMult ?? 1.0) : 1.0;
         const spotDecoFishMult = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
         const titleFishMult = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * hatFishMult * outfitFishMult * spotDecoFishMult * titleFishMult
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * hatFishMult * outfitFishMult * topFishMult * bottomFishMult * beltFishMult * spotDecoFishMult * titleFishMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1455,10 +1469,13 @@ export default function App() {
       const seasonFishBonus2 = getCurrentSeason()?.fishSpeedBonus ?? 0;
       const hatFishMult2 = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
       const outfitFishMult2 = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
+      const topFishMult2 = TOPS[s.top]?.bonus?.fishTimeMult ?? 1.0;
+      const bottomFishMult2 = BOTTOMS[s.bottom]?.bonus?.fishTimeMult ?? 1.0;
+      const beltFishMult2 = s.belt ? (BELTS[s.belt]?.bonus?.fishTimeMult ?? 1.0) : 1.0;
       const spotDecoFishMult2 = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
       const titleFishMult2 = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * hatFishMult2 * outfitFishMult2 * spotDecoFishMult2 * titleFishMult2
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * hatFishMult2 * outfitFishMult2 * topFishMult2 * bottomFishMult2 * beltFishMult2 * spotDecoFishMult2 * titleFishMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1522,8 +1539,10 @@ export default function App() {
       const cheolsuMineBonus = cheolsu >= 20 ? 0.08 : 0; // 채굴사 lv20: 채굴 속도 +8%
       const hatMineMult = HATS[s.hat]?.bonus?.mineTimeMult ?? 1.0;
       const outfitMineMult = FISHING_OUTFITS[s.outfit]?.bonus?.mineTimeMult ?? 1.0;
+      const topMineMult = TOPS[s.top]?.bonus?.mineTimeMult ?? 1.0;
+      const bottomMineMult = BOTTOMS[s.bottom]?.bonus?.mineTimeMult ?? 1.0;
       const titleMineMult = getActiveTitleBonus(s).mineTimeMult ?? 1.0;
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * titleMineMult);
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * topMineMult * bottomMineMult * titleMineMult);
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();
@@ -2376,18 +2395,24 @@ export default function App() {
     setShowPrestigeConfirm(false);
   }, [addMsg, stateRef]);
 
-  const handleNpcInteract = useCallback((npcName) => {
-    playNpcInteract();
-    if (npcName === '민준') {
+  // ── NPC 대화 행동 처리 ─────────────────────────────────────────────────────
+  const handleNpcDialogAction = useCallback((npcKey, actionId) => {
+    if (actionId === 'chat_affinity') {
+      gainNpcAffinity(npcKey === '민준' ? '상인' : npcKey === '수연' ? '요리사' : npcKey === '미나' ? '여관주인' : npcKey === '철수' ? '채굴사' : '은행원', 0.5);
+      return; // stay in dialogue
+    }
+    setNpcDialog(null);
+    if (actionId === 'shop') {
       setShowShop(true);
       setTimeout(() => checkNpcQuest('민준'), 0);
-    } else if (npcName === '수연') {
-      const cw = stateRef.current?.cookware;
+    } else if (actionId === 'cook') {
+      const s = stateRef.current;
+      const cw = s?.cookware;
       if (!cw) { addMsg('🍳 요리 도구가 없습니다. 상점에서 구매하세요!', 'error'); return; }
       const baseMult = COOKWARE[cw]?.mult ?? 1;
-      const cookAbil = stateRef.current?.abilities?.요리?.value ?? 0;
+      const cookAbil = s?.abilities?.요리?.value ?? 0;
       const totalMult = baseMult + cookAbil * 0.01;
-      const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
+      const raw = s.fishInventory.filter(f => !f.cooked);
       if (raw.length === 0) { addMsg('🍳 수연: "요리할 생선이 없네요!"'); return; }
       setGs(prev => {
         const newSpXP3 = (prev.seasonPassXP ?? 0) + 2;
@@ -2411,15 +2436,16 @@ export default function App() {
       advanceQuest('cook', raw.length);
       gainNpcAffinity('요리사', 3);
       setTimeout(() => checkNpcQuest('수연'), 0);
-    } else if (npcName === '미나') {
-      const lastRest = stateRef.current?.innRestAt ?? 0;
+    } else if (actionId === 'rest') {
+      const s = stateRef.current;
+      const lastRest = s?.innRestAt ?? 0;
       const cooldownMs = 60 * 60 * 1000;
       if (Date.now() - lastRest < cooldownMs) {
         const remainMin = Math.ceil((cooldownMs - (Date.now() - lastRest)) / 60000);
         addMsg(`🏨 미나: "아직 피로가 덜 쌓였어요! ${remainMin}분 후에 다시 오세요."`, 'info');
       } else {
-        const innAffinity = stateRef.current?.npcAffinity?.여관주인 ?? 0;
-        const innStaminaBonus = innAffinity >= 20 ? 1.0 : 0; // +1 stamina at 단골손님
+        const innAffinity = s?.npcAffinity?.여관주인 ?? 0;
+        const innStaminaBonus = innAffinity >= 20 ? 1.0 : 0;
         addMsg('🏨 미나: "편히 쉬고 가세요! 내일 퀘스트도 화이팅~"', 'info');
         addMsg(`💤 여관에서 휴식했습니다. 체력 어빌리티 +${0.5 + innStaminaBonus}!`, 'catch');
         grantAbility('체력', 0.5 + innStaminaBonus);
@@ -2437,11 +2463,11 @@ export default function App() {
         addMsg('💰 500G로 특별 휴식 가능! (!여관휴식) → 낚시 속도 10분 +20%', 'info');
       }
       setTimeout(() => checkNpcQuest('미나'), 0);
-    } else if (npcName === '철수') {
+    } else if (actionId === 'appearance') {
+      setShowAppearance(true);
+    } else if (actionId === 'ores') {
       const inv = stateRef.current?.oreInventory ?? {};
-      const lines = Object.entries(inv)
-        .filter(([, n]) => n > 0)
-        .map(([k, n]) => `${k} ${n}개`);
+      const lines = Object.entries(inv).filter(([, n]) => n > 0).map(([k, n]) => `${k} ${n}개`);
       if (lines.length > 0) {
         addMsg(`⛏ 철수: "현재 광석: ${lines.join(', ')}. 상점에서 팔 수 있어요!"`, 'info');
       } else {
@@ -2449,12 +2475,20 @@ export default function App() {
       }
       gainNpcAffinity('채굴사', 1);
       setTimeout(() => checkNpcQuest('철수'), 0);
-    } else if (npcName === '은행원') {
+    } else if (actionId === 'bank') {
       setShowBank(true);
       gainNpcAffinity('은행원', 1.5);
       setTimeout(() => checkNpcQuest('은행원'), 0);
     }
   }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, checkAndGrantAchievements, stateRef]);
+
+  const handleNpcInteract = useCallback((npcName) => {
+    playNpcInteract();
+    // 대화창 열기 + 첫 접촉 친밀도 소량 부여
+    const npcAffinityKey = npcName === '민준' ? '상인' : npcName === '수연' ? '요리사' : npcName === '미나' ? '여관주인' : npcName === '철수' ? '채굴사' : '은행원';
+    gainNpcAffinity(npcAffinityKey, 0.3);
+    setNpcDialog(npcName);
+  }, [gainNpcAffinity]);
 
   // ── Season/weather transition fade (must be before early returns per hook rules) ──
   const _currentSeasonForFade = getCurrentSeason();
@@ -2509,6 +2543,13 @@ export default function App() {
   const currentSeason = getCurrentSeason();
 
   const handleEnterRoom = (id) => { playEnterRoom(); setIndoorRoom(id); };
+
+  const handleZoneTransition = useCallback((newZone) => {
+    if (gameRef.current) gameRef.current.worldZone = newZone;
+    setActiveZone(newZone);
+    setActiveTiles(ZONE_TILES[newZone]);
+    setGs(prev => ({ ...prev, worldZone: newZone }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const handleExitRoom = () => {
     // Teleport player to the door exit position
     const door = DOOR_TRIGGERS.find(d => d.id === indoorRoom);
@@ -2547,6 +2588,7 @@ nickname={nickname}
           skinColor={gs.skinColor}
           gender={gs.gender}
           spotDecos={gs.spotDecos}
+          onZoneTransition={handleZoneTransition}
         />
         {/* IndoorCanvas overlays when inside a room */}
         {indoorRoom && (
@@ -2837,6 +2879,21 @@ nickname={nickname}
           setShowPrestigeConfirm(true);
         }}
       />
+
+      {/* NPC 대화 인터페이스 */}
+      {npcDialog && (
+        <NpcDialogue
+          npcKey={npcDialog}
+          affinity={gs.npcAffinity?.[
+            npcDialog === '민준' ? '상인' :
+            npcDialog === '수연' ? '요리사' :
+            npcDialog === '미나' ? '여관주인' :
+            npcDialog === '철수' ? '채굴사' : '은행원'
+          ] ?? 0}
+          onAction={(actionId) => handleNpcDialogAction(npcDialog, actionId)}
+          onClose={() => setNpcDialog(null)}
+        />
+      )}
 
       {/* Prestige confirm modal */}
       {showPrestigeConfirm && (

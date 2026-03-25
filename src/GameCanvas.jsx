@@ -3,16 +3,18 @@ import { TILE_SIZE, MAP_W, MAP_H, TILE, RODS, ORES, HERBS, randInt } from './gam
 import { playSwimSplash } from './soundManager';
 import { getSettings } from './settingsManager';
 import {
-  FISHING_CHAIRS, CHAIR_RANGE, MINE_ENTRANCE, FOREST_ZONE,
-  PLAYER_START_X, PLAYER_START_Y, pickOre, pickHerb,
-  COOKING_TX, COOKING_TY, DOOR_TRIGGERS,
+  CHAIR_RANGE, PLAYER_START_X, PLAYER_START_Y, pickOre, pickHerb,
+  COOKING_TX, COOKING_TY,
+  ZONE_CONNECTIONS, ZONE_TILES, ZONE_LABELS,
+  setActiveZone, getActiveZone, getActiveChairs, getActiveDoors,
+  getActiveForest, getActiveMineEntrance,
 } from './mapData';
 
 import { PW, PH, MAX_SPEED, FRICTION, ACCEL } from './game/constants';
 import { FARM_PLOT_POSITIONS, TREE_POSITIONS } from './game/decorationData';
 
 import {
-  getTile, canWalk,
+  getTile, canWalk, setActiveTiles,
   drawTile, drawFlowerPatch, drawTree, drawChair, drawSpotDecos,
   drawShopBuilding, drawBankBuilding, drawCookingBuilding, drawInnBuilding,
   drawFishingSign, drawGoldenPondSign, drawFreshwaterSign,
@@ -32,7 +34,7 @@ export default function GameCanvas({
   nickname, title, titleColor,
   otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, onNearActionChange,
   hairColor, bodyColor, skinColor, gender,
-  spotDecos,
+  spotDecos, onZoneTransition,
 }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange });
@@ -44,8 +46,11 @@ export default function GameCanvas({
   const onEnterRoomRef = useRef(onEnterRoom);
   const onNearDoorChangeRef = useRef(onNearDoorChange);
   const onNearActionChangeRef = useRef(onNearActionChange);
+  const onZoneTransitionRef = useRef(onZoneTransition);
   const nearDoorRef = useRef(null);
   const nearActionZoneRef = useRef(null);
+  const zoneCooldownRef = useRef(false);
+  const zoneLabelRef = useRef(null); // { text, expiry }
   const lastSplashRef = useRef(0);
   const hairColorRef = useRef(hairColor ?? '#5a3010');
   const bodyColorRef = useRef(bodyColor ?? '#5a7aaa');
@@ -58,6 +63,7 @@ export default function GameCanvas({
   useEffect(() => { onEnterRoomRef.current = onEnterRoom; });
   useEffect(() => { onNearDoorChangeRef.current = onNearDoorChange; });
   useEffect(() => { onNearActionChangeRef.current = onNearActionChange; });
+  useEffect(() => { onZoneTransitionRef.current = onZoneTransition; });
   useEffect(() => { hairColorRef.current = hairColor ?? '#5a3010'; }, [hairColor]);
   useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
   useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
@@ -243,8 +249,38 @@ export default function GameCanvas({
 
         const hasMarine = !!(gameRef.current?.marineGear);
         const nx = player.x + player.vx;
-        if (canWalk(nx, player.y, hasMarine)) player.x = Math.max(PW / 2, Math.min((MAP_W - 1) * TILE_SIZE - PW / 2, nx)); else player.vx = 0;
         const ny = player.y + player.vy;
+
+        // ── Zone edge transition ───────────────────────────────────────────
+        if (!zoneCooldownRef.current && player.state === 'idle') {
+          const currentZone = gameRef.current?.worldZone ?? '마을';
+          const conn = ZONE_CONNECTIONS[currentZone] ?? {};
+          const tx = Math.floor(player.x / TILE_SIZE);
+          const ty = Math.floor(player.y / TILE_SIZE);
+          let transDir = null;
+          if (player.vx < -0.1 && tx <= 0 && conn.west)           transDir = 'west';
+          else if (player.vx > 0.1 && tx >= MAP_W - 2 && conn.east)  transDir = 'east';
+          else if (player.vy < -0.1 && ty <= 0 && conn.north)        transDir = 'north';
+          else if (player.vy > 0.1 && ty >= MAP_H - 2 && conn.south) transDir = 'south';
+
+          if (transDir) {
+            const nextZone = conn[transDir];
+            setActiveZone(nextZone);
+            setActiveTiles(ZONE_TILES[nextZone]);
+            if (transDir === 'west')  player.x = (MAP_W - 3) * TILE_SIZE;
+            else if (transDir === 'east')  player.x = 3 * TILE_SIZE;
+            else if (transDir === 'north') player.y = (MAP_H - 3) * TILE_SIZE;
+            else if (transDir === 'south') player.y = 3 * TILE_SIZE;
+            player.vx = 0; player.vy = 0;
+            g.clickTarget = null;
+            zoneCooldownRef.current = true;
+            setTimeout(() => { zoneCooldownRef.current = false; }, 2000);
+            zoneLabelRef.current = { text: ZONE_LABELS[nextZone] ?? nextZone, expiry: Date.now() + 3000 };
+            onZoneTransitionRef.current?.(nextZone, transDir);
+          }
+        }
+
+        if (canWalk(nx, player.y, hasMarine)) player.x = Math.max(PW / 2, Math.min((MAP_W - 1) * TILE_SIZE - PW / 2, nx)); else player.vx = 0;
         if (canWalk(player.x, ny, hasMarine)) player.y = Math.max(PH / 2, Math.min((MAP_H - 1) * TILE_SIZE - PH / 2, ny)); else player.vy = 0;
 
         player.vx *= FRICTION;
@@ -307,7 +343,7 @@ export default function GameCanvas({
       // ── Door proximity ──
       {
         let closestDoor = null;
-        for (const dt of DOOR_TRIGGERS) {
+        for (const dt of getActiveDoors()) {
           if (Math.hypot(player.x - dt.wx, player.y - dt.wy) <= dt.range) {
             closestDoor = dt;
             break;
@@ -329,7 +365,7 @@ export default function GameCanvas({
       // ── Action zone proximity ──
       {
         let zone = null;
-        for (const c of FISHING_CHAIRS) {
+        for (const c of getActiveChairs()) {
           const cx = c.tx * TILE_SIZE + TILE_SIZE / 2;
           const cy = c.ty * TILE_SIZE + TILE_SIZE / 2;
           if (Math.hypot(player.x - cx, player.y - cy) <= CHAIR_RANGE) {
@@ -340,8 +376,8 @@ export default function GameCanvas({
         if (!zone) {
           const ptx = player.x / TILE_SIZE;
           const pty = player.y / TILE_SIZE;
-          if (ptx >= FOREST_ZONE.tx1 && ptx <= FOREST_ZONE.tx2 &&
-              pty >= FOREST_ZONE.ty1 && pty <= FOREST_ZONE.ty2) {
+          const fz = getActiveForest();
+          if (fz && ptx >= fz.tx1 && ptx <= fz.tx2 && pty >= fz.ty1 && pty <= fz.ty2) {
             zone = 'gather';
           }
         }
@@ -386,50 +422,52 @@ export default function GameCanvas({
         }
       }
 
-      // Buildings
-      const bsx = 1 * TILE_SIZE - camX, bsy = 1 * TILE_SIZE - camY;
-      if (bsx < W && bsx + 10 * TILE_SIZE > 0 && bsy < H && bsy + 11 * TILE_SIZE > 0)
-        drawShopBuilding(ctx, camX, camY);
+      // Buildings & signs (town-specific)
+      if (getActiveZone() === '마을') {
+        const bsx = 1 * TILE_SIZE - camX, bsy = 1 * TILE_SIZE - camY;
+        if (bsx < W && bsx + 10 * TILE_SIZE > 0 && bsy < H && bsy + 11 * TILE_SIZE > 0)
+          drawShopBuilding(ctx, camX, camY);
 
-      const ckx = COOKING_TX * TILE_SIZE - camX, cky = COOKING_TY * TILE_SIZE - camY;
-      if (ckx > -10 * TILE_SIZE && ckx < W + 2 * TILE_SIZE && cky > -10 * TILE_SIZE && cky < H)
-        drawCookingBuilding(ctx, camX, camY);
+        const ckx = COOKING_TX * TILE_SIZE - camX, cky = COOKING_TY * TILE_SIZE - camY;
+        if (ckx > -10 * TILE_SIZE && ckx < W + 2 * TILE_SIZE && cky > -10 * TILE_SIZE && cky < H)
+          drawCookingBuilding(ctx, camX, camY);
 
-      const innbx = 20 * TILE_SIZE - camX, innby = 1 * TILE_SIZE - camY;
-      if (innbx > -12 * TILE_SIZE && innbx < W + 2 * TILE_SIZE && innby > -10 * TILE_SIZE && innby < H)
-        drawInnBuilding(ctx, camX, camY);
+        const innbx = 20 * TILE_SIZE - camX, innby = 1 * TILE_SIZE - camY;
+        if (innbx > -12 * TILE_SIZE && innbx < W + 2 * TILE_SIZE && innby > -10 * TILE_SIZE && innby < H)
+          drawInnBuilding(ctx, camX, camY);
 
-      {
-        const sx = 13 * TILE_SIZE + TILE_SIZE / 2 - camX;
-        const sy = 18 * TILE_SIZE - camY;
-        if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
-          drawFishingSign(ctx, sx, sy);
-      }
+        {
+          const sx = 13 * TILE_SIZE + TILE_SIZE / 2 - camX;
+          const sy = 18 * TILE_SIZE - camY;
+          if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
+            drawFishingSign(ctx, sx, sy);
+        }
 
-      {
-        const bbx = 1 * TILE_SIZE - camX, bby = 14 * TILE_SIZE - camY;
-        if (bbx < W + 2 * TILE_SIZE && bbx + 9 * TILE_SIZE > 0 && bby < H + TILE_SIZE && bby + 4 * TILE_SIZE > 0)
-          drawBankBuilding(ctx, camX, camY);
-      }
+        {
+          const bbx = 1 * TILE_SIZE - camX, bby = 14 * TILE_SIZE - camY;
+          if (bbx < W + 2 * TILE_SIZE && bbx + 9 * TILE_SIZE > 0 && bby < H + TILE_SIZE && bby + 4 * TILE_SIZE > 0)
+            drawBankBuilding(ctx, camX, camY);
+        }
 
-      {
-        const sx = 19 * TILE_SIZE + TILE_SIZE / 2 - camX;
-        const sy = 15 * TILE_SIZE - camY;
-        if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
-          drawFreshwaterSign(ctx, sx, sy);
-      }
+        {
+          const sx = 19 * TILE_SIZE + TILE_SIZE / 2 - camX;
+          const sy = 15 * TILE_SIZE - camY;
+          if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
+            drawFreshwaterSign(ctx, sx, sy);
+        }
 
-      {
-        const sx = 38 * TILE_SIZE + TILE_SIZE / 2 - camX;
-        const sy = 8 * TILE_SIZE - camY;
-        if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
-          drawGoldenPondSign(ctx, sx, sy);
+        {
+          const sx = 38 * TILE_SIZE + TILE_SIZE / 2 - camX;
+          const sy = 8 * TILE_SIZE - camY;
+          if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
+            drawGoldenPondSign(ctx, sx, sy);
+        }
       }
 
       // Fishing chairs + spot decorations
       const localPlayer = gameRef.current?.player;
       const myDecos = spotDecosRef.current;
-      for (const c of FISHING_CHAIRS) {
+      for (const c of getActiveChairs()) {
         const cx = c.tx * TILE_SIZE + TILE_SIZE / 2;
         const cy = c.ty * TILE_SIZE + TILE_SIZE / 2;
         const occupied = (otherPlayersRef?.current ?? []).some(op =>
@@ -446,42 +484,51 @@ export default function GameCanvas({
         }
       }
 
-      // Trees (quality-aware: skip every other tree in low quality mode)
-      const quality = getSettings().canvasQuality;
-      for (let ti = 0; ti < TREE_POSITIONS.length; ti++) {
-        if (quality === 'low' && ti % 2 === 1) continue;
-        const tp = TREE_POSITIONS[ti];
-        const twx = tp.tx * TILE_SIZE - camX;
-        const twy = tp.ty * TILE_SIZE - camY;
-        if (twx > -60 && twx < W + 60 && twy > -80 && twy < H + 20)
-          drawTree(ctx, twx, twy);
+      // Trees (town-specific, quality-aware)
+      if (getActiveZone() === '마을') {
+        const quality = getSettings().canvasQuality;
+        for (let ti = 0; ti < TREE_POSITIONS.length; ti++) {
+          if (quality === 'low' && ti % 2 === 1) continue;
+          const tp = TREE_POSITIONS[ti];
+          const twx = tp.tx * TILE_SIZE - camX;
+          const twy = tp.ty * TILE_SIZE - camY;
+          if (twx > -60 && twx < W + 60 && twy > -80 && twy < H + 20)
+            drawTree(ctx, twx, twy);
+        }
       }
 
-      // Mine entrance
-      const mx = MINE_ENTRANCE.tx * TILE_SIZE - camX;
-      const my = MINE_ENTRANCE.ty * TILE_SIZE - camY;
-      if (mx > -6 * TILE_SIZE && mx < W && my > -5 * TILE_SIZE && my < H)
-        drawMineEntrance(ctx, mx, my);
+      // Mine entrance (town-specific)
+      {
+        const mineEnt = getActiveMineEntrance();
+        if (mineEnt) {
+          const mx = mineEnt.tx * TILE_SIZE - camX;
+          const my = mineEnt.ty * TILE_SIZE - camY;
+          if (mx > -6 * TILE_SIZE && mx < W && my > -5 * TILE_SIZE && my < H)
+            drawMineEntrance(ctx, mx, my);
+        }
+      }
 
       // Weather
       drawWeatherParticles(ctx, W, H, weatherParticlesRef, gameRef.current?.weather?.id);
 
-      // Area labels
-      ctx.font = 'bold 12px "Noto Sans KR", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      const fl = [14 * TILE_SIZE - camX, 16 * TILE_SIZE - camY];
-      if (fl[0] > 0 && fl[0] < W && fl[1] > 0 && fl[1] < H)
-        ctx.fillText('↓ 낚시터', fl[0], fl[1]);
-      const ml = [34 * TILE_SIZE - camX, 1 * TILE_SIZE - camY];
-      if (ml[0] > 0 && ml[0] < W && ml[1] > 0 && ml[1] < H)
-        ctx.fillText('광산 지역', ml[0], ml[1]);
-      const fml = [34 * TILE_SIZE - camX, 16 * TILE_SIZE - camY];
-      if (fml[0] > 0 && fml[0] < W && fml[1] > 0 && fml[1] < H)
-        ctx.fillText('🌱 농장', fml[0], fml[1]);
+      // Area labels (town-specific)
+      if (getActiveZone() === '마을') {
+        ctx.font = 'bold 12px "Noto Sans KR", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        const fl = [14 * TILE_SIZE - camX, 16 * TILE_SIZE - camY];
+        if (fl[0] > 0 && fl[0] < W && fl[1] > 0 && fl[1] < H)
+          ctx.fillText('↓ 낚시터', fl[0], fl[1]);
+        const ml = [34 * TILE_SIZE - camX, 1 * TILE_SIZE - camY];
+        if (ml[0] > 0 && ml[0] < W && ml[1] > 0 && ml[1] < H)
+          ctx.fillText('광산 지역', ml[0], ml[1]);
+        const fml = [34 * TILE_SIZE - camX, 16 * TILE_SIZE - camY];
+        if (fml[0] > 0 && fml[0] < W && fml[1] > 0 && fml[1] < H)
+          ctx.fillText('🌱 농장', fml[0], fml[1]);
+      }
 
-      // Farm crops
-      {
+      // Farm crops (town-specific)
+      if (getActiveZone() === '마을') {
         const now2 = Date.now();
         const farmPlots = gameRef.current?.farmPlots ?? [];
         farmPlots.forEach((plot, i) => {
@@ -505,6 +552,24 @@ export default function GameCanvas({
       drawFishParticles(ctx, gameRef.current, camX, camY);
       drawTreasureEffect(ctx, W, H, gameRef.current);
       drawQuestCompleteEffect(ctx, W, H, gameRef.current);
+
+      // Zone transition label
+      if (zoneLabelRef.current && Date.now() < zoneLabelRef.current.expiry) {
+        const progress = 1 - (zoneLabelRef.current.expiry - Date.now()) / 3000;
+        const alpha = progress < 0.7 ? 1 : (1 - (progress - 0.7) / 0.3);
+        const yOff = progress < 0.1 ? H / 2 + 20 * (1 - progress / 0.1) : H / 2;
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.font = 'bold 22px "Noto Sans KR", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillRect(W / 2 - 120, yOff - 28, 240, 42);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(zoneLabelRef.current.text, W / 2, yOff);
+        ctx.restore();
+      } else if (zoneLabelRef.current && Date.now() >= zoneLabelRef.current.expiry) {
+        zoneLabelRef.current = null;
+      }
 
       // Marine gear: water ripples + boat hull (before player)
       const marineGearKey = gameRef.current?.marineGear ?? null;

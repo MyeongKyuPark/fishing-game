@@ -128,6 +128,12 @@ export const DEFAULT_STATE = {
   ownedHats: [],
   outfit: '기본낚시복',
   ownedOutfits: ['기본낚시복'],
+  top: '기본상의',
+  ownedTops: ['기본상의'],
+  bottom: '기본하의',
+  ownedBottoms: ['기본하의'],
+  belt: null,
+  ownedBelts: [],
   activeRodSkin: '기본스킨',
   ownedRodSkins: ['기본스킨'],
   spotDecos: [],
@@ -169,6 +175,8 @@ export const DEFAULT_STATE = {
   seasonPassClaimedTiers: [],
   lastSeasonReset: '',
   equippedTitle: null,   // null = 자동 (최고 달성 칭호), string = 장착한 칭호 label
+  // World zones
+  worldZone: '마을',
 };
 
 export const SAVE_VERSION = 2;
@@ -279,6 +287,12 @@ export function loadSave(nickname) {
       ownedHats: s.ownedHats ?? [],
       outfit: s.outfit ?? '기본낚시복',
       ownedOutfits: s.ownedOutfits ?? ['기본낚시복'],
+      top: s.top ?? '기본상의',
+      ownedTops: s.ownedTops ?? ['기본상의'],
+      bottom: s.bottom ?? '기본하의',
+      ownedBottoms: s.ownedBottoms ?? ['기본하의'],
+      belt: s.belt ?? null,
+      ownedBelts: s.ownedBelts ?? [],
       activeRodSkin: s.activeRodSkin ?? '기본스킨',
       ownedRodSkins: s.ownedRodSkins ?? ['기본스킨'],
       spotDecos: s.spotDecos ?? [],
@@ -309,6 +323,7 @@ export function loadSave(nickname) {
       seasonPassClaimedTiers: s.seasonPassClaimedTiers ?? [],
       lastSeasonReset: s.lastSeasonReset ?? '',
       equippedTitle: s.equippedTitle ?? null,
+      worldZone: s.worldZone ?? '마을',
     };
   } catch { return DEFAULT_STATE; }
 }

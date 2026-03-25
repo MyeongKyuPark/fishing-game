@@ -255,9 +255,11 @@ export function isInMineZone(px, py) {
 }
 
 export function isInForestZone(px, py) {
+  const fz = getActiveForest();
+  if (!fz) return false;
   const tx = Math.floor(px / TILE_SIZE);
   const ty = Math.floor(py / TILE_SIZE);
-  return tx >= FOREST_ZONE.tx1 && tx <= FOREST_ZONE.tx2 && ty >= FOREST_ZONE.ty1 && ty <= FOREST_ZONE.ty2;
+  return tx >= fz.tx1 && tx <= fz.tx2 && ty >= fz.ty1 && ty <= fz.ty2;
 }
 
 export function nearInn(px, py) {
@@ -274,7 +276,7 @@ export function isOnWater(px, py) {
 
 export function nearestChair(px, py) {
   let nearest = null, minDist = Infinity;
-  for (const chair of FISHING_CHAIRS) {
+  for (const chair of getActiveChairs()) {
     const cx = chair.tx * TILE_SIZE + TILE_SIZE / 2;
     const cy = chair.ty * TILE_SIZE + TILE_SIZE / 2;
     const d = Math.hypot(px - cx, py - cy);
@@ -313,6 +315,294 @@ export function pickHerb() {
   const weighted = Object.entries(HERBS).map(([k]) => ({ f: k, w: weights[k] ?? 10 }));
   return weightedPick(weighted);
 }
+
+// ── Multi-Zone World Map System ──────────────────────────────────────────────
+
+function buildMapWest() {
+  const t = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILE.GRASS));
+
+  // Forest: cols 0-14, rows 0-20
+  for (let r = 0; r <= 20; r++)
+    for (let c = 0; c <= 14; c++)
+      t[r][c] = TILE.FOREST;
+
+  // River (north-south): cols 30-34
+  for (let r = 0; r < MAP_H; r++)
+    for (let c = 30; c <= 34; c++)
+      t[r][c] = TILE.WATER;
+
+  // Wooden bridge at rows 12-13 (path on sides, wood over river)
+  for (let c = 27; c <= 37; c++) { t[12][c] = TILE.PATH; t[13][c] = TILE.PATH; }
+  for (let c = 30; c <= 34; c++) { t[12][c] = TILE.WOOD; t[13][c] = TILE.WOOD; }
+
+  // Meadow lake: cols 50-58, rows 7-13
+  for (let r = 7; r <= 13; r++)
+    for (let c = 50; c <= 58; c++)
+      t[r][c] = TILE.WATER;
+
+  // Horizontal path: row 14 across map
+  for (let c = 0; c < MAP_W; c++) t[14][c] = TILE.PATH;
+
+  // Sand beach: rows 18-20
+  for (let r = 18; r <= 20; r++)
+    for (let c = 0; c < MAP_W; c++)
+      t[r][c] = TILE.SAND;
+
+  // Main dock: rows 21-22, cols 5-65
+  for (let r = 21; r <= 22; r++)
+    for (let c = 5; c <= 65; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Deep pier: rows 23-26, cols 35-45
+  for (let r = 23; r <= 26; r++)
+    for (let c = 35; c <= 45; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Water: rows 27+
+  for (let r = 27; r < MAP_H; r++)
+    for (let c = 0; c < MAP_W; c++)
+      t[r][c] = TILE.WATER;
+  for (let r = 23; r <= 26; r++) {
+    for (let c = 0; c < 35; c++) t[r][c] = TILE.WATER;
+    for (let c = 46; c < MAP_W; c++) t[r][c] = TILE.WATER;
+  }
+
+  // River flows through beach/dock into sea
+  for (let r = 18; r <= 26; r++)
+    for (let c = 30; c <= 34; c++)
+      t[r][c] = TILE.WATER;
+
+  // Scattered rocks
+  for (const [r, c] of [[4,20],[8,25],[11,42],[16,38],[3,55],[6,62],[10,67]])
+    if (t[r]?.[c] === TILE.GRASS) t[r][c] = TILE.STONE;
+
+  return t;
+}
+
+function buildMapEast() {
+  const t = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILE.STONE));
+
+  // Grassy valley: cols 15-44, rows 0-22
+  for (let r = 0; r <= 22; r++)
+    for (let c = 15; c <= 44; c++)
+      t[r][c] = TILE.GRASS;
+
+  // Main path: cols 27-29, rows 0-22
+  for (let r = 0; r <= 22; r++)
+    for (let c = 27; c <= 29; c++)
+      t[r][c] = TILE.PATH;
+
+  // Cave lake: cols 18-30, rows 7-16
+  for (let r = 7; r <= 16; r++)
+    for (let c = 18; c <= 30; c++)
+      t[r][c] = TILE.WATER;
+
+  // Forest patch: cols 48-63, rows 3-16
+  for (let r = 3; r <= 16; r++)
+    for (let c = 48; c <= 63; c++)
+      t[r][c] = TILE.FOREST;
+
+  // Sand beach: rows 18-20
+  for (let r = 18; r <= 20; r++)
+    for (let c = 0; c < MAP_W; c++)
+      if (t[r][c] !== TILE.WATER) t[r][c] = TILE.SAND;
+
+  // Coastal dock: rows 21-22, cols 10-60
+  for (let r = 21; r <= 22; r++)
+    for (let c = 10; c <= 60; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Deep pier: rows 23-26, cols 28-38
+  for (let r = 23; r <= 26; r++)
+    for (let c = 28; c <= 38; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Water: rows 27+
+  for (let r = 27; r < MAP_H; r++)
+    for (let c = 0; c < MAP_W; c++)
+      t[r][c] = TILE.WATER;
+  for (let r = 23; r <= 26; r++) {
+    for (let c = 0; c < 28; c++) t[r][c] = TILE.WATER;
+    for (let c = 39; c < MAP_W; c++) t[r][c] = TILE.WATER;
+  }
+
+  return t;
+}
+
+function buildMapNorth() {
+  const t = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILE.GRASS));
+
+  // Stone walls at corners/edges
+  for (let r = 0; r <= 7; r++) {
+    for (let c = 0; c <= 14; c++) t[r][c] = TILE.STONE;
+    for (let c = 56; c < MAP_W; c++) t[r][c] = TILE.STONE;
+  }
+  for (let r = 42; r < MAP_H; r++) {
+    for (let c = 0; c <= 9; c++) t[r][c] = TILE.STONE;
+    for (let c = 60; c < MAP_W; c++) t[r][c] = TILE.STONE;
+  }
+
+  // Mountain forest: cols 50-65, rows 0-22
+  for (let r = 0; r <= 22; r++)
+    for (let c = 50; c <= 65; c++)
+      t[r][c] = TILE.FOREST;
+
+  // Alpine lake: cols 22-44, rows 25-38
+  for (let r = 25; r <= 38; r++)
+    for (let c = 22; c <= 44; c++)
+      t[r][c] = TILE.WATER;
+
+  // Path to lake: cols 32-34, rows 0-25
+  for (let r = 0; r <= 25; r++)
+    for (let c = 32; c <= 34; c++)
+      t[r][c] = TILE.PATH;
+
+  // Lakeside path: rows 24 and 39
+  for (let c = 22; c <= 44; c++) { t[24][c] = TILE.PATH; t[39][c] = TILE.PATH; }
+
+  // Stone outcroppings
+  for (const [r, c] of [[12,5],[15,12],[10,48],[22,18],[40,30],[12,28],[18,42],[30,55]])
+    if (t[r]?.[c] === TILE.GRASS) t[r][c] = TILE.STONE;
+
+  // South edge sand (transition border with main map)
+  for (let c = 0; c < MAP_W; c++)
+    if (t[49]?.[c] === TILE.GRASS || t[49]?.[c] === TILE.PATH) t[49][c] = TILE.SAND;
+
+  return t;
+}
+
+function buildMapSouth() {
+  const t = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILE.WATER));
+
+  // Tropical island: cols 22-48, rows 15-32
+  for (let r = 15; r <= 32; r++)
+    for (let c = 22; c <= 48; c++)
+      t[r][c] = TILE.GRASS;
+
+  // Sandy beaches around island
+  for (let r = 13; r <= 34; r++)
+    for (let c = 20; c <= 50; c++) {
+      if (t[r][c] !== TILE.GRASS) {
+        const isEdge = r === 13 || r === 14 || r === 33 || r === 34
+          || c === 20 || c === 21 || c === 49 || c === 50;
+        if (isEdge) t[r][c] = TILE.SAND;
+      }
+    }
+
+  // Island forest: cols 25-36, rows 17-26
+  for (let r = 17; r <= 26; r++)
+    for (let c = 25; c <= 36; c++)
+      t[r][c] = TILE.FOREST;
+
+  // Island dock: rows 33-34, cols 32-38
+  for (let r = 33; r <= 34; r++)
+    for (let c = 32; c <= 38; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Island path: cols 35-36, rows 15-33
+  for (let r = 15; r <= 33; r++) { t[r][35] = TILE.PATH; t[r][36] = TILE.PATH; }
+
+  // North approach dock (from main map south edge): rows 0-4, cols 32-40
+  for (let r = 0; r <= 4; r++)
+    for (let c = 32; c <= 40; c++)
+      t[r][c] = TILE.WOOD;
+
+  return t;
+}
+
+// ── Zone Metadata ─────────────────────────────────────────────────────────────
+
+export const ZONE_TILES = {
+  '마을':    MAP_TILES,
+  '서쪽초원': buildMapWest(),
+  '동쪽절벽': buildMapEast(),
+  '북쪽고원': buildMapNorth(),
+  '남쪽심해': buildMapSouth(),
+};
+
+export const ZONE_LABELS = {
+  '마을':    '🏠 마을',
+  '서쪽초원': '🌾 서쪽 초원',
+  '동쪽절벽': '⛏ 동쪽 절벽',
+  '북쪽고원': '🏔 북쪽 고원',
+  '남쪽심해': '🌊 남쪽 심해',
+};
+
+export const ZONE_CONNECTIONS = {
+  '마을':    { west: '서쪽초원', east: '동쪽절벽', north: '북쪽고원', south: '남쪽심해' },
+  '서쪽초원': { east: '마을' },
+  '동쪽절벽': { west: '마을' },
+  '북쪽고원': { south: '마을' },
+  '남쪽심해': { north: '마을' },
+};
+
+const ZONE_CHAIRS = {
+  '마을': FISHING_CHAIRS,
+  '서쪽초원': [
+    // River fishing (north of bridge)
+    { tx: 26, ty: 11, zone: '강' }, { tx: 28, ty: 11, zone: '강' },
+    { tx: 35, ty: 11, zone: '강' }, { tx: 37, ty: 11, zone: '강' },
+    // Meadow lake (north edge)
+    { tx: 50, ty: 6, zone: '민물' }, { tx: 53, ty: 6, zone: '민물' },
+    { tx: 56, ty: 6, zone: '민물' }, { tx: 58, ty: 6, zone: '민물' },
+    // Main dock
+    { tx: 10, ty: 22, zone: '강' }, { tx: 16, ty: 22, zone: '강' },
+    { tx: 22, ty: 22, zone: '강' }, { tx: 28, ty: 22, zone: '강' },
+    { tx: 40, ty: 22, zone: '강' }, { tx: 46, ty: 22, zone: '강' },
+    { tx: 52, ty: 22, zone: '강' }, { tx: 58, ty: 22, zone: '강' },
+    // Deep pier
+    { tx: 37, ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 40, ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 43, ty: 26, seaFishing: true, zone: '바다' },
+  ],
+  '동쪽절벽': [
+    // Cave lake (north edge at row 6)
+    { tx: 20, ty: 6, zone: '민물' }, { tx: 24, ty: 6, zone: '민물' },
+    { tx: 28, ty: 6, zone: '민물' },
+    // Coastal dock
+    { tx: 12, ty: 22, zone: '바다' }, { tx: 18, ty: 22, zone: '바다' },
+    { tx: 24, ty: 22, zone: '바다' }, { tx: 30, ty: 22, zone: '바다' },
+    { tx: 36, ty: 22, zone: '바다' }, { tx: 42, ty: 22, zone: '바다' },
+    { tx: 48, ty: 22, zone: '바다' }, { tx: 54, ty: 22, zone: '바다' },
+    // Deep pier
+    { tx: 30, ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 34, ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 38, ty: 26, seaFishing: true, zone: '바다' },
+  ],
+  '북쪽고원': [
+    // Alpine lake (lakeside path at row 24)
+    { tx: 22, ty: 24, zone: '민물' }, { tx: 27, ty: 24, zone: '민물' },
+    { tx: 32, ty: 24, zone: '민물' }, { tx: 37, ty: 24, zone: '민물' },
+    { tx: 42, ty: 24, zone: '민물' }, { tx: 44, ty: 24, zone: '민물' },
+  ],
+  '남쪽심해': [
+    // Island dock
+    { tx: 32, ty: 34, zone: '바다' }, { tx: 35, ty: 34, zone: '바다' },
+    { tx: 38, ty: 34, zone: '바다' },
+    // North approach dock (deep sea)
+    { tx: 33, ty: 4, seaFishing: true, zone: '바다' },
+    { tx: 36, ty: 4, seaFishing: true, zone: '바다' },
+    { tx: 39, ty: 4, seaFishing: true, zone: '바다' },
+  ],
+};
+
+const ZONE_FOREST = {
+  '마을':    FOREST_ZONE,
+  '서쪽초원': { tx1: 0, ty1: 0, tx2: 14, ty2: 20 },
+  '동쪽절벽': { tx1: 48, ty1: 3, tx2: 63, ty2: 16 },
+  '북쪽고원': { tx1: 50, ty1: 0, tx2: 65, ty2: 22 },
+  '남쪽심해': { tx1: 25, ty1: 17, tx2: 36, ty2: 26 },
+};
+
+// ── Active Zone State (mutable module-level) ──────────────────────────────────
+let _activeZone = '마을';
+
+export function setActiveZone(zone) { _activeZone = zone; }
+export function getActiveZone() { return _activeZone; }
+export function getActiveChairs() { return ZONE_CHAIRS[_activeZone] ?? FISHING_CHAIRS; }
+export function getActiveDoors() { return _activeZone === '마을' ? DOOR_TRIGGERS : []; }
+export function getActiveForest() { return ZONE_FOREST[_activeZone] ?? null; }
+export function getActiveMineEntrance() { return _activeZone === '마을' ? MINE_ENTRANCE : null; }
 
 export function getFishingZone(px, py, marineGear, fishAbil) {
   const tx = Math.floor(px / TILE_SIZE);

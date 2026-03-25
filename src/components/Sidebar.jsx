@@ -3,7 +3,7 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   FARM_EXPANSION_PRICE, FARM_EXPANSION_SLOTS, FARM_MAX_EXPANSIONS,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
-  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE,
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, TOPS, BOTTOMS, BELTS, ROD_SKINS, SPOT_DECOS, FURNITURE,
   BAIT_RECIPES, DELIVERY_ORDER_POOL } from '../gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, doGradeUp, gradeRareBonus,
   SELL_ABILITY_PER_100G, ENHANCE_ABILITY_GAIN } from '../abilityData';
@@ -76,6 +76,7 @@ export default function Sidebar(props) {
 
   const [invFilter, setInvFilter] = useState('전체');
   const [equipPicker, setEquipPicker] = useState(null);
+  const [shopSection, setShopSection] = useState('낚시');
   const [buyToast, setBuyToast] = useState(null);
   const [settingsState, setSettingsState] = useState(() => getSettings());
   const [bgmVol, setBgmVolState] = useState(() => getBgmVolume());
@@ -472,12 +473,27 @@ export default function Sidebar(props) {
                       color={gs.hat ? HATS[gs.hat]?.color : undefined}
                       sub={gs.hat ? HATS[gs.hat]?.desc : null}
                     />
-                    <Slot slotKey="outfit" icon="🧥"
+                    <Slot icon="👕"
+                      label={gs.top !== '기본상의' ? TOPS[gs.top]?.name : null}
+                      color={gs.top !== '기본상의' ? TOPS[gs.top]?.color : undefined}
+                      sub={gs.top !== '기본상의' ? TOPS[gs.top]?.desc : null}
+                    />
+                    <Slot icon="🧥"
                       label={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.name : null}
                       color={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.color : undefined}
                       sub={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.desc : null}
                     />
-                    <Slot slotKey="ring" icon="💍"
+                    <Slot icon="👖"
+                      label={gs.bottom !== '기본하의' ? BOTTOMS[gs.bottom]?.name : null}
+                      color={gs.bottom !== '기본하의' ? BOTTOMS[gs.bottom]?.color : undefined}
+                      sub={gs.bottom !== '기본하의' ? BOTTOMS[gs.bottom]?.desc : null}
+                    />
+                    <Slot icon="🪢"
+                      label={gs.belt ? BELTS[gs.belt]?.name : null}
+                      color={gs.belt ? BELTS[gs.belt]?.color : undefined}
+                      sub={gs.belt ? BELTS[gs.belt]?.desc : null}
+                    />
+                    <Slot icon="💍"
                       label={gs.equippedJewelry?.ring ?? null}
                       color={JEWELRY_RECIPES[gs.equippedJewelry?.ring]?.color}
                       sub={gs.equippedJewelry?.ring ? JEWELRY_RECIPES[gs.equippedJewelry.ring]?.desc : null}
@@ -2083,8 +2099,40 @@ export default function Sidebar(props) {
               )}
             </div>
 
-            {/* ── Rods ── */}
-            <div className="section">
+            {/* ── 폴더 탭 네비게이션 ── */}
+            <div style={{ display: 'flex', gap: 4, padding: '0 16px 0 16px', marginBottom: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
+              {[
+                { id: '낚시',  icon: '🎣', label: '낚시' },
+                { id: '채굴',  icon: '⛏',  label: '채굴' },
+                { id: '생활',  icon: '🍳',  label: '생활' },
+                { id: '의류',  icon: '👔',  label: '의류' },
+                { id: '판매',  icon: '💰',  label: '판매' },
+              ].map(tab => {
+                const active = shopSection === tab.id;
+                return (
+                  <button key={tab.id} tabIndex={-1} onClick={() => setShopSection(tab.id)} style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '7px 13px',
+                    border: `1px solid ${active ? 'rgba(100,180,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
+                    borderBottom: active ? '1px solid #0f2035' : '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '8px 8px 0 0',
+                    background: active ? '#0f2035' : 'rgba(255,255,255,0.04)',
+                    color: active ? '#88ccff' : 'rgba(255,255,255,0.5)',
+                    fontSize: 12, fontWeight: active ? 700 : 400,
+                    cursor: 'pointer', whiteSpace: 'nowrap',
+                    transition: 'all 0.15s',
+                    marginBottom: active ? -1 : 0,
+                    position: 'relative', zIndex: active ? 1 : 0,
+                  }}>
+                    <span>{tab.icon}</span>
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ borderTop: '1px solid rgba(100,180,255,0.2)', marginBottom: 0 }} />
+
+            {shopSection === '낚시' && <div className="section">
               <div className="section-title">낚시대</div>
               {Object.entries(RODS).map(([key, rod]) => {
                 const owned = gs.ownedRods.includes(key);
@@ -2122,10 +2170,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Boots ── */}
-            <div className="section">
+            {shopSection === '생활' && <div className="section">
               <div className="section-title">신발 (이동속도)</div>
               {Object.entries(BOOTS).map(([key, boot]) => {
                 const owned = (gs.ownedBoots ?? ['기본신발']).includes(key);
@@ -2159,10 +2206,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Bait ── */}
-            <div className="section">
+            {shopSection === '낚시' && <div className="section">
               <div className="section-title">미끼</div>
               {Object.entries(BAIT).map(([key, bait]) => {
                 const isPerm = bait.type === 'permanent';
@@ -2192,10 +2238,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── DIY Bait Crafting ── */}
-            <div className="section">
+            {shopSection === '낚시' && <div className="section">
               <div className="section-title">🌿 미끼 DIY 제작</div>
               <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>허브 + 광석 조합으로 커스텀 미끼 제작</div>
               {Object.entries(BAIT_RECIPES).map(([key, recipe]) => {
@@ -2258,10 +2303,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Cookware ── */}
-            <div className="section">
+            {shopSection === '생활' && <div className="section">
               <div className="section-title">요리 도구</div>
               {Object.entries(COOKWARE).map(([key, cw]) => {
                 const owned = (gs.ownedCookware ?? []).includes(key);
@@ -2291,10 +2335,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Marine Gear ── */}
-            <div className="section">
+            {shopSection === '낚시' && <div className="section">
               <div className="section-title">🌊 해양 장비 (바다 낚시)</div>
               {Object.entries(MARINE_GEAR).map(([key, gear]) => {
                 const owned = (gs.ownedMarineGear ?? []).includes(key);
@@ -2328,10 +2371,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Pickaxes ── */}
-            <div className="section">
+            {shopSection === '채굴' && <div className="section">
               <div className="section-title">⛏ 곡괭이 (채굴 도구)</div>
               {Object.entries(PICKAXES).map(([key, px]) => {
                 const owned = (gs.ownedPickaxes ?? ['나무곡괭이']).includes(key);
@@ -2365,10 +2407,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Gather tools ── */}
-            <div className="section">
+            {shopSection === '채굴' && <div className="section">
               <div className="section-title">🌿 채집 도구</div>
               {Object.entries(GATHER_TOOLS).map(([key, gt]) => {
                 const owned = (gs.ownedGatherTools ?? ['맨손']).includes(key);
@@ -2402,10 +2443,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Hats ── */}
-            <div className="section">
+            {shopSection === '의류' && <div className="section">
               <div className="section-title">🎩 모자</div>
               {Object.entries(HATS).map(([key, hat]) => {
                 const owned = (gs.ownedHats ?? []).includes(key);
@@ -2445,10 +2485,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Fishing Outfits ── */}
-            <div className="section">
+            {shopSection === '의류' && <div className="section">
               <div className="section-title">🧥 낚시복</div>
               {Object.entries(FISHING_OUTFITS).map(([key, outfit]) => {
                 const owned = (gs.ownedOutfits ?? ['기본낚시복']).includes(key);
@@ -2497,10 +2536,144 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Rod Skins ── */}
-            <div className="section">
+            {shopSection === '의류' && <div className="section">
+              <div className="section-title">👕 상의</div>
+              {Object.entries(TOPS).map(([key, item]) => {
+                const owned = (gs.ownedTops ?? ['기본상의']).includes(key);
+                const equipped = gs.top === key;
+                const discount = 1 - getShopDiscount(gs.npcAffinity);
+                const price = Math.floor(item.price * discount);
+                const canAfford = gs.money >= price;
+                const hasMats = item.upgradeMats
+                  ? Object.entries(item.upgradeMats).every(([k, n]) => (gs.oreInventory[k] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = item.upgradeMats
+                  ? Object.entries(item.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ')
+                  : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: item.color, fontWeight: 700 }}>{item.icon} {item.name}</span>
+                      {equipped && <span className="badge">착용됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">{price > 0 ? `${price}G` : '무료'}{matsStr ? ` + ${matsStr}` : ''} · {item.desc}</div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => setGs(prev => ({ ...prev, top: key }))}>착용</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                            onClick={() => {
+                              if (!canBuy) return;
+                              const newOre = { ...gs.oreInventory };
+                              if (item.upgradeMats) Object.entries(item.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
+                              setGs(prev => ({ ...prev, money: prev.money - price, ownedTops: [...(prev.ownedTops ?? []), key], top: key, oreInventory: newOre }));
+                              gainNpcAffinity('상인', 1);
+                              addMsg(`👕 ${item.name} 구매!`, 'catch');
+                            }}>
+                            {canBuy ? `${price}G` : (!canAfford ? '💰 부족' : '재료 부족')}
+                          </button>
+                      }
+                      {owned && equipped && key !== '기본상의' && <button tabIndex={-1} className="btn-eq" style={{ opacity: 0.5 }} onClick={() => setGs(prev => ({ ...prev, top: '기본상의' }))}>탈착</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>}
+
+            {shopSection === '의류' && <div className="section">
+              <div className="section-title">👖 하의</div>
+              {Object.entries(BOTTOMS).map(([key, item]) => {
+                const owned = (gs.ownedBottoms ?? ['기본하의']).includes(key);
+                const equipped = gs.bottom === key;
+                const discount = 1 - getShopDiscount(gs.npcAffinity);
+                const price = Math.floor(item.price * discount);
+                const canAfford = gs.money >= price;
+                const hasMats = item.upgradeMats
+                  ? Object.entries(item.upgradeMats).every(([k, n]) => (gs.oreInventory[k] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = item.upgradeMats
+                  ? Object.entries(item.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ')
+                  : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: item.color, fontWeight: 700 }}>{item.icon} {item.name}</span>
+                      {equipped && <span className="badge">착용됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">{price > 0 ? `${price}G` : '무료'}{matsStr ? ` + ${matsStr}` : ''} · {item.desc}</div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => setGs(prev => ({ ...prev, bottom: key }))}>착용</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                            onClick={() => {
+                              if (!canBuy) return;
+                              const newOre = { ...gs.oreInventory };
+                              if (item.upgradeMats) Object.entries(item.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
+                              setGs(prev => ({ ...prev, money: prev.money - price, ownedBottoms: [...(prev.ownedBottoms ?? []), key], bottom: key, oreInventory: newOre }));
+                              gainNpcAffinity('상인', 1);
+                              addMsg(`👖 ${item.name} 구매!`, 'catch');
+                            }}>
+                            {canBuy ? `${price}G` : (!canAfford ? '💰 부족' : '재료 부족')}
+                          </button>
+                      }
+                      {owned && equipped && key !== '기본하의' && <button tabIndex={-1} className="btn-eq" style={{ opacity: 0.5 }} onClick={() => setGs(prev => ({ ...prev, bottom: '기본하의' }))}>탈착</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>}
+
+            {shopSection === '의류' && <div className="section">
+              <div className="section-title">🪢 벨트</div>
+              {Object.entries(BELTS).map(([key, item]) => {
+                const owned = (gs.ownedBelts ?? []).includes(key);
+                const equipped = gs.belt === key;
+                const discount = 1 - getShopDiscount(gs.npcAffinity);
+                const price = Math.floor(item.price * discount);
+                const canAfford = gs.money >= price;
+                const hasMats = item.upgradeMats
+                  ? Object.entries(item.upgradeMats).every(([k, n]) => (gs.oreInventory[k] || 0) >= n)
+                  : true;
+                const canBuy = canAfford && hasMats;
+                const matsStr = item.upgradeMats
+                  ? Object.entries(item.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ')
+                  : null;
+                return (
+                  <div key={key} className={`rod-card ${equipped ? 'equipped' : ''}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: item.color, fontWeight: 700 }}>{item.icon} {item.name}</span>
+                      {equipped && <span className="badge">장착됨</span>}
+                      {owned && !equipped && <span className="badge owned">보유</span>}
+                    </div>
+                    <div className="rod-meta">{price > 0 ? `${price}G` : '무료'}{matsStr ? ` + ${matsStr}` : ''} · {item.desc}</div>
+                    <div style={{ marginTop: 6 }}>
+                      {owned
+                        ? (!equipped && <button tabIndex={-1} className="btn-eq" onClick={() => setGs(prev => ({ ...prev, belt: key }))}>장착</button>)
+                        : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
+                            onClick={() => {
+                              if (!canBuy) return;
+                              const newOre = { ...gs.oreInventory };
+                              if (item.upgradeMats) Object.entries(item.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
+                              setGs(prev => ({ ...prev, money: prev.money - price, ownedBelts: [...(prev.ownedBelts ?? []), key], belt: key, oreInventory: newOre }));
+                              gainNpcAffinity('상인', 1);
+                              addMsg(`🪢 ${item.name} 구매!`, 'catch');
+                            }}>
+                            {canBuy ? `${price}G` : (!canAfford ? '💰 부족' : '재료 부족')}
+                          </button>
+                      }
+                      {owned && equipped && <button tabIndex={-1} className="btn-eq" style={{ opacity: 0.5 }} onClick={() => setGs(prev => ({ ...prev, belt: null }))}>탈착</button>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>}
+
+            {shopSection === '낚시' && <div className="section">
               <div className="section-title">🎨 낚싯대 스킨</div>
               {Object.entries(ROD_SKINS).filter(([key, skin]) => !skin.questOnly || (gs.ownedRodSkins ?? []).includes(key)).map(([key, skin]) => {
                 const owned = (gs.ownedRodSkins ?? ['기본스킨']).includes(key);
@@ -2545,10 +2718,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Spot Decorations ── */}
-            <div className="section">
+            {shopSection === '낚시' && <div className="section">
               <div className="section-title">🪑 낚시터 꾸미기</div>
               {Object.entries(SPOT_DECOS).map(([key, deco]) => {
                 const owned = (gs.spotDecos ?? []).includes(key) || key === '기본의자';
@@ -2578,10 +2750,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Pet eggs ── */}
-            <div className="section">
+            {shopSection === '생활' && <div className="section">
               <div className="section-title">🥚 펫 에그</div>
               {Object.entries(PETS).map(([key, pet]) => {
                 const egg = (gs.petEggs ?? {})[key];
@@ -2624,10 +2795,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Sell ore ── */}
-            <div className="section">
+            {shopSection === '판매' && <div className="section">
               <div className="section-title">광석 판매</div>
               {Object.entries(gs.oreInventory ?? {}).every(([, n]) => n === 0)
                 ? <div className="empty">판매할 광석 없음</div>
@@ -2671,10 +2841,9 @@ export default function Sidebar(props) {
                     })}
                   </div>
               }
-            </div>
+            </div>}
 
-            {/* ── Sell herbs ── */}
-            <div className="section">
+            {shopSection === '판매' && <div className="section">
               <div className="section-title">허브 판매</div>
               {Object.keys(gs.herbInventory ?? {}).filter(k => (gs.herbInventory[k] ?? 0) > 0).length === 0
                 ? <div className="empty">판매할 허브 없음</div>
@@ -2717,10 +2886,9 @@ export default function Sidebar(props) {
                     })}
                   </div>
               }
-            </div>
+            </div>}
 
-            {/* ── Sell fish ── */}
-            <div className="section">
+            {shopSection === '판매' && <div className="section">
               <div className="section-title">물고기 판매</div>
               {gs.fishInventory.length === 0
                 ? <div className="empty">판매할 물고기 없음</div>
@@ -2779,10 +2947,9 @@ export default function Sidebar(props) {
                     })}
                   </>
               }
-            </div>
+            </div>}
 
-            {/* ── Delivery Orders ── */}
-            {(() => {
+            {shopSection === '판매' && (() => {
               const today = new Date().toDateString();
               let orders = gs.deliveryOrders ?? [];
               // Generate new orders daily
@@ -2902,8 +3069,7 @@ export default function Sidebar(props) {
               );
             })()}
 
-            {/* ── Buy seeds ── */}
-            <div className="section">
+            {shopSection === '생활' && <div className="section">
               <div className="section-title">🌱 씨앗 구매</div>
               {Object.entries(SEEDS).map(([key, sd]) => {
                 const discount = getShopDiscount(gs.npcAffinity);
@@ -2940,10 +3106,9 @@ export default function Sidebar(props) {
                   </div>
                 );
               })}
-            </div>
+            </div>}
 
-            {/* ── Pet food ── */}
-            <div className="section">
+            {shopSection === '생활' && <div className="section">
               <div className="section-title">🍖 펫 간식</div>
               {!gs.activePet ? (
                 <div className="empty">활성 펫이 없습니다. 펫을 장착하세요.</div>
@@ -2997,10 +3162,9 @@ export default function Sidebar(props) {
                   );
                 });
               })()}
-            </div>
+            </div>}
 
-            {/* ── Sell crops ── */}
-            <div className="section">
+            {shopSection === '판매' && <div className="section">
               <div className="section-title">🌾 작물 판매</div>
               {Object.entries(gs.cropInventory ?? {}).filter(([, n]) => n > 0).length === 0
                 ? <div className="empty">판매할 작물 없음 (농장에서 수확)</div>
@@ -3043,7 +3207,7 @@ export default function Sidebar(props) {
                     })}
                   </div>
               }
-            </div>
+            </div>}
           </div>
         </div>
       )}
