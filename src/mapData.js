@@ -594,6 +594,16 @@ const ZONE_FOREST = {
   '남쪽심해': { tx1: 25, ty1: 17, tx2: 36, ty2: 26 },
 };
 
+// ── Zone Bonuses ─────────────────────────────────────────────────────────────
+// Passive bonuses applied when the player is in each world zone
+export const ZONE_BONUSES = {
+  '마을':    {},
+  '서쪽초원': { herbMult: 1.4, fishSellMult: 0.95 },          // lush meadow: +40% herb yield, -5% fish sell (no ocean)
+  '동쪽절벽': { oreMult: 1.3, mineTimeReduction: 0.08 },       // mineral cliffs: +30% ore yield, -8% mining time
+  '북쪽고원': { herbMult: 1.2, oreMult: 1.15, rarityBonus: 0.05 }, // highland: herb/ore/rarity bonus
+  '남쪽심해': { fishSellMult: 1.25, rarityBonus: 0.08 },       // deep sea: +25% fish sell price, +8% rare chance
+};
+
 // ── Active Zone State (mutable module-level) ──────────────────────────────────
 let _activeZone = '마을';
 

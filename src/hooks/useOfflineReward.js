@@ -3,6 +3,8 @@ import { useEffect } from 'react';
 import { loadSave, checkDailyBonus, getDailyQuests, SAVE_VERSION, saveKey } from './useGameState';
 import { FURNITURE } from '../gameData';
 import { getActiveTitleBonus } from '../titleData';
+import { setActiveZone, ZONE_TILES } from '../mapData';
+import { setActiveTiles } from '../canvas/drawMap';
 
 export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef }) {
   useEffect(() => {
@@ -48,6 +50,11 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
     const titleOffBonus = getActiveTitleBonus(saved).offlineBonus ?? 0;
     const offlineMult = innOffMult * bankOffMult * furnitureOffMult * (1 + titleOffBonus);
     const offlineReward = Math.floor(effectiveMins * 10 * offlineMult);
+    // Restore zone module state from save (prevents blank map on reload)
+    const savedZone = base.worldZone ?? '마을';
+    setActiveZone(savedZone);
+    setActiveTiles(ZONE_TILES[savedZone] ?? ZONE_TILES['마을']);
+
     if (bonus > 0) {
       const bonusAchStats = { ...baseAchStats, maxMoney: Math.max(baseAchStats.maxMoney ?? 0, saved.money + bonus) };
       setTimeout(() => checkAndGrantAchievementsRef?.current?.(bonusAchStats), 600);

@@ -3,6 +3,7 @@ import MiniMap from '../MiniMap';
 import Joystick from '../Joystick';
 import { RODS, FISH } from '../gameData';
 import { MINE_DEPTH_REQ, MINE_DEPTH_TIME } from '../hooks/useGameState';
+import { ZONE_LABELS } from '../mapData';
 
 export default function TopBar({
   gs, setGs, nickname, myTitle, roomTitle, weather, currentSeason, activity, isOnline,
@@ -38,6 +39,11 @@ export default function TopBar({
         )}
         {weather && (
           <div className="hud-chip" style={{ fontSize: 11 }}>{weather.icon} {weather.label}</div>
+        )}
+        {gs.worldZone && gs.worldZone !== '마을' && (
+          <div className="hud-chip" style={{ fontSize: 11, color: '#a8e8ff', background: 'rgba(0,80,140,0.4)' }}>
+            {ZONE_LABELS[gs.worldZone] ?? gs.worldZone}
+          </div>
         )}
         {!isOnline && (
           <div className="hud-chip" style={{ fontSize: 11, color: '#ff8888', background: 'rgba(80,0,0,0.5)' }}>📵 오프라인</div>

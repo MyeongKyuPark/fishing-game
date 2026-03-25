@@ -449,6 +449,41 @@ export const ZONE_FISH = {
     { f:'황금붕어', w:40 }, { f:'연어', w:25 }, { f:'금눈돔', w:20 },
     { f:'감성돔', w:10 }, { f:'용고기', w:5 },
   ],
+
+  // ── World-zone specific tables ─────────────────────────────────────────────
+  // 서쪽초원 river: clear stream fish, no sea fish
+  '서쪽초원_강': [
+    { f:'피라미', w:35 }, { f:'붕어', w:25 }, { f:'잉어', w:20 },
+    { f:'미꾸라지', w:12 }, { f:'메기', w:5 }, { f:'황금붕어', w:3 },
+  ],
+  // 서쪽초원 meadow lake: freshwater with slightly better catch
+  '서쪽초원_민물': [
+    { f:'붕어', w:28 }, { f:'잉어', w:22 }, { f:'피라미', w:20 },
+    { f:'메기', w:15 }, { f:'황금붕어', w:10 }, { f:'연어', w:5 },
+  ],
+  // 동쪽절벽 coastal: rough-water sea fish with rare cliff species
+  '동쪽절벽_바다': [
+    { f:'오징어', w:20 }, { f:'낙지', w:18 }, { f:'광어', w:15 },
+    { f:'참치', w:12 }, { f:'해마', w:10 }, { f:'황새치', w:8 },
+    { f:'전갱이', w:10 }, { f:'부시리', w:7 },
+  ],
+  // 동쪽절벽 cave lake: mineral-rich freshwater
+  '동쪽절벽_민물': [
+    { f:'잉어', w:30 }, { f:'메기', w:25 }, { f:'뱀장어', w:20 },
+    { f:'우럭', w:15 }, { f:'감성돔', w:7 }, { f:'황금붕어', w:3 },
+  ],
+  // 북쪽고원 alpine lake: cold-water mountain fish
+  '북쪽고원_민물': [
+    { f:'빙어', w:35 }, { f:'연어', w:25 }, { f:'붕어', w:20 },
+    { f:'피라미', w:12 }, { f:'황금붕어', w:5 }, { f:'금눈돔', w:3 },
+  ],
+  // 남쪽심해 open ocean: deep-sea rare fish, high-value
+  '남쪽심해_바다': [
+    { f:'광어', w:18 }, { f:'참치', w:15 }, { f:'개복치', w:12 },
+    { f:'황새치', w:12 }, { f:'달빛가오리', w:10 }, { f:'보석복어', w:8 },
+    { f:'용고기', w:8 }, { f:'고대어', w:7 }, { f:'고대철갑상어', w:5 },
+    { f:'타이드헤이븐리바이어던', w:2 }, { f:'용아귀', w:3 },
+  ],
 };
 
 export const FISHING_ZONES = {

@@ -27,7 +27,7 @@ import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
 import { getTitle, getActiveTitleBonus, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
-import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm, setActiveZone, ZONE_TILES } from './mapData';
+import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm, setActiveZone, ZONE_TILES, ZONE_BONUSES, getActiveZone } from './mapData';
 import { setActiveTiles } from './canvas/drawMap';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
 import { PETS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
@@ -687,12 +687,23 @@ export default function App() {
     // Zone-based fish table selection
     const zone = gameRef.current?.fishingZone ?? '강';
     const zoneDef = FISHING_ZONES[zone];
+    const worldZone = getActiveZone();
     let table;
-    if (zone === '심해' || zone === '민물' || zone === '바다' || zone === '황금연못') {
+    // Check world-zone specific table first, then fall back to generic zone table
+    const worldZoneKey = `${worldZone}_${zone}`;
+    if (ZONE_FISH[worldZoneKey]) {
+      table = ZONE_FISH[worldZoneKey];
+    } else if (zone === '심해' || zone === '민물' || zone === '바다' || zone === '황금연못') {
       table = ZONE_FISH[zone] ?? getAbilityFishTable(fishAbil);
     } else {
       // '강' — use normal ability-gated table
       table = getAbilityFishTable(fishAbil);
+    }
+
+    // World-zone rarity bonus (남쪽심해, 북쪽고원)
+    const worldZoneBonus = ZONE_BONUSES[worldZone] ?? {};
+    if (worldZoneBonus.rarityBonus) {
+      table = applyBoosts(table, { 희귀: 1 + worldZoneBonus.rarityBonus, 전설: 1 + worldZoneBonus.rarityBonus * 1.5, 신화: 1 + worldZoneBonus.rarityBonus * 2 });
     }
 
     // Grade rare bonus — boost rare/legendary/mythic weights
@@ -837,7 +848,8 @@ export default function App() {
     const beltSellBonus = s?.belt ? (1 + (BELTS[s.belt]?.bonus?.sellBonus ?? 0)) : 1.0;
     const titleBonusObj = getActiveTitleBonus(s);
     const titleSellBonus = 1 + (titleBonusObj.sellBonus ?? 0) + (titleBonusObj.fishSellBonus ?? 0);
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus * hatSellBonus * outfitSellBonus * topSellBonus * bottomSellBonus * beltSellBonus * titleSellBonus * furnitureSellBonus);
+    const worldZoneSellBonus = worldZoneBonus.fishSellMult ?? 1.0;
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus * hatSellBonus * outfitSellBonus * topSellBonus * bottomSellBonus * beltSellBonus * titleSellBonus * furnitureSellBonus * worldZoneSellBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -1112,23 +1124,26 @@ export default function App() {
   }, [resistanceGame, addMsg]);
 
   const onOreMined = useCallback((oreName) => {
+    // World-zone ore yield bonus (동쪽절벽 ×1.3, 북쪽고원 ×1.15)
+    const oreZoneBon = ZONE_BONUSES[getActiveZone()] ?? {};
+    const oreCount = (oreZoneBon.oreMult && Math.random() < (oreZoneBon.oreMult - 1)) ? 2 : 1;
     setGs(prev => {
       const prevStats = prev.achStats ?? {};
-      const newOreLog = { ...(prev.oreLog ?? {}), [oreName]: ((prev.oreLog ?? {})[oreName] ?? 0) + 1 };
+      const newOreLog = { ...(prev.oreLog ?? {}), [oreName]: ((prev.oreLog ?? {})[oreName] ?? 0) + oreCount };
       const oreSpecies = Object.keys(newOreLog).filter(k => newOreLog[k] > 0).length;
-      const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + 1, oreSpecies };
+      const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + oreCount, oreSpecies };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       const newSpXP2 = (prev.seasonPassXP ?? 0) + 1;
       return {
         ...prev,
-        oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + 1 },
+        oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + oreCount },
         oreLog: newOreLog,
         achStats: updatedStats,
         seasonPassXP: newSpXP2,
         seasonPassTier: Math.min(10, Math.floor(newSpXP2 / 50)),
       };
     });
-    addMsg(`⛏ ${oreName} 1개 채굴!`, 'mine');
+    addMsg(`⛏ ${oreName} ${oreCount}개 채굴!${oreCount > 1 ? ' (광물이 풍부한 지역!)' : ''}`, 'mine');
     playOreMined();
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `+${oreName}`, age: 0, color: ORES[oreName]?.color ?? '#fa4' };
@@ -1188,20 +1203,23 @@ export default function App() {
   }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkAndGrantAchievements, miningMinigame]);
 
   const onHerbGathered = useCallback((herbName) => {
+    // World-zone herb yield bonus (서쪽초원 ×1.4, 북쪽고원 ×1.2)
+    const zoneBon = ZONE_BONUSES[getActiveZone()] ?? {};
+    const herbCount = (zoneBon.herbMult && Math.random() < (zoneBon.herbMult - 1)) ? 2 : 1;
     setGs(prev => {
       const prevStats = prev.achStats ?? {};
-      const newHerbLog = { ...(prev.herbLog ?? {}), [herbName]: ((prev.herbLog ?? {})[herbName] ?? 0) + 1 };
+      const newHerbLog = { ...(prev.herbLog ?? {}), [herbName]: ((prev.herbLog ?? {})[herbName] ?? 0) + herbCount };
       const herbSpecies = Object.keys(newHerbLog).filter(k => newHerbLog[k] > 0).length;
-      const updatedStats = { ...prevStats, herbGathered: (prevStats.herbGathered ?? 0) + 1, herbSpecies };
+      const updatedStats = { ...prevStats, herbGathered: (prevStats.herbGathered ?? 0) + herbCount, herbSpecies };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       return {
         ...prev,
-        herbInventory: { ...(prev.herbInventory ?? {}), [herbName]: ((prev.herbInventory ?? {})[herbName] || 0) + 1 },
+        herbInventory: { ...(prev.herbInventory ?? {}), [herbName]: ((prev.herbInventory ?? {})[herbName] || 0) + herbCount },
         herbLog: newHerbLog,
         achStats: updatedStats,
       };
     });
-    addMsg(`🌿 ${herbName} 1개 채집!`, 'catch');
+    addMsg(`🌿 ${herbName} ${herbCount}개 채집!${herbCount > 1 ? ' (풍요로운 지역 보너스!)' : ''}`, 'catch');
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `+${herbName}`, age: 0, color: HERBS[herbName]?.color ?? '#8c4' };
     grantAbility('체력', 0.1);
@@ -1542,7 +1560,8 @@ export default function App() {
       const topMineMult = TOPS[s.top]?.bonus?.mineTimeMult ?? 1.0;
       const bottomMineMult = BOTTOMS[s.bottom]?.bonus?.mineTimeMult ?? 1.0;
       const titleMineMult = getActiveTitleBonus(s).mineTimeMult ?? 1.0;
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * topMineMult * bottomMineMult * titleMineMult);
+      const worldZoneMineReduction = ZONE_BONUSES[getActiveZone()]?.mineTimeReduction ?? 0;
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * topMineMult * bottomMineMult * titleMineMult * (1 - worldZoneMineReduction));
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();
