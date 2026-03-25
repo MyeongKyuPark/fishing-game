@@ -848,14 +848,12 @@ export default function App() {
     const seaBonus = zoneDef?.seaBonus ?? (gameRef.current?.player?.seaFishing ? 1.5 : 1.0);
     const petSellBonus = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
     const jobSellBonus = 1 + (JOBS[s?.selectedJob]?.bonus?.sellBonus ?? 0);
-    const hatSellBonus = 1 + (HATS[s?.hat]?.bonus?.sellBonus ?? 0);
-    const outfitSellBonus = 1 + (FISHING_OUTFITS[s?.outfit]?.bonus?.sellBonus ?? 0);
-    const furnitureSellBonus = 1 + (s?.cottage?.furniture ?? []).reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.sellBonus ?? 0), 0);
     const seasonPriceBonus = 1 + (getCurrentSeason()?.fishPriceBonus ?? 0);
     const srvSellBonus = (srvEvent?.type === 'sellBonus') ? (1 + (srvEvent.effectValue ?? 0.2)) : 1.0;
     const prestigeSellBonus = 1 + (s?.prestigePermanentSellBonus ?? 0);
     const hatSellBonus = 1 + (HATS[s?.hat]?.bonus?.sellBonus ?? 0);
     const outfitSellBonus = 1 + (FISHING_OUTFITS[s?.outfit]?.bonus?.sellBonus ?? 0);
+    const furnitureSellBonus = 1 + (s?.cottage?.furniture ?? []).reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.sellBonus ?? 0), 0);
     const topSellBonus = 1 + (TOPS[s?.top]?.bonus?.sellBonus ?? 0);
     const bottomSellBonus = 1 + (BOTTOMS[s?.bottom]?.bonus?.sellBonus ?? 0);
     const beltSellBonus = s?.belt ? (1 + (BELTS[s.belt]?.bonus?.sellBonus ?? 0)) : 1.0;
