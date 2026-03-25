@@ -1,4 +1,5 @@
 import { PH } from '../game/constants';
+import { ROD_SKINS, HATS } from '../gameData';
 
 export function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hairColor, bodyColor, skinColor, gender, marineGear = null, equippedItems = {}) {
   const { facing, state, activityProgress } = player;
@@ -9,6 +10,9 @@ export function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hai
   const necklace = equippedItems.necklace;
   const gatherTool = equippedItems.gatherTool ?? '맨손';
   const pickaxeType = equippedItems.pickaxe ?? '나무곡괭이';
+  const hatKey = equippedItems.hat ?? null;
+  const rodSkinKey = equippedItems.activeRodSkin ?? '기본스킨';
+  const rodColor = ROD_SKINS[rodSkinKey]?.color ?? '#7a5020';
   const isSea = !!(player.seaFishing && marineGear);
   const now = Date.now();
 
@@ -171,6 +175,65 @@ export function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hai
   ctx.fillStyle = 'rgba(255,200,120,0.18)';
   ctx.beginPath(); ctx.arc(px - 3, headY - 8, 5, 0, Math.PI * 2); ctx.fill();
 
+  // ── Hat drawing ────────────────────────────────────────────────────────────
+  if (hatKey && !isScuba && !isBoat && HATS[hatKey]) {
+    const hColor = HATS[hatKey].color;
+    const hatTop = headY - 12;
+    if (hatKey === '밀짚모자') {
+      // wide brim + dome
+      ctx.fillStyle = hColor;
+      ctx.beginPath(); ctx.ellipse(px, headY - 9, 17, 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#b89030';
+      ctx.beginPath(); ctx.ellipse(px, headY - 9, 17, 4, 0, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = hColor;
+      ctx.beginPath(); ctx.ellipse(px, hatTop - 1, 10, 7, 0, Math.PI, 0); ctx.fill();
+      ctx.strokeStyle = '#907020'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(px, headY - 9, 17, 4, 0, 0, Math.PI * 2); ctx.stroke();
+    } else if (hatKey === '낚시캡') {
+      // baseball cap
+      ctx.fillStyle = hColor;
+      ctx.beginPath(); ctx.ellipse(px, hatTop, 11, 7, 0, Math.PI, 0); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(px, headY - 9, 11, 3, 0, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = '#2255aa';
+      ctx.beginPath(); ctx.moveTo(px - 2, headY - 9); ctx.lineTo(px + 14, headY - 10); ctx.lineTo(px + 12, headY - 6); ctx.lineTo(px - 2, headY - 6); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#1a3a88'; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.ellipse(px, hatTop, 11, 7, 0, Math.PI, 0); ctx.stroke();
+    } else if (hatKey === '광부헬멧') {
+      // hard hat with light
+      ctx.fillStyle = hColor;
+      ctx.beginPath(); ctx.ellipse(px, hatTop, 13, 8, 0, Math.PI, 0); ctx.fill();
+      ctx.beginPath(); ctx.rect(px - 13, headY - 9, 26, 3); ctx.fill();
+      ctx.strokeStyle = '#cc9900'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(px, hatTop, 13, 8, 0, Math.PI, 0); ctx.stroke();
+      ctx.beginPath(); ctx.rect(px - 13, headY - 9, 26, 3); ctx.stroke();
+      // lamp
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.arc(px, hatTop - 1, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,180,0.8)';
+      ctx.beginPath(); ctx.arc(px, hatTop - 1, 2, 0, Math.PI * 2); ctx.fill();
+    } else if (hatKey === '왕관') {
+      // crown with gems
+      ctx.fillStyle = hColor;
+      ctx.beginPath();
+      ctx.moveTo(px - 12, headY - 8);
+      ctx.lineTo(px - 12, hatTop - 4);
+      ctx.lineTo(px - 6, headY - 11);
+      ctx.lineTo(px, hatTop - 8);
+      ctx.lineTo(px + 6, headY - 11);
+      ctx.lineTo(px + 12, hatTop - 4);
+      ctx.lineTo(px + 12, headY - 8);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#cc9900'; ctx.lineWidth = 1;
+      ctx.stroke();
+      // gems
+      ctx.fillStyle = '#ff4466';
+      ctx.beginPath(); ctx.arc(px, hatTop - 8, 2.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#44aaff';
+      ctx.beginPath(); ctx.arc(px - 12, hatTop - 4, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px + 12, hatTop - 4, 2, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
   if (!isScuba) {
     const ey = headY + 1;
     ctx.fillStyle = '#1a1a1a';
@@ -239,7 +302,7 @@ export function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hai
       ctx.fillStyle = '#000077';
       ctx.beginPath(); ctx.arc(px + 12, py + 13, 3.5, 0, Math.PI * 2); ctx.fill();
 
-      ctx.strokeStyle = '#7a5020'; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = rodColor; ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.moveTo(armX, armY);
       ctx.quadraticCurveTo(armX + 5, py + 14, rodEndX, rodEndY);
@@ -267,7 +330,7 @@ export function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hai
       const rodTipX = rodBaseX + 34 + tipBob * 0.4;
       const rodTipY = rodBaseY - 20 + tipBob;
 
-      ctx.strokeStyle = '#5a3810'; ctx.lineWidth = 3;
+      ctx.strokeStyle = rodColor; ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(rodBaseX, rodBaseY);
       ctx.quadraticCurveTo(rodBaseX + 18, rodBaseY - 12, rodTipX, rodTipY);
@@ -315,7 +378,7 @@ export function drawPlayer(ctx, px, py, player, nickname, title, titleColor, hai
       const rodTipX = rodBaseX + 28 + tipBob * 0.4;
       const rodTipY = rodBaseY - 18 + tipBob;
 
-      ctx.strokeStyle = '#7a5020'; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = rodColor; ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.moveTo(rodBaseX, rodBaseY);
       ctx.quadraticCurveTo(rodBaseX + 16, rodBaseY - 10, rodTipX, rodTipY);

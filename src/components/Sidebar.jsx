@@ -34,7 +34,7 @@ export default function Sidebar(props) {
   const {
     gs, setGs, nickname,
     addMsg, handleCommand, grantAbility, advanceQuest, gainNpcAffinity, checkAndGrantAchievements,
-    sellAll, sellOne, equipBait, totalFishVal,
+    sellAll, sellOne, equipBait, equipRod, equipBoots, equipCookware, equipMarineGear, equipPickaxe, equipGatherTool, totalFishVal,
     showInv, setShowInv,
     showShop, setShowShop, sellQty, setSellQty,
     showStats, setShowStats, statsTab, setStatsTab,
@@ -45,7 +45,7 @@ export default function Sidebar(props) {
     showAppearance, setShowAppearance, appearanceDraft, setAppearanceDraft,
     inspectPlayer, setInspectPlayer,
     showTournament, setShowTournament, tournamentRanking,
-    serverQuest, serverBoss, serverStats, serverAnnouncements,
+    serverQuest, serverBoss, serverAnnouncements,
     showGuild, setShowGuild, guildTab, setGuildTab,
     myGuildId, setMyGuildId,
     guildInfo, guildMembers, guildList, guildChat, guildQuest, guildCompetition,
@@ -65,9 +65,9 @@ export default function Sidebar(props) {
     onResistanceSuccess, onResistanceFail,
     setGradeUpCelebration,
     stateRef, playSellSound,
-    buyRod, equipRod, buyBoots, equipBoots, buyBait,
-    buyCookware, equipCookware, buyMarineGear, equipMarineGear,
-    buyPickaxe, equipPickaxe, buyGatherTool, equipGatherTool,
+    buyRod, buyBoots, buyBait,
+    buyCookware, buyMarineGear,
+    buyPickaxe, buyGatherTool,
     setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
   } = props;
 
@@ -75,6 +75,7 @@ export default function Sidebar(props) {
   const currentSeason = getCurrentSeason();
 
   const [invFilter, setInvFilter] = useState('전체');
+  const [equipPicker, setEquipPicker] = useState(null);
   const [buyToast, setBuyToast] = useState(null);
   const [settingsState, setSettingsState] = useState(() => getSettings());
   const [bgmVol, setBgmVolState] = useState(() => getBgmVolume());
@@ -100,9 +101,16 @@ export default function Sidebar(props) {
         );
         const sellSpecies = (name) => {
           const total = groups[name].reduce((s, f) => s + f.price, 0);
-          setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: prev.fishInventory.filter(f => f.name !== name) }));
+          setGs(prev => {
+            const prevStats = prev.achStats ?? {};
+            const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+            setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+            return { ...prev, money: prev.money + total, fishInventory: prev.fishInventory.filter(f => f.name !== name), achStats: updatedStats };
+          });
           addMsg(`💰 ${name} ${groups[name].length}마리 판매 +${total}G`, 'catch');
           grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
+          advanceQuest('sell', total);
+          gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
         };
         const INV_FILTERS = ['전체', '물고기', '광석', '허브', '작물', '기타'];
         const showFish  = invFilter === '전체' || invFilter === '물고기';
@@ -288,7 +296,7 @@ export default function Sidebar(props) {
             {statsTab === '장비' && (() => {
               const rodData   = RODS[gs.rod];
               const bootData  = BOOTS[gs.boots];
-              const baitData  = gs.equippedBait ? BAIT[gs.equippedBait] : null;
+              const baitData  = gs.equippedBait ? (BAIT[gs.equippedBait] ?? BAIT_RECIPES[gs.equippedBait]) : null;
               const cwData    = gs.cookware ? COOKWARE[gs.cookware] : null;
               const enhLv     = gs.rodEnhance?.[gs.rod] ?? 0;
               // Compute overall 도감 completion %
@@ -304,17 +312,143 @@ export default function Sidebar(props) {
               const dexDone   = dexFish + dexHerb + dexOre + dexDish + dexSmelt + dexJewel + dexPotion + dexCrop;
               const dexPct    = dexTotal > 0 ? Math.round(dexDone / dexTotal * 100) : 0;
 
-              // Slot renderer
-              const Slot = ({ icon, label, color, sub, locked }) => (
-                <div className={`doll-slot ${locked ? 'doll-slot-locked' : label ? 'doll-slot-filled' : 'doll-slot-empty'}`}>
-                  <div className="doll-slot-icon">{icon}</div>
-                  {label
-                    ? <div className="doll-slot-name" style={{ color: color ?? '#ccc' }}>{label}</div>
-                    : <div className="doll-slot-name doll-slot-none">{locked ? '준비 중' : '없음'}</div>
-                  }
-                  {sub && <div className="doll-slot-sub">{sub}</div>}
-                </div>
-              );
+              // Build picker configs for each equippable slot
+              const pickerConfigs = {
+                rod: {
+                  label: '낚싯대',
+                  items: (gs.ownedRods ?? [gs.rod]).map(key => ({
+                    key,
+                    name: RODS[key]?.name ?? key,
+                    color: RODS[key]?.color,
+                    sub: (gs.rodEnhance?.[key] ?? 0) > 0 ? `+${gs.rodEnhance[key]} 강화` : (RODS[key]?.desc ?? null),
+                    equipped: gs.rod === key,
+                  })),
+                  onEquip: (key) => { equipRod(key); setEquipPicker(null); },
+                  canUnequip: false,
+                },
+                bait: {
+                  label: '미끼',
+                  items: [
+                    ...(gs.ownedBait ?? []).map(key => ({
+                      key, name: (BAIT[key] ?? BAIT_RECIPES[key])?.name ?? key,
+                      color: (BAIT[key] ?? BAIT_RECIPES[key])?.color,
+                      sub: (BAIT[key] ?? BAIT_RECIPES[key])?.desc ?? null,
+                      equipped: gs.equippedBait === key,
+                    })),
+                    ...Object.entries(gs.baitInventory ?? {})
+                      .filter(([k, n]) => n > 0 && !(gs.ownedBait ?? []).includes(k))
+                      .map(([key, count]) => ({
+                        key, name: (BAIT[key] ?? BAIT_RECIPES[key])?.name ?? key,
+                        color: (BAIT[key] ?? BAIT_RECIPES[key])?.color,
+                        sub: `×${count}`,
+                        equipped: gs.equippedBait === key,
+                      })),
+                  ],
+                  onEquip: (key) => { equipBait(key); setEquipPicker(null); },
+                  canUnequip: true,
+                  onUnequip: () => { setGs(prev => ({ ...prev, equippedBait: null })); setEquipPicker(null); addMsg('🪝 미끼 해제'); },
+                },
+                boots: {
+                  label: '신발',
+                  items: (gs.ownedBoots ?? ['기본신발']).map(key => ({
+                    key, name: BOOTS[key]?.name ?? key,
+                    color: BOOTS[key]?.color,
+                    sub: BOOTS[key]?.speedBonus > 0 ? `+${BOOTS[key].speedBonus} 속도` : (BOOTS[key]?.desc ?? null),
+                    equipped: gs.boots === key,
+                  })),
+                  onEquip: (key) => { equipBoots(key); setEquipPicker(null); },
+                  canUnequip: false,
+                },
+                cookware: {
+                  label: '요리도구',
+                  items: (gs.ownedCookware ?? []).map(key => ({
+                    key, name: COOKWARE[key]?.name ?? key,
+                    color: COOKWARE[key]?.color,
+                    sub: COOKWARE[key]?.mult ? `×${COOKWARE[key].mult} 요리배율` : null,
+                    equipped: gs.cookware === key,
+                  })),
+                  onEquip: (key) => { equipCookware(key); setEquipPicker(null); },
+                  canUnequip: false,
+                },
+                hat: {
+                  label: '모자',
+                  items: (gs.ownedHats ?? []).map(key => ({
+                    key, name: HATS[key]?.name ?? key,
+                    color: HATS[key]?.color,
+                    sub: HATS[key]?.desc ?? null,
+                    equipped: gs.hat === key,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, hat: key })); setEquipPicker(null); addMsg(`🎩 ${HATS[key]?.name} 장착`); },
+                  canUnequip: true,
+                  onUnequip: () => { setGs(prev => ({ ...prev, hat: null })); setEquipPicker(null); addMsg('🎩 모자 해제'); },
+                },
+                outfit: {
+                  label: '의상',
+                  items: (gs.ownedOutfits ?? ['기본낚시복']).map(key => ({
+                    key, name: FISHING_OUTFITS[key]?.name ?? key,
+                    color: FISHING_OUTFITS[key]?.color,
+                    sub: FISHING_OUTFITS[key]?.desc ?? null,
+                    equipped: gs.outfit === key,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, outfit: key })); setEquipPicker(null); addMsg(`🧥 ${FISHING_OUTFITS[key]?.name ?? key} 착용`); },
+                  canUnequip: false,
+                },
+                rodSkin: {
+                  label: '낚싯대 스킨',
+                  items: (gs.ownedRodSkins ?? ['기본스킨']).map(key => ({
+                    key, name: ROD_SKINS[key]?.name ?? key,
+                    color: ROD_SKINS[key]?.color,
+                    sub: null,
+                    equipped: gs.activeRodSkin === key,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, activeRodSkin: key })); setEquipPicker(null); addMsg(`🎣 ${ROD_SKINS[key]?.name ?? key} 스킨 적용`); },
+                  canUnequip: false,
+                },
+                ring: {
+                  label: '반지',
+                  items: [...new Map((gs.jewelryInventory ?? []).filter(j => JEWELRY_RECIPES[j.name]?.slot === 'ring').map(j => [j.name, j])).values()].map(j => ({
+                    key: j.name, name: j.name,
+                    color: JEWELRY_RECIPES[j.name]?.color,
+                    sub: JEWELRY_RECIPES[j.name]?.desc ?? null,
+                    equipped: gs.equippedJewelry?.ring === j.name,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, equippedJewelry: { ...(prev.equippedJewelry ?? {}), ring: key } })); setEquipPicker(null); addMsg(`💍 ${key} 장착`); },
+                  canUnequip: true,
+                  onUnequip: () => { setGs(prev => ({ ...prev, equippedJewelry: { ...(prev.equippedJewelry ?? {}), ring: null } })); setEquipPicker(null); addMsg('💍 반지 해제'); },
+                },
+                necklace: {
+                  label: '목걸이',
+                  items: [...new Map((gs.jewelryInventory ?? []).filter(j => JEWELRY_RECIPES[j.name]?.slot === 'necklace').map(j => [j.name, j])).values()].map(j => ({
+                    key: j.name, name: j.name,
+                    color: JEWELRY_RECIPES[j.name]?.color,
+                    sub: JEWELRY_RECIPES[j.name]?.desc ?? null,
+                    equipped: gs.equippedJewelry?.necklace === j.name,
+                  })),
+                  onEquip: (key) => { setGs(prev => ({ ...prev, equippedJewelry: { ...(prev.equippedJewelry ?? {}), necklace: key } })); setEquipPicker(null); addMsg(`📿 ${key} 장착`); },
+                  canUnequip: true,
+                  onUnequip: () => { setGs(prev => ({ ...prev, equippedJewelry: { ...(prev.equippedJewelry ?? {}), necklace: null } })); setEquipPicker(null); addMsg('📿 목걸이 해제'); },
+                },
+              };
+
+              // Clickable slot renderer
+              const Slot = ({ slotKey, icon, label, color, sub, locked }) => {
+                const isOpen = equipPicker === slotKey;
+                const hasConfig = !!pickerConfigs[slotKey];
+                return (
+                  <div
+                    className={`doll-slot ${locked ? 'doll-slot-locked' : label ? 'doll-slot-filled' : 'doll-slot-empty'}${hasConfig && !locked ? ' doll-slot-clickable' : ''}${isOpen ? ' doll-slot-active' : ''}`}
+                    onClick={hasConfig && !locked ? () => setEquipPicker(isOpen ? null : slotKey) : undefined}
+                  >
+                    <div className="doll-slot-icon">{icon}</div>
+                    {label
+                      ? <div className="doll-slot-name" style={{ color: color ?? '#ccc' }}>{label}</div>
+                      : <div className="doll-slot-name doll-slot-none">{locked ? '준비 중' : '없음'}</div>
+                    }
+                    {sub && <div className="doll-slot-sub">{sub}</div>}
+                    {hasConfig && !locked && <div className="doll-slot-hint">탭</div>}
+                  </div>
+                );
+              };
 
               return (
                 <>
@@ -333,31 +467,31 @@ export default function Sidebar(props) {
                 <div className="doll-wrap">
                   {/* Left column — body slots */}
                   <div className="doll-col doll-col-left">
-                    <Slot icon="🎩"
+                    <Slot slotKey="hat" icon="🎩"
                       label={gs.hat ? HATS[gs.hat]?.name : null}
                       color={gs.hat ? HATS[gs.hat]?.color : undefined}
                       sub={gs.hat ? HATS[gs.hat]?.desc : null}
                     />
-                    <Slot icon="🧥"
+                    <Slot slotKey="outfit" icon="🧥"
                       label={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.name : null}
                       color={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.color : undefined}
                       sub={gs.outfit !== '기본낚시복' ? FISHING_OUTFITS[gs.outfit]?.desc : null}
                     />
-                    <Slot icon="💍"
+                    <Slot slotKey="ring" icon="💍"
                       label={gs.equippedJewelry?.ring ?? null}
                       color={JEWELRY_RECIPES[gs.equippedJewelry?.ring]?.color}
                       sub={gs.equippedJewelry?.ring ? JEWELRY_RECIPES[gs.equippedJewelry.ring]?.desc : null}
                     />
-                    <Slot icon="🎣"
+                    <Slot slotKey="rodSkin" icon="🎨"
                       label={gs.activeRodSkin !== '기본스킨' ? ROD_SKINS[gs.activeRodSkin]?.name : null}
                       color={gs.activeRodSkin !== '기본스킨' ? ROD_SKINS[gs.activeRodSkin]?.color : undefined}
                     />
-                    <Slot icon="📿"
+                    <Slot slotKey="necklace" icon="📿"
                       label={gs.equippedJewelry?.necklace ?? null}
                       color={JEWELRY_RECIPES[gs.equippedJewelry?.necklace]?.color}
                       sub={gs.equippedJewelry?.necklace ? JEWELRY_RECIPES[gs.equippedJewelry.necklace]?.desc : null}
                     />
-                    <Slot icon="👟"
+                    <Slot slotKey="boots" icon="👟"
                       label={bootData?.name ?? gs.boots}
                       color={bootData?.color}
                       sub={bootData?.speedBonus > 0 ? `+${bootData.speedBonus} 속도` : null}
@@ -380,22 +514,56 @@ export default function Sidebar(props) {
 
                   {/* Right column — activity slots */}
                   <div className="doll-col doll-col-right">
-                    <Slot icon="🎣"
+                    <Slot slotKey="rod" icon="🎣"
                       label={rodData?.name ?? gs.rod}
                       color={rodData?.color}
                       sub={enhLv > 0 ? `+${enhLv} 강화` : null}
                     />
-                    <Slot icon="🪝"
+                    <Slot slotKey="bait" icon="🪝"
                       label={baitData?.name ?? null}
                       color={baitData?.color}
                     />
-                    <Slot icon="🍳"
+                    <Slot slotKey="cookware" icon="🍳"
                       label={cwData?.name ?? null}
                       color={cwData?.color}
                       sub={cwData ? `×${cwData.mult} 요리` : null}
                     />
                   </div>
                 </div>
+
+                {/* Equipment picker panel */}
+                {equipPicker && pickerConfigs[equipPicker] && (() => {
+                  const cfg = pickerConfigs[equipPicker];
+                  return (
+                    <div className="equip-picker">
+                      <div className="equip-picker-head">
+                        <span className="equip-picker-title">🔄 {cfg.label} 교체</span>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {cfg.canUnequip && cfg.onUnequip && (
+                            <button tabIndex={-1} className="equip-picker-unequip" onClick={cfg.onUnequip}>해제</button>
+                          )}
+                          <button tabIndex={-1} className="equip-picker-close" onClick={() => setEquipPicker(null)}>✕</button>
+                        </div>
+                      </div>
+                      {cfg.items.length === 0 ? (
+                        <div style={{ fontSize: 12, color: '#888', textAlign: 'center', padding: '10px 0' }}>보유 중인 {cfg.label}이 없습니다</div>
+                      ) : (
+                        <div className="equip-picker-list">
+                          {cfg.items.map(item => (
+                            <div key={item.key} className={`equip-picker-item${item.equipped ? ' equip-picker-item-on' : ''}`}>
+                              <div className="equip-picker-item-name" style={{ color: item.color ?? '#ccc' }}>{item.name}</div>
+                              {item.sub && <div className="equip-picker-item-sub">{item.sub}</div>}
+                              {item.equipped
+                                ? <span className="equip-picker-badge">장착중</span>
+                                : <button tabIndex={-1} className="equip-picker-btn" onClick={() => cfg.onEquip(item.key)}>장착</button>
+                              }
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 </>
               );
             })()}
@@ -498,7 +666,8 @@ export default function Sidebar(props) {
                     const cost = rodEnhanceCost(enhLv);
                     const mats = rodEnhanceMatsNeeded(enhLv);
                     const ganghwaAbil = gs.abilities?.강화?.value ?? 0;
-                    const rate = rodEnhanceSuccessRate(enhLv, ganghwaAbil);
+                    const furnitureEnhBonus = (gs.cottage?.furniture ?? []).reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.enhanceBonus ?? 0), 0);
+                    const rate = Math.min(0.98, rodEnhanceSuccessRate(enhLv, ganghwaAbil) + furnitureEnhBonus);
                     const canAfford = gs.money >= cost;
                     const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
                     const matsStr = Object.entries(mats).map(([k, n]) => `${k}×${n}`).join(' ');
@@ -526,7 +695,7 @@ export default function Sidebar(props) {
                           disabled={!canAfford || !hasMats || enhLv >= 100}
                           onClick={() => {
                             if (enhLv >= 100) return;
-                            const success = Math.random() < rodEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0);
+                            const success = Math.random() < Math.min(0.98, rodEnhanceSuccessRate(enhLv, gs.abilities?.강화?.value ?? 0) + furnitureEnhBonus);
                             setGs(prev => {
                               const ores = { ...prev.oreInventory };
                               for (const [ore, n] of Object.entries(mats)) ores[ore] = Math.max(0, (ores[ore] || 0) - n);
@@ -596,8 +765,16 @@ export default function Sidebar(props) {
                               return { ...prev, money: prev.money - cost, oreInventory: ores,
                                 pickaxeEnhance: { ...(prev.pickaxeEnhance ?? {}), [pxKey]: success ? enhLv + 1 : enhLv } };
                             });
-                            if (success) { addMsg(`⛏ ${px.name} +${enhLv + 1} 강화 성공!`, 'catch'); grantAbility('강화', ENHANCE_ABILITY_GAIN); }
-                            else addMsg(`⛏ 강화 실패... (+${enhLv} 유지)`, 'error');
+                            if (success) {
+                              addMsg(`⛏ ${px.name} +${enhLv + 1} 강화 성공!`, 'catch');
+                              grantAbility('강화', ENHANCE_ABILITY_GAIN);
+                              setGs(prev2 => {
+                                const ps = prev2.achStats ?? {};
+                                const us = { ...ps, enhanceCount: (ps.enhanceCount ?? 0) + 1 };
+                                setTimeout(() => checkAndGrantAchievements(us), 0);
+                                return { ...prev2, achStats: us };
+                              });
+                            } else addMsg(`⛏ 강화 실패... (+${enhLv} 유지)`, 'error');
                           }}
                         >
                           {enhLv >= 100 ? '최대 강화' : `강화 (+${enhLv} → +${enhLv + 1})`}
@@ -720,8 +897,15 @@ export default function Sidebar(props) {
                                 return { ...prev, processedOreInventory: proc, jewelryInventory: jewelry, jewelLog: newJewelLog };
                               });
                               grantAbility('제련', 5);
-                              if (success) addMsg(`${recipe.icon} ${recipe.name} 제작 성공!`, 'catch');
-                              else addMsg(`제작 실패… 재료 소모됨`, 'error');
+                              if (success) {
+                                addMsg(`${recipe.icon} ${recipe.name} 제작 성공!`, 'catch');
+                                setGs(prev2 => {
+                                  const ps = prev2.achStats ?? {};
+                                  const us = { ...ps, smeltCount: (ps.smeltCount ?? 0) + 1 };
+                                  setTimeout(() => checkAndGrantAchievements(us), 0);
+                                  return { ...prev2, achStats: us };
+                                });
+                              } else addMsg(`제작 실패… 재료 소모됨`, 'error');
                             }}>제작</button>
                             {owned && (
                               <button className={equipped ? 'btn-dis' : 'btn-eq'} disabled={equipped} onClick={() => {
@@ -1105,7 +1289,8 @@ export default function Sidebar(props) {
                 <div className="section-title">탐험 구역 ({(gs.exploredZones ?? []).length} / {EXPLORE_ZONES.length} 발견)</div>
                 {EXPLORE_ZONES.map(zone => {
                   const unlocked = (gs.exploredZones ?? []).includes(zone.id);
-                  const canUnlock = Object.entries(zone.reqAbil).every(([abil, req]) => (gs.abilities?.[abil]?.value ?? 0) >= req);
+                  const furnitureExploreRed = (gs.cottage?.furniture ?? []).reduce((sum, f) => sum + Math.abs(FURNITURE[f.key]?.bonus?.exploreReq ?? 0), 0);
+                  const canUnlock = Object.entries(zone.reqAbil).every(([abil, req]) => (gs.abilities?.[abil]?.value ?? 0) >= Math.max(0, req - furnitureExploreRed));
                   return (
                     <div key={zone.id} className="rod-card" style={{ opacity: unlocked ? 1 : 0.7, borderColor: unlocked ? 'rgba(100,220,100,0.3)' : undefined }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
@@ -1270,10 +1455,15 @@ export default function Sidebar(props) {
                               <button className="btn-buy" style={{ fontSize: 11 }} onClick={() => {
                                 setGs(prev => {
                                   const newCrop = { ...(prev.cropInventory ?? {}), [itemName]: 0 };
-                                  return { ...prev, money: prev.money + total, cropInventory: newCrop };
+                                  const prevStats = prev.achStats ?? {};
+                                  const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+                                  setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                                  return { ...prev, money: prev.money + total, cropInventory: newCrop, achStats: updatedStats };
                                 });
                                 addMsg(`💰 ${itemName} ${count}개 판매 +${total}G`, 'catch');
+                                grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
                                 advanceQuest('sell', total);
+                                gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                               }}>
                                 전체 판매 ({total}G)
                               </button>
@@ -1451,12 +1641,16 @@ export default function Sidebar(props) {
                           onClick={() => {
                             setGs(prev => {
                               const newSpXP = (prev.seasonPassXP ?? 0) + 5;
+                              const prevStats = prev.achStats ?? {};
+                              const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + q.reward) };
+                              setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
                               return {
                                 ...prev,
                                 money: prev.money + q.reward,
                                 questClaimed: { ...(prev.questClaimed ?? {}), [q.id]: true },
                                 seasonPassXP: newSpXP,
                                 seasonPassTier: Math.min(10, Math.floor(newSpXP / 50)),
+                                achStats: updatedStats,
                               };
                             });
                             addMsg(`🎁 퀘스트 보상 수령: +${q.reward}G!`, 'catch');
@@ -1481,7 +1675,7 @@ export default function Sidebar(props) {
 
       {/* Fish encyclopedia modal */}
       {showDex && (() => {
-        const DEX_TABS = ['어종', '채집', '광석', '요리', '제작', '포션', '작물'];
+        const DEX_TABS = ['어종', '채집', '광석', '요리', '제작', '포션', '작물', '칭호'];
         // Compute per-tab completion for overall %
         const fishTotal = Object.keys(FISH).length;
         const fishDone = (gs.caughtSpecies ?? []).length;
@@ -1499,8 +1693,10 @@ export default function Sidebar(props) {
         const potionDone = Object.keys(POTION_RECIPES).filter(k => (gs.potionLog ?? {})[k] > 0).length;
         const cropTotal = Object.keys(SEEDS).length;
         const cropDone = Object.keys(SEEDS).filter(s => (gs.cropLog ?? {})[SEEDS[s].yield.item] > 0).length;
-        const grandTotal = fishTotal + herbTotal + oreTotal + dishTotal + smeltTotal + jewelTotal + potionTotal + cropTotal;
-        const grandDone = fishDone + herbDone + oreDone + dishDone + smeltDone + jewelDone + potionDone + cropDone;
+        const titleTotal = TITLES.length;
+        const titleDone = TITLES.filter(t => t.condition(gs)).length;
+        const grandTotal = fishTotal + herbTotal + oreTotal + dishTotal + smeltTotal + jewelTotal + potionTotal + cropTotal + titleTotal;
+        const grandDone = fishDone + herbDone + oreDone + dishDone + smeltDone + jewelDone + potionDone + cropDone + titleDone;
         const completePct = grandTotal > 0 ? Math.round(grandDone / grandTotal * 100) : 0;
 
         return (
@@ -1547,6 +1743,12 @@ export default function Sidebar(props) {
                     우럭: '낚시 50+ · 바다·전설 미끼', 뱀장어: '낚시 50+ · 바다 낚시',
                     황새치: '낚시 50+ · 신화 미끼 추천',
                     용고기: '낚시 70+ · 바다·신화 미끼', 고대어: '낚시 70+ · 신화 미끼 필수',
+                    피라미: '낚시 10+ · 부두 낚시', 도미: '낚시 20+ · 바다 낚시',
+                    해마: '낚시 30+ · 심해 부두 추천', 전갱이: '낚시 40+ · 바다 낚시',
+                    부시리: '낚시 50+ · 바다·전설 미끼', 개복치: '낚시 65+ · 바다 낚시',
+                    빙어: '낚시 70+ · ❄️ 겨울에 잘 잡힘', 불사조고기: '낚시 70+ · 신화 미끼 추천',
+                    크라켄: '🦑 심해 원정대 전용 · 파티 3인+ 심해 입장',
+                    해룡: '🐲 심해 원정대 전용 · 파티 3인+ 심해 입장',
                     벚꽃붕어: '🌸 봄 한정 · 낚시 20+', 불꽃송어: '🔥 여름 한정 · 낚시 40+',
                     단풍잉어: '🍂 가을 한정 · 낚시 20+', 빙어왕: '❄️ 겨울 한정 · 낚시 40+',
                   };
@@ -1791,6 +1993,74 @@ export default function Sidebar(props) {
                     {cropDone >= cropTotal && <div style={{ fontSize: 11, color: '#66cc44', marginTop: 8 }}>🌾 모든 작물 수확 완료! "대지의 개척자" 업적 달성 가능</div>}
                   </>
                 )}
+                {/* 칭호 탭 */}
+                {dexTab === '칭호' && (
+                  <>
+                    <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>획득: {titleDone} / {titleTotal}종</div>
+                    <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, marginBottom: 10 }}>
+                      <div style={{ width: `${titleDone / titleTotal * 100}%`, height: '100%', background: '#cc88ff', borderRadius: 4 }} />
+                    </div>
+                    {/* 자동 설정 버튼 */}
+                    <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '8px 10px' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, color: '#ccc' }}>현재 장착: <span style={{ color: getTitle(gs).color, fontWeight: 700 }}>[{getTitle(gs).label}]</span></div>
+                        {gs.equippedTitle
+                          ? <div style={{ fontSize: 10, color: '#aaa' }}>수동 장착 — 효과: {TITLES.find(t => t.label === gs.equippedTitle)?.effectDesc ?? ''}</div>
+                          : <div style={{ fontSize: 10, color: '#aaa' }}>자동 설정 (최고 달성 칭호)</div>
+                        }
+                      </div>
+                      {gs.equippedTitle && (
+                        <button tabIndex={-1} onClick={() => setGs(prev => ({ ...prev, equippedTitle: null }))}
+                          style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, border: '1px solid rgba(200,200,255,0.3)', background: 'rgba(100,100,200,0.25)', color: '#aac', cursor: 'pointer' }}>
+                          자동으로
+                        </button>
+                      )}
+                    </div>
+                    {TITLES.slice().reverse().map(t => {
+                      const unlocked = t.condition(gs);
+                      const isEquipped = gs.equippedTitle === t.label;
+                      const isAuto = !gs.equippedTitle && getTitle(gs).label === t.label;
+                      return (
+                        <div key={t.label} style={{
+                          display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', marginBottom: 6,
+                          borderRadius: 8, border: `1px solid ${unlocked ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)'}`,
+                          background: isEquipped ? 'rgba(180,100,255,0.15)' : isAuto ? 'rgba(100,180,255,0.10)' : 'rgba(0,0,0,0.2)',
+                          opacity: unlocked ? 1 : 0.5,
+                        }}>
+                          <div style={{ fontSize: 20, width: 28, textAlign: 'center' }}>{unlocked ? '🏅' : '🔒'}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13, color: unlocked ? t.color : '#666' }}>
+                              [{t.label}]
+                              {isEquipped && <span style={{ marginLeft: 6, fontSize: 10, background: 'rgba(180,80,255,0.4)', borderRadius: 4, padding: '1px 5px', color: '#ddb' }}>장착 중</span>}
+                              {isAuto && <span style={{ marginLeft: 6, fontSize: 10, background: 'rgba(80,160,255,0.35)', borderRadius: 4, padding: '1px 5px', color: '#adf' }}>자동</span>}
+                            </div>
+                            <div style={{ fontSize: 10, color: '#aaa', marginTop: 1 }}>🔓 {t.unlockDesc}</div>
+                            {unlocked && t.effectDesc !== '없음' && (
+                              <div style={{ fontSize: 10, color: '#ffdd88', marginTop: 1 }}>✨ {t.effectDesc}</div>
+                            )}
+                            {!unlocked && (
+                              <div style={{ fontSize: 10, color: '#ff8866', marginTop: 1 }}>🔒 미획득</div>
+                            )}
+                          </div>
+                          {unlocked && !isEquipped && (
+                            <button tabIndex={-1}
+                              onClick={() => setGs(prev => ({ ...prev, equippedTitle: t.label }))}
+                              style={{ fontSize: 11, padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(200,150,255,0.4)', background: 'rgba(140,80,220,0.3)', color: '#dcc', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              장착
+                            </button>
+                          )}
+                          {isEquipped && (
+                            <button tabIndex={-1}
+                              onClick={() => setGs(prev => ({ ...prev, equippedTitle: null }))}
+                              style={{ fontSize: 11, padding: '5px 12px', borderRadius: 6, border: '1px solid rgba(255,100,100,0.4)', background: 'rgba(180,60,60,0.3)', color: '#faa', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                              해제
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1955,26 +2225,36 @@ export default function Sidebar(props) {
                         );
                       })}
                     </div>
-                    <button tabIndex={-1} className={canCraft ? 'btn-buy' : 'btn-dis'} disabled={!canCraft} style={{ fontSize: 11 }}
-                      onClick={() => {
-                        setGs(prev => {
-                          const herbs = { ...(prev.herbInventory ?? {}) };
-                          const ores = { ...prev.oreInventory };
-                          for (const [item, n] of Object.entries(recipe.input)) {
-                            if (['들풀','버섯','희귀허브'].includes(item)) herbs[item] = Math.max(0, (herbs[item] ?? 0) - n);
-                            else ores[item] = Math.max(0, (ores[item] ?? 0) - n);
-                          }
-                          const newBait = { ...(prev.baitInventory ?? {}), [recipe.name]: ((prev.baitInventory ?? {})[recipe.name] ?? 0) + 1 };
-                          const newDiyLog = { ...(prev.diyBaitLog ?? {}), [key]: ((prev.diyBaitLog ?? {})[key] ?? 0) + 1 };
-                          if (!prev.ownedBait.includes(recipe.name)) {
-                            return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog, ownedBait: [...prev.ownedBait, recipe.name] };
-                          }
-                          return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog };
-                        });
-                        addMsg(`${recipe.icon} ${recipe.name} 제작 완료!`, 'catch');
-                      }}>
-                      {canCraft ? '제작' : '재료 부족'}
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button tabIndex={-1} className={canCraft ? 'btn-buy' : 'btn-dis'} disabled={!canCraft} style={{ fontSize: 11 }}
+                        onClick={() => {
+                          setGs(prev => {
+                            const herbs = { ...(prev.herbInventory ?? {}) };
+                            const ores = { ...prev.oreInventory };
+                            for (const [item, n] of Object.entries(recipe.input)) {
+                              if (['들풀','버섯','희귀허브'].includes(item)) herbs[item] = Math.max(0, (herbs[item] ?? 0) - n);
+                              else ores[item] = Math.max(0, (ores[item] ?? 0) - n);
+                            }
+                            const newBait = { ...(prev.baitInventory ?? {}), [recipe.name]: ((prev.baitInventory ?? {})[recipe.name] ?? 0) + 1 };
+                            const newDiyLog = { ...(prev.diyBaitLog ?? {}), [key]: ((prev.diyBaitLog ?? {})[key] ?? 0) + 1 };
+                            if (!prev.ownedBait.includes(recipe.name)) {
+                              return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog, ownedBait: [...prev.ownedBait, recipe.name] };
+                            }
+                            return { ...prev, herbInventory: herbs, oreInventory: ores, baitInventory: newBait, diyBaitLog: newDiyLog };
+                          });
+                          addMsg(`${recipe.icon} ${recipe.name} 제작 완료!`, 'catch');
+                        }}>
+                        {canCraft ? '제작' : '재료 부족'}
+                      </button>
+                      {stock > 0 && (
+                        <button tabIndex={-1}
+                          className={gs.equippedBait === key ? 'btn-eq' : 'sell-btn'}
+                          style={{ fontSize: 11 }}
+                          onClick={() => equipBait(key)}>
+                          {gs.equippedBait === key ? '장착중' : '장착'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -2222,7 +2502,7 @@ export default function Sidebar(props) {
             {/* ── Rod Skins ── */}
             <div className="section">
               <div className="section-title">🎨 낚싯대 스킨</div>
-              {Object.entries(ROD_SKINS).map(([key, skin]) => {
+              {Object.entries(ROD_SKINS).filter(([key, skin]) => !skin.questOnly || (gs.ownedRodSkins ?? []).includes(key)).map(([key, skin]) => {
                 const owned = (gs.ownedRodSkins ?? ['기본스킨']).includes(key);
                 const equipped = gs.activeRodSkin === key;
                 const canAfford = gs.money >= skin.price;
@@ -2255,6 +2535,7 @@ export default function Sidebar(props) {
                               const newOre = { ...gs.processedOreInventory };
                               if (skin.upgradeMats) Object.entries(skin.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
                               setGs(prev => ({ ...prev, money: prev.money - skin.price, ownedRodSkins: [...(prev.ownedRodSkins ?? []), key], activeRodSkin: key, processedOreInventory: newOre }));
+                              if (skin.price > 0) gainNpcAffinity('상인', 1);
                               addMsg(`🎨 ${skin.name} 획득!`, 'catch');
                             }}>
                             {canUnlock ? (skin.price > 0 ? `${skin.price}G` : '해금') : (skin.reqMythic && !reqMythicMet ? '조건 미달' : '재료 부족')}
@@ -2288,6 +2569,7 @@ export default function Sidebar(props) {
                         onClick={() => {
                           if (!canBuy) return;
                           setGs(prev => ({ ...prev, money: prev.money - deco.price, spotDecos: [...(prev.spotDecos ?? []), key] }));
+                          if (deco.price > 0) gainNpcAffinity('상인', 1);
                           addMsg(`${deco.icon} ${deco.name} 설치!`, 'catch');
                         }}>
                         {canBuy ? `${deco.price}G` : (!canAfford ? '💰 부족' : '이미 보유')}
@@ -2332,6 +2614,7 @@ export default function Sidebar(props) {
                               money: prev.money - pet.eggPrice,
                               petEggs: { ...(prev.petEggs ?? {}), [key]: { boughtAt, hatchAt } },
                             }));
+                            gainNpcAffinity('상인', 2);
                             addMsg(`🥚 ${pet.name} 알 구매! ${hatchMin}분 후 부화됩니다.`, 'catch');
                           }}>
                           {canAfford ? `${pet.eggPrice}G 구매` : '💰 골드 부족'}
@@ -2370,9 +2653,16 @@ export default function Sidebar(props) {
                             <span style={{ color: '#ffcc44', fontSize: 12, flex: 1 }}>{total.toLocaleString()}G</span>
                             <button tabIndex={-1} className="btn-eq" style={{ fontSize: 11 }} onClick={() => setSellQty(prev => ({ ...prev, [qtyKey]: count }))}>전체</button>
                             <button tabIndex={-1} className="btn-buy" onClick={() => {
-                              setGs(prev => ({ ...prev, money: prev.money + total, oreInventory: { ...prev.oreInventory, [ore]: count - qty } }));
+                              setGs(prev => {
+                                const prevStats = prev.achStats ?? {};
+                                const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+                                setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                                return { ...prev, money: prev.money + total, oreInventory: { ...prev.oreInventory, [ore]: count - qty }, achStats: updatedStats };
+                              });
                               addMsg(`💰 ${ore} ${qty}개 → ${total}G!`, 'catch');
+                              grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
                               advanceQuest('sell', total);
+                              gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                               setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
                             }}>판매</button>
                           </div>
@@ -2409,9 +2699,16 @@ export default function Sidebar(props) {
                             <span style={{ color: '#ffcc44', fontSize: 12, flex: 1 }}>{total.toLocaleString()}G</span>
                             <button tabIndex={-1} className="btn-eq" style={{ fontSize: 11 }} onClick={() => setSellQty(prev => ({ ...prev, [qtyKey]: count }))}>전체</button>
                             <button tabIndex={-1} className="btn-buy" onClick={() => {
-                              setGs(prev => ({ ...prev, money: prev.money + total, herbInventory: { ...(prev.herbInventory ?? {}), [herb]: count - qty } }));
+                              setGs(prev => {
+                                const prevStats = prev.achStats ?? {};
+                                const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+                                setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                                return { ...prev, money: prev.money + total, herbInventory: { ...(prev.herbInventory ?? {}), [herb]: count - qty }, achStats: updatedStats };
+                              });
                               addMsg(`💰 ${herb} ${qty}개 → ${total}G!`, 'catch');
+                              grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
                               advanceQuest('sell', total);
+                              gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                               setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
                             }}>판매</button>
                           </div>
@@ -2463,9 +2760,16 @@ export default function Sidebar(props) {
                               const toSell = items.slice(0, qty);
                               const ids = new Set(toSell.map(f => f.id));
                               const earned = toSell.reduce((s, f) => s + f.price, 0);
-                              setGs(prev => ({ ...prev, money: prev.money + earned, fishInventory: prev.fishInventory.filter(f => !ids.has(f.id)) }));
+                              setGs(prev => {
+                                const prevStats = prev.achStats ?? {};
+                                const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + earned, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + earned) };
+                                setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                                return { ...prev, money: prev.money + earned, fishInventory: prev.fishInventory.filter(f => !ids.has(f.id)), achStats: updatedStats };
+                              });
                               addMsg(`💰 ${species} ${qty}마리 → ${earned}G!`, 'catch');
+                              grantAbility('화술', Math.max(0.01, Math.floor(earned / 100) * SELL_ABILITY_PER_100G));
                               advanceQuest('sell', earned);
+                              gainNpcAffinity('상인', Math.max(1, Math.floor(earned / 150)));
                               playSellSound(earned);
                               setSellQty(prev => ({ ...prev, [qtyKey]: '' }));
                             }}>판매</button>
@@ -2527,7 +2831,6 @@ export default function Sidebar(props) {
                               else if (order.itemType === 'crop') ns.cropInventory = { ...(ns.cropInventory ?? {}), [order.item]: Math.max(0, ((ns.cropInventory ?? {})[order.item] ?? 0) - order.qty) };
                               else if (order.itemType === 'processed') ns.processedOreInventory = { ...(ns.processedOreInventory ?? {}), [order.item]: Math.max(0, ((ns.processedOreInventory ?? {})[order.item] ?? 0) - order.qty) };
                               totalMoney += order.reward.money;
-                              ns.npcAffinity = { ...ns.npcAffinity, [order.npc]: (ns.npcAffinity?.[order.npc] ?? 0) + order.reward.affinity };
                               const idx = updatedOrders.findIndex(o => o.id === order.id);
                               if (idx >= 0) updatedOrders[idx] = { ...updatedOrders[idx], completed: true };
                               else updatedOrders.push({ ...order, completed: true });
@@ -2535,9 +2838,15 @@ export default function Sidebar(props) {
                             ns.money = (ns.money ?? 0) + totalMoney;
                             ns.deliveryOrders = updatedOrders;
                             ns.deliveryDate = today;
+                            const prevStats = prev.achStats ?? {};
+                            const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + totalMoney, maxMoney: Math.max(prevStats.maxMoney ?? 0, ns.money) };
+                            setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                            ns.achStats = updatedStats;
                             return ns;
                           });
+                          for (const order of fulfillable) gainNpcAffinity(order.npc, order.reward.affinity);
                           const totalGold = fulfillable.reduce((s, o) => s + o.reward.money, 0);
+                          advanceQuest('sell', totalGold);
                           addMsg(`📦 일괄 납품 완료! ${fulfillable.length}개 주문 → +${totalGold}G`, 'catch');
                         }}
                       >📦 일괄 납품 ({fulfillable.length}건)</button>
@@ -2571,14 +2880,17 @@ export default function Sidebar(props) {
                               else if (order.itemType === 'crop') newState.cropInventory = { ...(prev.cropInventory ?? {}), [order.item]: Math.max(0, ((prev.cropInventory ?? {})[order.item] ?? 0) - order.qty) };
                               else if (order.itemType === 'processed') newState.processedOreInventory = { ...(prev.processedOreInventory ?? {}), [order.item]: Math.max(0, ((prev.processedOreInventory ?? {})[order.item] ?? 0) - order.qty) };
                               newState.money = prev.money + order.reward.money;
-                              // Mark order completed & save today's orders
                               const savedOrders = orders.map(o => o.id === order.id ? { ...o, completed: true } : o);
                               newState.deliveryOrders = savedOrders;
                               newState.deliveryDate = today;
-                              const npcKey = order.npc;
-                              newState.npcAffinity = { ...prev.npcAffinity, [npcKey]: (prev.npcAffinity?.[npcKey] ?? 0) + order.reward.affinity };
+                              const prevStats = prev.achStats ?? {};
+                              const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + order.reward.money, maxMoney: Math.max(prevStats.maxMoney ?? 0, newState.money) };
+                              setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                              newState.achStats = updatedStats;
                               return newState;
                             });
+                            gainNpcAffinity(order.npc, order.reward.affinity);
+                            advanceQuest('sell', order.reward.money);
                             addMsg(`📦 납품 완료! ${order.item} ${order.qty}개 → +${order.reward.money}G, ${order.npc} 친밀도 +${order.reward.affinity}`, 'catch');
                           }}>
                           {completed ? '완료됨' : canFulfill ? '납품하기' : '재료 부족'}
@@ -2716,10 +3028,15 @@ export default function Sidebar(props) {
                           <button tabIndex={-1} className="btn-buy" onClick={() => {
                             setGs(prev => {
                               const newCrop = { ...(prev.cropInventory ?? {}), [itemName]: 0 };
-                              return { ...prev, money: prev.money + total, cropInventory: newCrop };
+                              const prevStats = prev.achStats ?? {};
+                              const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+                              setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                              return { ...prev, money: prev.money + total, cropInventory: newCrop, achStats: updatedStats };
                             });
                             addMsg(`💰 ${itemName} ${count}개 → ${total}G!`, 'catch');
+                            grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
                             advanceQuest('sell', total);
+                            gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
                           }}>전체 판매 ({total}G)</button>
                         </div>
                       );
@@ -3405,11 +3722,12 @@ export default function Sidebar(props) {
                   const amt = Math.floor(Number(bankInput));
                   if (!amt || amt <= 0) { addMsg('금액을 입력하세요.', 'error'); return; }
                   if (amt > (gs.bankDeposit ?? 0)) { addMsg('🏦 예금 잔액 부족', 'error'); return; }
-                  setGs(prev => ({
-                    ...prev,
-                    money: prev.money + amt,
-                    bankDeposit: (prev.bankDeposit ?? 0) - amt,
-                  }));
+                  setGs(prev => {
+                    const prevStats = prev.achStats ?? {};
+                    const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + amt) };
+                    setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+                    return { ...prev, money: prev.money + amt, bankDeposit: (prev.bankDeposit ?? 0) - amt, achStats: updatedStats };
+                  });
                   addMsg(`🏦 ${amt.toLocaleString()}G 출금 완료!`, 'catch');
                   setBankInput('');
                 }}>출금</button>

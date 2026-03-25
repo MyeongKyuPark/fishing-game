@@ -156,13 +156,14 @@ export const EXPLORE_ZONES = [
   },
 ];
 
-export function checkZoneUnlock(abilities, exploredZones, guildLevel = 0, currentSeasonId = null) {
+export function checkZoneUnlock(abilities, exploredZones, guildLevel = 0, currentSeasonId = null, abilReduction = 0) {
   // Returns newly unlockable zone ids
+  // abilReduction: reduce each reqAbil by this amount (e.g. from 책장 furniture bonus)
   return EXPLORE_ZONES.filter(z => {
     if (exploredZones.includes(z.id)) return false;
     if (z.reqGuildLevel && guildLevel < z.reqGuildLevel) return false;
     if (z.reqSeason && currentSeasonId !== z.reqSeason) return false;
     if (!z.reqAbil || Object.keys(z.reqAbil).length === 0) return true;
-    return Object.entries(z.reqAbil).every(([abil, req]) => (abilities?.[abil]?.value ?? 0) >= req);
+    return Object.entries(z.reqAbil).every(([abil, req]) => (abilities?.[abil]?.value ?? 0) >= Math.max(0, req - abilReduction));
   });
 }

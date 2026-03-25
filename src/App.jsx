@@ -9,7 +9,7 @@ import Joystick from './Joystick';
 import Leaderboard from './Leaderboard';
 import RankSidebar from './RankSidebar';
 import ChannelLobby from './ChannelLobby';
-import { saveFishRecord, saveOverallFishRecord, broadcastAnnouncement, incrementServerStat,
+import { saveFishRecord, saveOverallFishRecord, broadcastAnnouncement,
   submitTournamentScore, incrementServerQuestProgress,
   saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore, savePrestigeRecord,
   damageServerBoss } from './ranking';
@@ -21,11 +21,11 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
-  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE } from './gameData';
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, ROD_SKINS, SPOT_DECOS, FURNITURE, BAIT_RECIPES } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
-import { getTitle, TITLES } from './titleData';
+import { getTitle, getActiveTitleBonus, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm } from './mapData';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
@@ -202,6 +202,8 @@ export default function App() {
   // Server boss
   const [serverBoss, setServerBoss] = useState(null);
   const prevBossHpRef = useRef(null);
+  const prevServerQuestRef = useRef(null);
+  const [seasonRanking, setSeasonRanking] = useState([]);
 
   // Marketplace
   const [showMarket, setShowMarket] = useState(false);
@@ -244,9 +246,7 @@ export default function App() {
   const [nearActionZone, setNearActionZone] = useState(null);
   const [nearIndoorNpc, setNearIndoorNpc] = useState(null);
   const prevTitleRef = useRef(null);
-  const prevServerStatsRef = useRef({});
   const [serverAnnouncements, setServerAnnouncements] = useState([]);
-  const [serverStats, setServerStats] = useState({});
   const [showDex, setShowDex] = useState(false);
   const [showAnnounce, setShowAnnounce] = useState(false);
   const [showBank, setShowBank] = useState(false);
@@ -403,6 +403,20 @@ export default function App() {
   }, []);
   useEffect(() => { addMsgRef.current = addMsg; }, [addMsg]);
 
+  useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef });
+
+  useWebSocket({
+    nickname, roomId, myGuildId, partyId,
+    gameRef, stateRef, addMsgRef, otherPlayersRef, prevOtherPlayersRef, lastPosRef,
+    weatherRef, fishSurgeRef, serverEventRef, partyMembersRef, partyIdRef, myGuildIdRef,
+    prevBossHpRef, prevServerQuestRef, nicknameRef, roomIdRef,
+    setGuildList, setGuildCompetition, setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
+    setMarketListings, setMyListings, setServerAnnouncements, setServerEvent, setServerQuest,
+    setServerBoss, setTournamentRanking, setSeasonRanking, setFishSurgeEvent,
+    setPartyMessages, setPendingInvite, setGs, setWeather, setIsOnline, setShowAnnounce,
+    addMsg, gs, weather,
+  });
+
   const showNextAchPopup = useCallback(() => {
     if (achPopupQueueRef.current.length === 0) { achPopupActiveRef.current = false; return; }
     const next = achPopupQueueRef.current.shift();
@@ -415,6 +429,7 @@ export default function App() {
   }, [showNextAchPopup]);
   const achPopupRef = useRef(enqueueAchPopup);
   useEffect(() => { achPopupRef.current = enqueueAchPopup; }, [enqueueAchPopup]);
+  const checkAndGrantAchievementsRef = useRef(null);
 
   // Expire active potion (after addMsg to avoid TDZ)
   useEffect(() => {
@@ -511,24 +526,17 @@ export default function App() {
     const interestRate = Math.min(0.04, 0.025 + (bankAffinity >= 50 ? 0.01 : bankAffinity >= 20 ? 0.005 : 0));
     const interest = Math.floor(deposit * interestRate * hoursElapsed);
     if (interest <= 0) return;
-    setGs(prev => ({ ...prev, money: prev.money + interest, bankLastInterest: now }));
+    setGs(prev => {
+      const newMoney = prev.money + interest;
+      const prevStats = prev.achStats ?? {};
+      const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, newMoney) };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      return { ...prev, money: newMoney, bankLastInterest: now, achStats: updatedStats };
+    });
     addMsg(`🏦 은행 이자 +${interest}G (${deposit.toLocaleString()}G × ${(interestRate * 100).toFixed(1)}%/시간 × ${hoursElapsed.toFixed(2)}시간)`, 'catch');
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nickname, gs.bankDeposit]);
 
-  // Server collective quest milestone announcements
-  useEffect(() => {
-    const prev = prevServerStatsRef.current;
-    const curr = serverStats;
-    const milestones = [1000, 5000, 10000, 50000, 100000];
-    for (const m of milestones) {
-      if ((prev.totalFishCaught ?? 0) < m && (curr.totalFishCaught ?? 0) >= m) {
-        addMsg(`🌍 서버 전체 물고기 ${m.toLocaleString()}마리 달성! 모든 플레이어 +500G 보상!`, 'catch');
-        setGs(prev2 => ({ ...prev2, money: prev2.money + 500 }));
-      }
-    }
-    prevServerStatsRef.current = curr;
-  }, [serverStats, addMsg]);
 
   // Grant ability EXP; shows grade-available message if reached 100
   const grantAbility = useCallback((abilName, amount) => {
@@ -539,7 +547,8 @@ export default function App() {
     const newPlayerMult = isNewPlayer ? 2 : 1;
     const petAbilMult = gameRef.current?.petBonus?.abilGainMult ?? 1;
     const jobSpeechMult = (abilName === '화술') ? (JOBS[stateRef.current?.selectedJob]?.bonus?.speechGainMult ?? 1) : 1;
-    const result = gainAbility(current, amount * newPlayerMult * petAbilMult * jobSpeechMult, partyBonus);
+    const titleAbilMult = 1 + (getActiveTitleBonus(stateRef.current).abilExpBonus ?? 0);
+    const result = gainAbility(current, amount * newPlayerMult * petAbilMult * jobSpeechMult * titleAbilMult, partyBonus);
     if (result.reachedMax && current.value < 100) {
       const def = ABILITY_DEFS[abilName];
       setTimeout(() => addMsg(`🌟 ${def?.icon ?? ''} ${abilName} 100.00 달성! 스킬창에서 그레이드업 가능!`, 'catch'), 0);
@@ -626,17 +635,21 @@ export default function App() {
       for (const k of Object.keys(bonusBait)) { if (!newBaitOwned.includes(k)) newBaitOwned.push(k); }
       const newPotionInv = { ...(prev.potionInventory ?? {}) };
       for (const [k, v] of Object.entries(bonusPotion)) newPotionInv[k] = (newPotionInv[k] ?? 0) + v;
+      const achPrevStats = prev.achStats ?? {};
       return {
         ...prev, achievements: [...already, ...newIds], money: prev.money + bonusMoney,
         baitInventory: newBaitInv, ownedBait: newBaitOwned, potionInventory: newPotionInv,
+        achStats: { ...achPrevStats, maxMoney: Math.max(achPrevStats.maxMoney ?? 0, prev.money + bonusMoney) },
       };
     });
   }, []);
+  useEffect(() => { checkAndGrantAchievementsRef.current = checkAndGrantAchievements; }, [checkAndGrantAchievements]);
 
   const gainNpcAffinity = useCallback((npcKey, amount) => {
+    const titleNpcMult = getActiveTitleBonus(stateRef.current).npcAffinityMult ?? 1.0;
     setGs(prev => {
       const current = prev.npcAffinity?.[npcKey] ?? 0;
-      const newVal = Math.min(100, current + amount);
+      const newVal = Math.min(100, current + amount * titleNpcMult);
       const npcThresholds = NPCS[npcKey]?.thresholds ?? [];
       const crossed = npcThresholds.find(t => current < t.at && newVal >= t.at);
       if (crossed) {
@@ -713,18 +726,29 @@ export default function App() {
       table = applyBoosts(table, { 희귀: 1 + potionRareBonus, 전설: 1 + potionRareBonus * 1.5, 신화: 1 + potionRareBonus * 2 });
     }
 
-    // Pet + Job rare boost
+    // Pet + Job + Hat + Outfit rare boost
     const petRareBonus = gameRef.current?.petBonus?.rareBonus ?? 0;
     const jobRareBonus = JOBS[s?.selectedJob]?.bonus?.rareBonus ?? 0;
-    const totalRareBonus = petRareBonus + jobRareBonus;
+    const hatRareBonus = HATS[s?.hat]?.bonus?.rareBonus ?? 0;
+    const outfitRareBonus = FISHING_OUTFITS[s?.outfit]?.bonus?.rareBonus ?? 0;
+    const totalRareBonus = petRareBonus + jobRareBonus + hatRareBonus + outfitRareBonus;
     if (totalRareBonus > 0) {
       table = applyBoosts(table, { 희귀: 1 + totalRareBonus, 전설: 1 + totalRareBonus * 1.5, 신화: 1 + totalRareBonus * 2 });
     }
 
-    // Bait boost
+    // Bait boost (amplified by spot deco bait efficiency)
     const baitKey = s?.equippedBait;
     const baitData = baitKey ? BAIT[baitKey] : null;
-    if (baitData) table = applyBoosts(table, baitData.boost);
+    const diyBaitData = baitKey ? BAIT_RECIPES[baitKey] : null;
+    if (baitData) {
+      const baitEff = (s?.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.baitEfficiency ?? 1.0), 1.0);
+      const effBoost = Object.fromEntries(Object.entries(baitData.boost).map(([k, v]) => [k, 1 + (v - 1) * baitEff]));
+      table = applyBoosts(table, effBoost);
+    }
+    if (diyBaitData?.rareBonus) {
+      const r = diyBaitData.rareBonus;
+      table = applyBoosts(table, { 희귀: 1 + r, 전설: 1 + r * 1.5, 신화: 1 + r * 2 });
+    }
 
     // Apply exploration zone fish boosts
     const explored = s?.exploredZones ?? [];
@@ -794,10 +818,15 @@ export default function App() {
     const seaBonus = zoneDef?.seaBonus ?? (gameRef.current?.player?.seaFishing ? 1.5 : 1.0);
     const petSellBonus = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
     const jobSellBonus = 1 + (JOBS[s?.selectedJob]?.bonus?.sellBonus ?? 0);
+    const hatSellBonus = 1 + (HATS[s?.hat]?.bonus?.sellBonus ?? 0);
+    const outfitSellBonus = 1 + (FISHING_OUTFITS[s?.outfit]?.bonus?.sellBonus ?? 0);
+    const furnitureSellBonus = 1 + (s?.cottage?.furniture ?? []).reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.sellBonus ?? 0), 0);
     const seasonPriceBonus = 1 + (getCurrentSeason()?.fishPriceBonus ?? 0);
     const srvSellBonus = (srvEvent?.type === 'sellBonus') ? (1 + (srvEvent.effectValue ?? 0.2)) : 1.0;
     const prestigeSellBonus = 1 + (s?.prestigePermanentSellBonus ?? 0);
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus);
+    const titleBonusObj = getActiveTitleBonus(s);
+    const titleSellBonus = 1 + (titleBonusObj.sellBonus ?? 0) + (titleBonusObj.fishSellBonus ?? 0);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * hatSellBonus * outfitSellBonus * furnitureSellBonus * seasonPriceBonus * srvSellBonus * titleSellBonus * prestigeSellBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -818,7 +847,12 @@ export default function App() {
     // 2% treasure chest
     if (Math.random() < 0.02) {
       const treasure = randInt(200, 800);
-      setGs(prev => ({ ...prev, money: prev.money + treasure }));
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + treasure) };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+        return { ...prev, money: prev.money + treasure, achStats: updatedStats };
+      });
       addMsg(`💰 낚시 중 보물상자 발견! +${treasure}G`, 'catch');
       if (gameRef.current?.player)
         gameRef.current.player.floatText = { text: `보물상자 +${treasure}G`, age: 0, color: '#ffdd00' };
@@ -829,6 +863,12 @@ export default function App() {
       setGs(prev => {
         const bi = { ...(prev.baitInventory ?? {}), [baitKey]: Math.max(0, (prev.baitInventory?.[baitKey] ?? 1) - 1) };
         return { ...prev, baitInventory: bi, equippedBait: bi[baitKey] <= 0 ? null : prev.equippedBait };
+      });
+    } else if (diyBaitData?.oneTime) {
+      const invKey = diyBaitData.name;
+      setGs(prev => {
+        const bi = { ...(prev.baitInventory ?? {}), [invKey]: Math.max(0, (prev.baitInventory?.[invKey] ?? 1) - 1) };
+        return { ...prev, baitInventory: bi, equippedBait: bi[invKey] <= 0 ? null : prev.equippedBait };
       });
     }
     const id = Date.now() + Math.random();
@@ -946,7 +986,6 @@ export default function App() {
     });
 
     // Server-wide stat
-    incrementServerStat('totalFishCaught');
 
     // Tournament: track weekly total (size + rarity bonus)
     if (nicknameRef.current) {
@@ -969,7 +1008,8 @@ export default function App() {
     damageServerBoss(1);
 
     const seasonStaminaMult = getCurrentSeason()?.staminaGainMult ?? 1.0;
-    grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
+    const outfitFishAbilGain = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.fishAbilGain ?? 1.0;
+    grantAbility('낚시', (FISH_ABILITY_GAIN[fd.rarity] ?? 0.30) * outfitFishAbilGain);
     grantAbility('체력', STAMINA_GAIN * seasonStaminaMult);
     advanceQuest('fish');
 
@@ -1036,7 +1076,6 @@ export default function App() {
       setTimeout(() => addMsg('🐲 [심해 원정대] 해룡!! 심해를 지배하는 전설의 존재와 원정대가 맞닥뜨렸습니다!', 'catch'), 600);
       setTimeout(() => addMsg('🌟 원정대의 승리! 해룡이 낚싯줄에 굴복했습니다!', 'catch'), 2200);
     }
-    incrementServerStat('totalFishCaught');
     if (nicknameRef.current) { const rb = TOURNAMENT_RARITY_BONUS[fd.rarity] ?? 0; tournamentScoreRef.current = Math.round(tournamentScoreRef.current + size + rb); submitTournamentScore(nicknameRef.current, tournamentScoreRef.current); seasonScoreRef.current += 1; submitSeasonScore(nicknameRef.current, seasonScoreRef.current); }
     incrementServerQuestProgress('fishCaught');
     if (myGuildIdRef.current) {
@@ -1045,7 +1084,8 @@ export default function App() {
     }
     damageServerBoss(1);
     const seasonStaminaMult = getCurrentSeason()?.staminaGainMult ?? 1.0;
-    grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
+    const outfitFishAbilGain2 = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.fishAbilGain ?? 1.0;
+    grantAbility('낚시', (FISH_ABILITY_GAIN[fd.rarity] ?? 0.30) * outfitFishAbilGain2);
     grantAbility('화술', Math.floor(finalPrice / 100) * SELL_ABILITY_PER_100G * (1 + speechAbil * 0.005));
     grantAbility('체력', STAMINA_GAIN * seasonStaminaMult);
     advanceQuest('fish');
@@ -1086,7 +1126,8 @@ export default function App() {
     const cheolsuAffinity = stateRef.current?.npcAffinity?.채굴사 ?? 0;
     const cheolsuWindfall = cheolsuAffinity >= 50 ? 0.05 : 0;
     const jobWindfallMult = JOBS[stateRef.current?.selectedJob]?.bonus?.windfallMult ?? 1.0;
-    const windfallChance = (0.03 + (curDepth - 1) * 0.015 + cheolsuWindfall + (gameRef.current?.petBonus?.windfallBonus ?? 0)) * jobWindfallMult;
+    const outfitWindfallBonus = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.windfallBonus ?? 0;
+    const windfallChance = (0.03 + (curDepth - 1) * 0.015 + cheolsuWindfall + (gameRef.current?.petBonus?.windfallBonus ?? 0) + outfitWindfallBonus) * jobWindfallMult;
     const windfall = Math.random() < windfallChance;
     if (windfall) {
       const extra = randInt(4, 9);
@@ -1159,15 +1200,6 @@ export default function App() {
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
 
-  const onFishBite = useCallback(() => {
-    addMsg('🎣 찌가 움직입니다! 낚아채세요!', 'catch');
-  }, [addMsg]);
-
-  const onFishEscaped = useCallback(() => {
-    addMsg('💨 낚싯줄이 풀렸습니다... 물고기가 도망쳤어요!', 'error');
-    if (gameRef.current?.player)
-      gameRef.current.player.floatText = { text: '놓쳤다!', age: 0, color: '#ff6644' };
-  }, []);
 
   // ── Command handler ───────────────────────────────────────────────────────
 
@@ -1288,7 +1320,9 @@ export default function App() {
       }
       const baseMult = COOKWARE[cw]?.mult ?? 1;
       const cookAbil = stateRef.current?.abilities?.요리?.value ?? 0;
-      const totalMult = baseMult + cookAbil * 0.01; // up to +1.0x at 100
+      const outfitCookMult = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.cookPriceMult ?? 0;
+      const jobCookMult = JOBS[stateRef.current?.selectedJob]?.bonus?.cookPriceMult ?? 0;
+      const totalMult = baseMult + cookAbil * 0.01 + outfitCookMult + jobCookMult; // up to +1.0x at 100
       const raw = stateRef.current.fishInventory.filter(f => !f.cooked);
       if (raw.length === 0) { addMsg('요리할 생선이 없습니다.'); return; }
       setGs(prev => ({
@@ -1346,12 +1380,17 @@ export default function App() {
         const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
         const enhEffect = rodEnhanceEffect(enhLevel);
         const potionFishBonus = (s.activePotion?.effect?.fishSpeedBonus ?? 0);
+        const diyFishBonus = BAIT_RECIPES[s.equippedBait]?.fishSpeedBonus ?? 0;
         const petFishMult = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
         const jobFishMult = JOBS[s.selectedJob]?.bonus?.fishTimeMult ?? 1.0;
         const innBuffMult = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
         const seasonFishBonus = getCurrentSeason()?.fishSpeedBonus ?? 0;
+        const hatFishMult = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
+        const outfitFishMult = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
+        const spotDecoFishMult = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
+        const titleFishMult = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * hatFishMult * outfitFishMult * spotDecoFishMult * titleFishMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1408,12 +1447,18 @@ export default function App() {
       const enhLevel = s.rodEnhance?.[s.rod] ?? 0;
       const enhEffect = rodEnhanceEffect(enhLevel);
       const potionFishBonus2 = (s.activePotion?.effect?.fishSpeedBonus ?? 0);
+      const diyBaitDef2 = BAIT_RECIPES[s.equippedBait];
+      const diyFishBonus2 = (!diyBaitDef2?.seaOnly || nearest.seaFishing) ? (diyBaitDef2?.fishSpeedBonus ?? 0) : 0;
       const petFishMult2 = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
       const jobFishMult2 = JOBS[s.selectedJob]?.bonus?.fishTimeMult ?? 1.0;
       const innBuffMult2 = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
       const seasonFishBonus2 = getCurrentSeason()?.fishSpeedBonus ?? 0;
+      const hatFishMult2 = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
+      const outfitFishMult2 = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
+      const spotDecoFishMult2 = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
+      const titleFishMult2 = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * hatFishMult2 * outfitFishMult2 * spotDecoFishMult2 * titleFishMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1475,7 +1520,10 @@ export default function App() {
       const jobMineMult = JOBS[s.selectedJob]?.bonus?.mineTimeMult ?? 1.0;
       const depthTimeMult = MINE_DEPTH_TIME[mineDepth - 1] ?? 1.0;
       const cheolsuMineBonus = cheolsu >= 20 ? 0.08 : 0; // 채굴사 lv20: 채굴 속도 +8%
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult);
+      const hatMineMult = HATS[s.hat]?.bonus?.mineTimeMult ?? 1.0;
+      const outfitMineMult = FISHING_OUTFITS[s.outfit]?.bonus?.mineTimeMult ?? 1.0;
+      const titleMineMult = getActiveTitleBonus(s).mineTimeMult ?? 1.0;
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * titleMineMult);
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();
@@ -1513,7 +1561,8 @@ export default function App() {
       const potionGatherBonus = s.activePotion?.effect?.gatherSpeedBonus ?? 0;
       const seasonGatherBonus = getCurrentSeason()?.gatherSpeedBonus ?? 0;
       const petGatherMult = gameRef.current?.petBonus?.gatherTimeMult ?? 1.0;
-      const gatherMult = Math.max(0.3, (1 - gatherAbil * 0.004) * gatherToolMult * (1 - potionGatherBonus) * (1 - seasonGatherBonus) * petGatherMult);
+      const furnitureGatherMult = (s.cottage?.furniture ?? []).reduce((acc, f) => acc * (FURNITURE[f.key]?.bonus?.gatherTimeMult ?? 1.0), 1.0);
+      const gatherMult = Math.max(0.3, (1 - gatherAbil * 0.004) * gatherToolMult * (1 - potionGatherBonus) * (1 - seasonGatherBonus) * petGatherMult * furnitureGatherMult);
       if (gameRef.current) gameRef.current.gatherTimeMult = gatherMult;
       const [mn, mx2] = HERBS[herb].gatherRange.map(t2 => Math.max(800, Math.round(t2 * gatherMult)));
       player.activityStart = performance.now();
@@ -1541,11 +1590,17 @@ export default function App() {
       const inv = s.fishInventory;
       if (inv.length === 0) { addMsg('판매할 물고기가 없습니다.'); return; }
       const total = inv.reduce((sum, f) => sum + f.price, 0);
-      setGs(prev => ({ ...prev, money: prev.money + total, fishInventory: [] }));
+      setGs(prev => {
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + total, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + total) };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+        return { ...prev, money: prev.money + total, fishInventory: [], achStats: updatedStats };
+      });
       addMsg(`💰 물고기 ${inv.length}마리 → ${total}G!`, 'catch');
       playSellSound(total);
       grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
       advanceQuest('sell', total);
+      gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
       return;
     }
 
@@ -1573,7 +1628,8 @@ export default function App() {
       const explored = stateRef.current?.exploredZones ?? [];
       const guildLv = guildInfo?.level ?? 0;
       const curSeasonId = getCurrentSeason()?.id ?? null;
-      const unlockable = checkZoneUnlock(abilities, explored, guildLv, curSeasonId);
+      const furnitureExploreReduction = (stateRef.current?.cottage?.furniture ?? []).reduce((sum, f) => sum + Math.abs(FURNITURE[f.key]?.bonus?.exploreReq ?? 0), 0);
+      const unlockable = checkZoneUnlock(abilities, explored, guildLv, curSeasonId, furnitureExploreReduction);
       if (unlockable.length === 0) {
         const allExplored = EXPLORE_ZONES.every(z => explored.includes(z.id));
         if (allExplored) { addMsg('🗺 모든 탐험 구역을 이미 발견했습니다!'); }
@@ -1813,7 +1869,8 @@ export default function App() {
       // 요리사 affinity 50+ (제자): 15% chance to cook double
       const cookDoubleChance = (stateRef.current?.npcAffinity?.요리사 ?? 0) >= 50 ? 0.15 : 0;
       const cookedDouble = Math.random() < cookDoubleChance;
-      const dishEarned = recipe.price * (cookedDouble ? 2 : 1);
+      const outfitDishMult = 1 + (FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.cookPriceMult ?? 0) + (JOBS[stateRef.current?.selectedJob]?.bonus?.cookPriceMult ?? 0);
+      const dishEarned = Math.round(recipe.price * outfitDishMult * (cookedDouble ? 2 : 1));
       // Consume ingredients and add gold
       setGs(prev => {
         const newCrops = { ...(prev.cropInventory ?? {}) };
@@ -1828,7 +1885,7 @@ export default function App() {
         const prevStats = prev.achStats ?? {};
         const newDishLog = { ...(prev.dishLog ?? {}), [dishKey]: ((prev.dishLog ?? {})[dishKey] ?? 0) + 1 };
         const dishSpecies = Object.keys(newDishLog).filter(k => newDishLog[k] > 0).length;
-        const updatedStats = { ...prevStats, dishCooked: (prevStats.dishCooked ?? 0) + 1, cookCount: (prevStats.cookCount ?? 0) + 1, dishSpecies };
+        const updatedStats = { ...prevStats, dishCooked: (prevStats.dishCooked ?? 0) + 1, cookCount: (prevStats.cookCount ?? 0) + 1, dishSpecies, maxMoney: Math.max(prevStats.maxMoney ?? 0, (prev.money ?? 0) + dishEarned) };
         setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
         const newDiscovered = (prev.discoveredRecipes ?? []).includes(dishKey)
           ? prev.discoveredRecipes
@@ -2134,7 +2191,8 @@ export default function App() {
     const hasMats = Object.entries(mats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n);
     if (!canAfford) { addMsg(`💰 골드 부족 (${cost}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
-    const rate = pickaxeEnhanceSuccessRate(enhLevel, gs.abilities?.강화?.value ?? 0);
+    const furnitureEnhBonus = (gs.cottage?.furniture ?? []).reduce((sum, f) => sum + (FURNITURE[f.key]?.bonus?.enhanceBonus ?? 0), 0);
+    const rate = Math.min(0.98, pickaxeEnhanceSuccessRate(enhLevel, gs.abilities?.강화?.value ?? 0) + furnitureEnhBonus);
     const success = Math.random() < rate;
     setGs(prev => {
       const ores = { ...prev.oreInventory };
@@ -2171,8 +2229,15 @@ export default function App() {
   const sellOne = (id) => {
     const fish = gs.fishInventory.find(f => f.id === id);
     if (!fish) return;
-    setGs(prev => ({ ...prev, money: prev.money + fish.price, fishInventory: prev.fishInventory.filter(f => f.id !== id) }));
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + fish.price, maxMoney: Math.max(prevStats.maxMoney ?? 0, prev.money + fish.price) };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      return { ...prev, money: prev.money + fish.price, fishInventory: prev.fishInventory.filter(f => f.id !== id), achStats: updatedStats };
+    });
     grantAbility('화술', Math.max(0.01, Math.floor(fish.price / 100) * SELL_ABILITY_PER_100G));
+    advanceQuest('sell', fish.price);
+    gainNpcAffinity('상인', Math.max(1, Math.floor(fish.price / 150)));
   };
 
   const handleLogin = (name, appearance) => {
@@ -2252,9 +2317,21 @@ export default function App() {
         }
         if (reward.rodSkin && !(next.rodSkins ?? []).includes(reward.rodSkin)) {
           next = { ...next, rodSkins: [...(next.rodSkins ?? []), reward.rodSkin] };
+          // Map display name → ROD_SKINS key so the skin can be equipped from the shop panel
+          const rodSkinKeyMap = { '황금낚싯대 스킨': '황금스킨', '광부낚싯대 스킨': '광부스킨' };
+          const equipKey = rodSkinKeyMap[reward.rodSkin];
+          if (equipKey && !(next.ownedRodSkins ?? ['기본스킨']).includes(equipKey)) {
+            next = { ...next, ownedRodSkins: [...(next.ownedRodSkins ?? ['기본스킨']), equipKey] };
+          }
         }
         if (reward.costume && !(next.ownedCostumes ?? []).includes(reward.costume)) {
           next = { ...next, ownedCostumes: [...(next.ownedCostumes ?? []), reward.costume] };
+        }
+        if (reward.money) {
+          const prevStats = next.achStats ?? {};
+          const updatedStats = { ...prevStats, maxMoney: Math.max(prevStats.maxMoney ?? 0, next.money) };
+          setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+          next = { ...next, achStats: updatedStats };
         }
         return next;
       });
@@ -2268,7 +2345,7 @@ export default function App() {
       addMsg(`💬 ${nextQuest.dialogue[0]}`, 'info');
       addMsg(`📌 ${nextQuest.hint(s)}`, 'info');
     }
-  }, [addMsg, stateRef]);
+  }, [addMsg, stateRef, checkAndGrantAchievements]);
 
   const handlePrestige = useCallback(() => {
     const playerState = gameRef.current?.player?.state;
@@ -2314,6 +2391,9 @@ export default function App() {
       if (raw.length === 0) { addMsg('🍳 수연: "요리할 생선이 없네요!"'); return; }
       setGs(prev => {
         const newSpXP3 = (prev.seasonPassXP ?? 0) + 2;
+        const prevStats = prev.achStats ?? {};
+        const updatedStats = { ...prevStats, cookCount: (prevStats.cookCount ?? 0) + raw.length };
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
         return {
           ...prev,
           fishInventory: prev.fishInventory.map(f =>
@@ -2321,6 +2401,7 @@ export default function App() {
           ),
           seasonPassXP: newSpXP3,
           seasonPassTier: Math.min(10, Math.floor(newSpXP3 / 50)),
+          achStats: updatedStats,
         };
       });
       addMsg(`🍳 수연이 생선 ${raw.length}마리를 요리해줬어요! (x${totalMult.toFixed(2)})`, 'catch');
@@ -2373,7 +2454,7 @@ export default function App() {
       gainNpcAffinity('은행원', 1.5);
       setTimeout(() => checkNpcQuest('은행원'), 0);
     }
-  }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, stateRef]);
+  }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, checkAndGrantAchievements, stateRef]);
 
   // ── Season/weather transition fade (must be before early returns per hook rules) ──
   const _currentSeasonForFade = getCurrentSeason();
@@ -2453,9 +2534,7 @@ export default function App() {
           onOreMined={onOreMined}
           onHerbGathered={onHerbGathered}
           onActivityChange={onActivityChange}
-          onFishBite={onFishBite}
-          onFishEscaped={onFishEscaped}
-          nickname={nickname}
+nickname={nickname}
           title={myTitle.label}
           titleColor={myTitle.color}
           otherPlayersRef={otherPlayersRef}
@@ -2497,7 +2576,6 @@ export default function App() {
           currentSeason={currentSeason}
           activity={activity}
           isOnline={isOnline}
-          serverStats={serverStats}
           serverQuest={serverQuest}
           serverBoss={serverBoss}
           fishSurgeEvent={fishSurgeEvent}
@@ -2650,6 +2728,12 @@ export default function App() {
         sellAll={sellAll}
         sellOne={sellOne}
         equipBait={equipBait}
+        equipRod={equipRod}
+        equipBoots={equipBoots}
+        equipCookware={equipCookware}
+        equipMarineGear={equipMarineGear}
+        equipPickaxe={equipPickaxe}
+        equipGatherTool={equipGatherTool}
         totalFishVal={totalFishVal}
         showInv={showInv}
         setShowInv={setShowInv}
@@ -2726,18 +2810,12 @@ export default function App() {
         stateRef={stateRef}
         playSellSound={playSellSound}
         buyRod={buyRod}
-        equipRod={equipRod}
         buyBoots={buyBoots}
-        equipBoots={equipBoots}
         buyBait={buyBait}
         buyCookware={buyCookware}
-        equipCookware={equipCookware}
         buyMarineGear={buyMarineGear}
-        equipMarineGear={equipMarineGear}
         buyPickaxe={buyPickaxe}
-        equipPickaxe={equipPickaxe}
         buyGatherTool={buyGatherTool}
-        equipGatherTool={equipGatherTool}
         setGuildInfo={setGuildInfo}
         setGuildMembers={setGuildMembers}
         setGuildChat={setGuildChat}
