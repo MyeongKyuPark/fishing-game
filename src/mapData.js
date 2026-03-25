@@ -634,9 +634,9 @@ export function getActiveMineEntrance() { return ZONE_MINE_ENTRANCES[_activeZone
 // Traveling NPCs in outer zones — tile positions for detection & rendering
 export const ZONE_TRAVEL_NPCS = {
   '서쪽초원': { id: '행상인',    name: '행상인',      icon: '🧳', color: '#ddaa44', tx: 20, ty: 12 },
-  '동쪽절벽': { id: '노련한광부', name: '노련한 광부',  icon: '🪨', color: '#aa8866', tx: 20, ty: 12 },
+  '동쪽절벽': { id: '노련한광부', name: '노련한 광부',  icon: '🪨', color: '#aa8866', tx: 35, ty: 12 },
   '북쪽고원': { id: '산신령',    name: '산신령',      icon: '🌫', color: '#aaddff', tx: 20, ty: 10 },
-  '남쪽심해': { id: '심해탐험가', name: '심해 탐험가',  icon: '🤿', color: '#4488ff', tx: 20, ty: 12 },
+  '남쪽심해': { id: '심해탐험가', name: '심해 탐험가',  icon: '🤿', color: '#4488ff', tx: 36, ty: 16 },
 };
 
 // Zone unlock requirements — checked in App.jsx to populate gameRef.current.unlockedZones

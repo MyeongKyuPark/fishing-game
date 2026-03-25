@@ -59,6 +59,15 @@ import SeasonPass from './SeasonPass';
 // Tournament rarity bonus: points added on top of fish size per rarity tier
 const TOURNAMENT_RARITY_BONUS = { 흔함: 0, 보통: 10, 희귀: 25, 전설: 60, 신화: 150 };
 
+// Zone mastery thresholds (cumulative exp → level 1-5)
+const ZONE_MASTERY_THRESHOLDS = [10, 30, 60, 100, 150];
+function getZoneMasteryLevel(zoneMastery, zone) {
+  const exp = zoneMastery?.[zone] ?? 0;
+  let lv = 0;
+  for (const t of ZONE_MASTERY_THRESHOLDS) if (exp >= t) lv++;
+  return lv;
+}
+
 function LoginScreen({ onLogin }) {
   const [name, setName] = useState('');
   const [err, setErr] = useState('');
@@ -853,7 +862,11 @@ export default function App() {
     const titleBonusObj = getActiveTitleBonus(s);
     const titleSellBonus = 1 + (titleBonusObj.sellBonus ?? 0) + (titleBonusObj.fishSellBonus ?? 0);
     const worldZoneSellBonus = worldZoneBonus.fishSellMult ?? 1.0;
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus * hatSellBonus * outfitSellBonus * topSellBonus * bottomSellBonus * beltSellBonus * titleSellBonus * furnitureSellBonus * worldZoneSellBonus);
+    const mtnBuffSell = gameRef.current?.mountainBuff;
+    const mtnSellBonus = (mtnBuffSell?.type === 'sellPrice' && Date.now() < mtnBuffSell.expiresAt) ? 1.15 : 1.0;
+    const deepMasteryLv = getZoneMasteryLevel(s?.zoneMastery, '남쪽심해');
+    const deepMasteryBonus = (worldZone === '남쪽심해' && deepMasteryLv > 0) ? 1 + deepMasteryLv * 0.1 : 1.0;
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus * hatSellBonus * outfitSellBonus * topSellBonus * bottomSellBonus * beltSellBonus * titleSellBonus * furnitureSellBonus * worldZoneSellBonus * mtnSellBonus * deepMasteryBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -909,6 +922,10 @@ export default function App() {
         : (prevStats.speciesCount ?? (prev.caughtSpecies ?? []).length) + 1;
       const newMoney = prev.money;
       const newMaxMoney = Math.max(prevStats.maxMoney ?? 0, newMoney);
+      const isLegendaryOrMythic = fd.rarity === '전설' || fd.rarity === '신화';
+      const zoneDeepFishCount = (getActiveZone() === '남쪽심해' && isLegendaryOrMythic)
+        ? (prevStats.zoneDeepFishCount ?? 0) + 1
+        : (prevStats.zoneDeepFishCount ?? 0);
       const updatedStats = {
         ...prevStats,
         fishCaught: newFishCaught,
@@ -916,12 +933,18 @@ export default function App() {
         mythicCount: newMythic,
         speciesCount: newSpeciesCount,
         maxMoney: newMaxMoney,
+        zoneDeepFishCount,
       };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       const prevRecord = prev.fishRecords?.[name]?.size ?? 0;
       const isNewRecord = size > prevRecord;
       const newSpXP = (prev.seasonPassXP ?? 0) + 1;
       const newSpTier = Math.min(10, Math.floor(newSpXP / 50));
+      // Zone mastery exp: 남쪽심해 +1 per fish caught there
+      const fishActiveZone = getActiveZone();
+      const newZoneMastery = fishActiveZone === '남쪽심해'
+        ? { ...(prev.zoneMastery ?? {}), '남쪽심해': (prev.zoneMastery?.['남쪽심해'] ?? 0) + 1 }
+        : (prev.zoneMastery ?? {});
       return {
         ...prev,
         fishInventory: [...prev.fishInventory, { name, size, price: finalPrice, id }],
@@ -932,6 +955,7 @@ export default function App() {
           : prev.fishRecords,
         seasonPassXP: newSpXP,
         seasonPassTier: newSpTier,
+        zoneMastery: newZoneMastery,
       };
     });
     const prevRecord = stateRef.current?.fishRecords?.[name]?.size ?? 0;
@@ -1129,15 +1153,24 @@ export default function App() {
 
   const onOreMined = useCallback((oreName) => {
     // World-zone ore yield bonus (동쪽절벽 ×1.3, 북쪽고원 ×1.15)
-    const oreZoneBon = ZONE_BONUSES[getActiveZone()] ?? {};
-    const oreCount = (oreZoneBon.oreMult && Math.random() < (oreZoneBon.oreMult - 1)) ? 2 : 1;
+    const oreActiveZone = getActiveZone();
+    const oreZoneBon = ZONE_BONUSES[oreActiveZone] ?? {};
+    const baseMasteryLv = getZoneMasteryLevel(stateRef.current?.zoneMastery, oreActiveZone);
+    const oreMasteryBonus = (oreActiveZone === '동쪽절벽' && baseMasteryLv > 0 && Math.random() < baseMasteryLv * 0.1) ? 1 : 0;
+    const oreCount = ((oreZoneBon.oreMult && Math.random() < (oreZoneBon.oreMult - 1)) ? 2 : 1) + oreMasteryBonus;
     setGs(prev => {
       const prevStats = prev.achStats ?? {};
       const newOreLog = { ...(prev.oreLog ?? {}), [oreName]: ((prev.oreLog ?? {})[oreName] ?? 0) + oreCount };
       const oreSpecies = Object.keys(newOreLog).filter(k => newOreLog[k] > 0).length;
-      const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + oreCount, oreSpecies };
+      const zoneOreCount = oreActiveZone === '동쪽절벽' ? (prevStats.zoneOreCount ?? 0) + oreCount : (prevStats.zoneOreCount ?? 0);
+      const zoneRareCount = oreActiveZone === '북쪽고원' ? (prevStats.zoneRareCount ?? 0) + oreCount : (prevStats.zoneRareCount ?? 0);
+      const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + oreCount, oreSpecies, zoneOreCount, zoneRareCount };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       const newSpXP2 = (prev.seasonPassXP ?? 0) + 1;
+      // Zone mastery exp: 동쪽절벽 or 북쪽고원
+      const newZoneMasteryOre = { ...(prev.zoneMastery ?? {}) };
+      if (oreActiveZone === '동쪽절벽') newZoneMasteryOre['동쪽절벽'] = (newZoneMasteryOre['동쪽절벽'] ?? 0) + 1;
+      if (oreActiveZone === '북쪽고원') newZoneMasteryOre['북쪽고원'] = (newZoneMasteryOre['북쪽고원'] ?? 0) + 1;
       return {
         ...prev,
         oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + oreCount },
@@ -1145,6 +1178,7 @@ export default function App() {
         achStats: updatedStats,
         seasonPassXP: newSpXP2,
         seasonPassTier: Math.min(10, Math.floor(newSpXP2 / 50)),
+        zoneMastery: newZoneMasteryOre,
       };
     });
     addMsg(`⛏ ${oreName} ${oreCount}개 채굴!${oreCount > 1 ? ' (광물이 풍부한 지역!)' : ''}`, 'mine');
@@ -1208,19 +1242,29 @@ export default function App() {
 
   const onHerbGathered = useCallback((herbName) => {
     // World-zone herb yield bonus (서쪽초원 ×1.4, 북쪽고원 ×1.2)
-    const zoneBon = ZONE_BONUSES[getActiveZone()] ?? {};
-    const herbCount = (zoneBon.herbMult && Math.random() < (zoneBon.herbMult - 1)) ? 2 : 1;
+    const herbActiveZone = getActiveZone();
+    const zoneBon = ZONE_BONUSES[herbActiveZone] ?? {};
+    const herbMasteryLv = getZoneMasteryLevel(stateRef.current?.zoneMastery, herbActiveZone);
+    const herbMasteryBonus = (herbActiveZone === '서쪽초원' && herbMasteryLv > 0 && Math.random() < herbMasteryLv * 0.1) ? 1 : 0;
+    const herbCount = ((zoneBon.herbMult && Math.random() < (zoneBon.herbMult - 1)) ? 2 : 1) + herbMasteryBonus;
     setGs(prev => {
       const prevStats = prev.achStats ?? {};
       const newHerbLog = { ...(prev.herbLog ?? {}), [herbName]: ((prev.herbLog ?? {})[herbName] ?? 0) + herbCount };
       const herbSpecies = Object.keys(newHerbLog).filter(k => newHerbLog[k] > 0).length;
-      const updatedStats = { ...prevStats, herbGathered: (prevStats.herbGathered ?? 0) + herbCount, herbSpecies };
+      const zoneHerbCount = herbActiveZone === '서쪽초원' ? (prevStats.zoneHerbCount ?? 0) + herbCount : (prevStats.zoneHerbCount ?? 0);
+      const zoneRareHerb = herbActiveZone === '북쪽고원' ? (prevStats.zoneRareCount ?? 0) + herbCount : (prevStats.zoneRareCount ?? 0);
+      const updatedStats = { ...prevStats, herbGathered: (prevStats.herbGathered ?? 0) + herbCount, herbSpecies, zoneHerbCount, zoneRareCount: Math.max(prevStats.zoneRareCount ?? 0, zoneRareHerb) };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      // Zone mastery exp
+      const newZoneMasteryHerb = { ...(prev.zoneMastery ?? {}) };
+      if (herbActiveZone === '서쪽초원') newZoneMasteryHerb['서쪽초원'] = (newZoneMasteryHerb['서쪽초원'] ?? 0) + 1;
+      if (herbActiveZone === '북쪽고원') newZoneMasteryHerb['북쪽고원'] = (newZoneMasteryHerb['북쪽고원'] ?? 0) + 1;
       return {
         ...prev,
         herbInventory: { ...(prev.herbInventory ?? {}), [herbName]: ((prev.herbInventory ?? {})[herbName] || 0) + herbCount },
         herbLog: newHerbLog,
         achStats: updatedStats,
+        zoneMastery: newZoneMasteryHerb,
       };
     });
     addMsg(`🌿 ${herbName} ${herbCount}개 채집!${herbCount > 1 ? ' (풍요로운 지역 보너스!)' : ''}`, 'catch');
@@ -1443,6 +1487,8 @@ export default function App() {
         const petFishMult = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
         const jobFishMult = JOBS[s.selectedJob]?.bonus?.fishTimeMult ?? 1.0;
         const innBuffMult = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
+        const mtnBuff = gameRef.current?.mountainBuff;
+        const mtnFishMult = (mtnBuff?.type === 'fishSpeed' && Date.now() < mtnBuff.expiresAt) ? 0.85 : 1.0;
         const seasonFishBonus = getCurrentSeason()?.fishSpeedBonus ?? 0;
         const hatFishMult = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
         const outfitFishMult = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
@@ -1452,7 +1498,7 @@ export default function App() {
         const spotDecoFishMult = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
         const titleFishMult = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * hatFishMult * outfitFishMult * topFishMult * bottomFishMult * beltFishMult * spotDecoFishMult * titleFishMult
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * mtnFishMult * hatFishMult * outfitFishMult * topFishMult * bottomFishMult * beltFishMult * spotDecoFishMult * titleFishMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1514,6 +1560,8 @@ export default function App() {
       const petFishMult2 = gameRef.current?.petBonus?.fishTimeMult ?? 1.0;
       const jobFishMult2 = JOBS[s.selectedJob]?.bonus?.fishTimeMult ?? 1.0;
       const innBuffMult2 = (gameRef.current?.innBuff?.expiresAt ?? 0) > Date.now() ? 0.8 : 1.0;
+      const mtnBuff2 = gameRef.current?.mountainBuff;
+      const mtnFishMult2 = (mtnBuff2?.type === 'fishSpeed' && Date.now() < mtnBuff2.expiresAt) ? 0.85 : 1.0;
       const seasonFishBonus2 = getCurrentSeason()?.fishSpeedBonus ?? 0;
       const hatFishMult2 = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
       const outfitFishMult2 = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
@@ -1523,7 +1571,7 @@ export default function App() {
       const spotDecoFishMult2 = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
       const titleFishMult2 = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * hatFishMult2 * outfitFishMult2 * topFishMult2 * bottomFishMult2 * beltFishMult2 * spotDecoFishMult2 * titleFishMult2
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * mtnFishMult2 * hatFishMult2 * outfitFishMult2 * topFishMult2 * bottomFishMult2 * beltFishMult2 * spotDecoFishMult2 * titleFishMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1591,7 +1639,9 @@ export default function App() {
       const bottomMineMult = BOTTOMS[s.bottom]?.bonus?.mineTimeMult ?? 1.0;
       const titleMineMult = getActiveTitleBonus(s).mineTimeMult ?? 1.0;
       const worldZoneMineReduction = ZONE_BONUSES[getActiveZone()]?.mineTimeReduction ?? 0;
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * topMineMult * bottomMineMult * titleMineMult * (1 - worldZoneMineReduction));
+      const mtnBuffMine = gameRef.current?.mountainBuff;
+      const mtnMineMult = (mtnBuffMine?.type === 'mineSpeed' && Date.now() < mtnBuffMine.expiresAt) ? 0.85 : 1.0;
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * topMineMult * bottomMineMult * titleMineMult * (1 - worldZoneMineReduction) * mtnMineMult);
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();
@@ -3090,6 +3140,7 @@ nickname={nickname}
       {showWorldMap && (
         <WorldMap
           currentZone={gs.worldZone ?? '마을'}
+          zoneMastery={gs.zoneMastery ?? {}}
           lockedZones={Object.keys(ZONE_UNLOCK_REQ).filter(z => {
             const req = ZONE_UNLOCK_REQ[z];
             if (!req) return false;

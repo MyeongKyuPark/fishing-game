@@ -755,6 +755,51 @@ export default function GameCanvas({
         drawFullMap(ctx, W, H, player.x, player.y, others, nickname);
       }
 
+      // Zone atmosphere overlays
+      {
+        const az = getActiveZone();
+        const t = performance.now();
+        if (az === '북쪽고원') {
+          // Fog: wispy horizontal gradient drifting slowly
+          const drift = (t / 8000) % 1;
+          const fogGrad = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+          fogGrad.addColorStop(0, 'rgba(220,230,255,0.38)');
+          fogGrad.addColorStop(0.4, 'rgba(200,215,255,0.18)');
+          fogGrad.addColorStop(1, 'rgba(200,215,255,0.0)');
+          ctx.fillStyle = fogGrad;
+          ctx.fillRect(0, 0, W, H);
+          // Wispy fog bands
+          ctx.save();
+          ctx.globalAlpha = 0.12 + 0.06 * Math.sin(t / 2400);
+          for (let i = 0; i < 3; i++) {
+            const bx = ((drift + i / 3) % 1) * W * 1.5 - W * 0.25;
+            const by = H * (0.08 + i * 0.09);
+            const bw = W * 0.7 + i * 40;
+            const bh = 28 + i * 10;
+            const bg = ctx.createRadialGradient(bx + bw / 2, by, 0, bx + bw / 2, by, bw / 1.5);
+            bg.addColorStop(0, 'rgba(235,242,255,0.7)');
+            bg.addColorStop(1, 'rgba(235,242,255,0)');
+            ctx.fillStyle = bg;
+            ctx.fillRect(bx, by - bh / 2, bw, bh);
+          }
+          ctx.restore();
+        } else if (az === '남쪽심해') {
+          // Blue tint + animated caustic shimmer
+          const wave = 0.07 + 0.03 * Math.sin(t / 1800);
+          ctx.fillStyle = `rgba(0,60,120,${wave.toFixed(3)})`;
+          ctx.fillRect(0, 0, W, H);
+          // Light caustic ripples along the top
+          ctx.save();
+          ctx.globalAlpha = 0.08 + 0.04 * Math.sin(t / 900);
+          const cg = ctx.createLinearGradient(0, 0, 0, H * 0.3);
+          cg.addColorStop(0, 'rgba(100,200,255,0.5)');
+          cg.addColorStop(1, 'rgba(100,200,255,0)');
+          ctx.fillStyle = cg;
+          ctx.fillRect(0, 0, W, H);
+          ctx.restore();
+        }
+      }
+
       ctx.restore();
 
       rafId = requestAnimationFrame(loop);

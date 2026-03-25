@@ -1,6 +1,15 @@
 // WorldMap — 5-zone overview modal
 import { ZONE_LABELS, ZONE_BONUSES, ZONE_CONNECTIONS, ZONE_UNLOCK_REQ } from '../mapData';
 
+const ZONE_MASTERY_THRESHOLDS = [10, 30, 60, 100, 150];
+function getZoneMasteryLevel(zoneMastery, zone) {
+  const exp = zoneMastery?.[zone] ?? 0;
+  let lv = 0;
+  for (const t of ZONE_MASTERY_THRESHOLDS) if (exp >= t) lv++;
+  return lv;
+}
+const MASTERY_COLORS = ['#aaaaaa', '#88dd88', '#44aaff', '#ff9944', '#ff44aa', '#ffdd00'];
+
 const ZONE_META = {
   '마을':    { icon: '🏠', color: '#e8d888', desc: '낚시와 채굴의 조용한 마을', bonusText: '기본 지역' },
   '서쪽초원': { icon: '🌾', color: '#88dd88', desc: '풍요로운 초원. 허브가 풍부하다.', bonusText: '허브 +40% · 생선 판매 -5%' },
@@ -30,7 +39,7 @@ const CONNECTORS = [
   { from: [1, 1], to: [2, 1], dir: '↕' },
 ];
 
-export default function WorldMap({ currentZone, onClose, lockedZones = [] }) {
+export default function WorldMap({ currentZone, onClose, lockedZones = [], zoneMastery = {} }) {
   return (
     <div
       style={{
@@ -107,6 +116,19 @@ export default function WorldMap({ currentZone, onClose, lockedZones = [] }) {
                 {isLocked && (
                   <div style={{ position: 'absolute', top: 4, right: 4, fontSize: 12 }} title={ZONE_UNLOCK_REQ[zone]?.desc ?? ''}>🔒</div>
                 )}
+                {!isLocked && zone !== '마을' && (() => {
+                  const lv = getZoneMasteryLevel(zoneMastery, zone);
+                  const exp = zoneMastery?.[zone] ?? 0;
+                  const nextThreshold = ZONE_MASTERY_THRESHOLDS[lv] ?? null;
+                  return (
+                    <div style={{ position: 'absolute', top: 4, left: 4 }}
+                      title={lv > 0 ? `숙련도 ${lv}레벨 (${exp}exp${nextThreshold ? ` / 다음: ${nextThreshold}` : ' MAX'})` : `숙련도 0 (${exp}exp / 다음: ${ZONE_MASTERY_THRESHOLDS[0]})`}>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: MASTERY_COLORS[lv], background: 'rgba(0,0,0,0.55)', borderRadius: 3, padding: '1px 3px' }}>
+                        Lv{lv}
+                      </span>
+                    </div>
+                  );
+                })()}
                 <div style={{ fontSize: 24, lineHeight: 1, marginBottom: 4 }}>{meta.icon}</div>
                 <div style={{ color: meta.color, fontWeight: 700, fontSize: 11, marginBottom: 3 }}>
                   {zone}
@@ -148,6 +170,30 @@ export default function WorldMap({ currentZone, onClose, lockedZones = [] }) {
             <div style={{ color: ZONE_META[currentZone].color, fontSize: 11, marginTop: 6, opacity: 0.8 }}>
               보너스: {ZONE_META[currentZone].bonusText}
             </div>
+            {currentZone !== '마을' && (() => {
+              const lv = getZoneMasteryLevel(zoneMastery, currentZone);
+              const exp = zoneMastery?.[currentZone] ?? 0;
+              const nextT = ZONE_MASTERY_THRESHOLDS[lv] ?? null;
+              const bar = nextT ? exp / nextT : 1;
+              const prevT = lv > 0 ? ZONE_MASTERY_THRESHOLDS[lv - 1] : 0;
+              const barFill = nextT ? Math.min(1, (exp - prevT) / (nextT - prevT)) : 1;
+              return (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                    <span style={{ color: MASTERY_COLORS[lv], fontWeight: 700, fontSize: 11 }}>숙련도 Lv{lv}</span>
+                    <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>{exp}{nextT ? ` / ${nextT}` : ' MAX'} exp</span>
+                  </div>
+                  <div style={{ height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${barFill * 100}%`, background: MASTERY_COLORS[lv], borderRadius: 2, transition: 'width 0.3s' }} />
+                  </div>
+                  {lv > 0 && (
+                    <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, marginTop: 3 }}>
+                      현재 보너스: +{lv * 10}% 수확/판매
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 

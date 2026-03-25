@@ -188,6 +188,20 @@ export const TITLES = [
     condition: (gs) => (gs.achStats?.mythicCount ?? 0) >= 10,
   },
   {
+    label: '초원의 바람',   color: '#88dd88',
+    unlockDesc: '초원 채집 50회',
+    effectDesc: '없음',
+    bonus: {},
+    condition: (gs) => (gs.achStats?.zoneHerbCount ?? 0) >= 50,
+  },
+  {
+    label: '심해의 지배자', color: '#4488ff',
+    unlockDesc: '심해 물고기 5마리',
+    effectDesc: '없음',
+    bonus: {},
+    condition: (gs) => (gs.achStats?.zoneDeepFishCount ?? 0) >= 5,
+  },
+  {
     label: '타이드헤이븐의 전설', color: '#ffd700',
     unlockDesc: '챕터 5 스토리 완료',
     effectDesc: '판매가 +10% · 오프라인 수입 +10%',

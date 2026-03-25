@@ -368,6 +368,12 @@ export function useWebSocket(params) {
 
   useEffect(() => {
     if (!gameRef.current) return;
+    const buff = gs.mountainBuff;
+    gameRef.current.mountainBuff = (buff && Date.now() < buff.expiresAt) ? buff : null;
+  }, [gs.mountainBuff]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!gameRef.current) return;
     gameRef.current.worldZone = gs.worldZone ?? '마을';
   }, [gs.worldZone]); // eslint-disable-line react-hooks/exhaustive-deps
 

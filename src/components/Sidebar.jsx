@@ -2806,7 +2806,9 @@ export default function Sidebar(props) {
                       const oreColors = { 철광석: '#cc8844', 구리광석: '#44ccaa', 수정: '#aa66ff', 금광석: '#ffd700' };
                       const petSell = 1 + (gameRef.current?.petBonus?.sellBonus ?? 0);
                       const speechMult = 1 + (gs.abilities?.화술?.value ?? 0) * 0.005;
-                      const price = Math.round((ORES[ore]?.price ?? 100) * petSell * speechMult);
+                      const mtnBuffOre = gameRef.current?.mountainBuff;
+                      const mtnOreSell = (mtnBuffOre?.type === 'sellPrice' && Date.now() < mtnBuffOre.expiresAt) ? 1.15 : 1.0;
+                      const price = Math.round((ORES[ore]?.price ?? 100) * petSell * speechMult * mtnOreSell);
                       const qtyKey = `ore_${ore}`;
                       const qty = Math.min(count, Math.max(1, parseInt(sellQty[qtyKey] ?? count) || count));
                       const total = price * qty;

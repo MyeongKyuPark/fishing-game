@@ -62,6 +62,11 @@ export const ACHIEVEMENTS = [
   { id: 'dish_all',     label: '마스터 셰프',   desc: '모든 특별 요리 레시피 완성',            icon: '👨‍🍳', type: 'dishSpecies',  goal: 9,  reward: { money: 15000 } },
   { id: 'crop_all',     label: '대지의 개척자', desc: '모든 종류 작물 수확',                  icon: '🌱', type: 'cropSpecies',   goal: 9,  reward: { money: 10000 } },
   { id: 'potion_all',   label: '연금술사',      desc: '모든 포션 종류 제조',                  icon: '⚗️', type: 'potionSpecies', goal: 7,  reward: { money: 8000 } },
+  // Phase 11: Zone-specific achievements
+  { id: 'zone_herb_50',  label: '초원의 약초꾼', desc: '서쪽 초원에서 허브 50개 채집',          icon: '🌾', type: 'zoneHerbCount',     goal: 50,  reward: { money: 5000 } },
+  { id: 'zone_ore_100',  label: '절벽의 광부',   desc: '동쪽 절벽에서 광석 100개 채굴',         icon: '⛏',  type: 'zoneOreCount',      goal: 100, reward: { money: 8000 } },
+  { id: 'zone_rare_30',  label: '고원의 수집가',  desc: '북쪽 고원에서 희귀 자원 30개 수집',     icon: '🏔', type: 'zoneRareCount',     goal: 30,  reward: { money: 10000 } },
+  { id: 'zone_deep_5',   label: '심해의 전설',   desc: '남쪽 심해에서 전설/신화급 5마리 포획',  icon: '🌊', type: 'zoneDeepFishCount', goal: 5,   reward: { money: 20000 } },
 ];
 
 /** Check which new achievements were just unlocked.

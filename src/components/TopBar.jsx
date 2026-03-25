@@ -40,11 +40,18 @@ export default function TopBar({
         {weather && (
           <div className="hud-chip" style={{ fontSize: 11 }}>{weather.icon} {weather.label}</div>
         )}
-        {gs.worldZone && gs.worldZone !== '마을' && (
-          <div className="hud-chip" style={{ fontSize: 11, color: '#a8e8ff', background: 'rgba(0,80,140,0.4)' }}>
-            {ZONE_LABELS[gs.worldZone] ?? gs.worldZone}
-          </div>
-        )}
+        {gs.worldZone && gs.worldZone !== '마을' && (() => {
+          const THRESHOLDS = [10, 30, 60, 100, 150];
+          const exp = gs.zoneMastery?.[gs.worldZone] ?? 0;
+          let lv = 0;
+          for (const t of THRESHOLDS) if (exp >= t) lv++;
+          return (
+            <div className="hud-chip" style={{ fontSize: 11, color: '#a8e8ff', background: 'rgba(0,80,140,0.4)', display: 'flex', gap: 4, alignItems: 'center' }}>
+              {ZONE_LABELS[gs.worldZone] ?? gs.worldZone}
+              <span style={{ fontSize: 9, fontWeight: 700, color: ['#aaa','#88dd88','#44aaff','#ff9944','#ff44aa','#ffdd00'][lv], background: 'rgba(0,0,0,0.4)', borderRadius: 3, padding: '1px 3px' }}>Lv{lv}</span>
+            </div>
+          );
+        })()}
         {!isOnline && (
           <div className="hud-chip" style={{ fontSize: 11, color: '#ff8888', background: 'rgba(80,0,0,0.5)' }}>📵 오프라인</div>
         )}

@@ -31,7 +31,7 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
     const questClaimed = isNewDay ? {} : (saved.questClaimed ?? {});
     const loginStreak = Math.max(saved.achStats?.loginStreak ?? 0, streak);
     const baseAchStats = { ...(saved.achStats ?? {}), loginStreak };
-    const base = { ...saved, dailyQuests: quests, questProgress, questClaimed, questDate: today,
+    let base = { ...saved, dailyQuests: quests, questProgress, questClaimed, questDate: today,
       achStats: baseAchStats };
     if (!saved.firstLoginDate) {
       base.firstLoginDate = new Date().toISOString();
@@ -54,6 +54,10 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
     const savedZone = base.worldZone ?? '마을';
     setActiveZone(savedZone);
     setActiveTiles(ZONE_TILES[savedZone] ?? ZONE_TILES['마을']);
+    // Clear expired mountainBuff
+    if (base.mountainBuff && Date.now() >= base.mountainBuff.expiresAt) {
+      base = { ...base, mountainBuff: null };
+    }
 
     if (bonus > 0) {
       const bonusAchStats = { ...baseAchStats, maxMoney: Math.max(baseAchStats.maxMoney ?? 0, saved.money + bonus) };

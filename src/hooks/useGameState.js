@@ -180,6 +180,7 @@ export const DEFAULT_STATE = {
   // World zones
   worldZone: '마을',
   visitedZones: ['마을'],
+  zoneMastery: {},
 };
 
 export const SAVE_VERSION = 2;
@@ -330,6 +331,7 @@ export function loadSave(nickname) {
       equippedTitle: s.equippedTitle ?? null,
       worldZone: s.worldZone ?? '마을',
       visitedZones: s.visitedZones ?? ['마을'],
+      zoneMastery: s.zoneMastery ?? {},
     };
   } catch { return DEFAULT_STATE; }
 }
