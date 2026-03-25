@@ -76,7 +76,7 @@ export default function Sidebar(props) {
 
   const [invFilter, setInvFilter] = useState('전체');
   const [equipPicker, setEquipPicker] = useState(null);
-  const [shopSection, setShopSection] = useState('낚시');
+  const [shopSection, setShopSection] = useState('낚시대');
   const [buyToast, setBuyToast] = useState(null);
   const [settingsState, setSettingsState] = useState(() => getSettings());
   const [bgmVol, setBgmVolState] = useState(() => getBgmVolume());
@@ -2099,40 +2099,49 @@ export default function Sidebar(props) {
               )}
             </div>
 
-            {/* ── 폴더 탭 네비게이션 ── */}
-            <div style={{ display: 'flex', gap: 4, padding: '0 16px 0 16px', marginBottom: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
+            {/* ── 카테고리 인덱스 ── */}
+            <div style={{ padding: '8px 12px 6px', display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {[
-                { id: '낚시',  icon: '🎣', label: '낚시' },
-                { id: '채굴',  icon: '⛏',  label: '채굴' },
-                { id: '생활',  icon: '🍳',  label: '생활' },
-                { id: '의류',  icon: '👔',  label: '의류' },
-                { id: '판매',  icon: '💰',  label: '판매' },
+                { id: '낚시대',    icon: '🎣', label: '낚시대' },
+                { id: '미끼',      icon: '🪝', label: '미끼' },
+                { id: '미끼DIY',   icon: '🌿', label: '미끼DIY' },
+                { id: '해양장비',  icon: '🌊', label: '해양장비' },
+                { id: '낚싯대스킨', icon: '🎨', label: '로드스킨' },
+                { id: '낚시터',    icon: '🪑', label: '낚시터' },
+                { id: '신발',      icon: '👟', label: '신발' },
+                { id: '요리도구',  icon: '🍳', label: '요리도구' },
+                { id: '펫에그',    icon: '🥚', label: '펫에그' },
+                { id: '씨앗',      icon: '🌱', label: '씨앗' },
+                { id: '펫간식',    icon: '🍖', label: '펫간식' },
+                { id: '곡괭이',    icon: '⛏',  label: '곡괭이' },
+                { id: '채집도구',  icon: '🧺', label: '채집도구' },
+                { id: '모자',      icon: '🎩', label: '모자' },
+                { id: '낚시복',    icon: '👘', label: '낚시복' },
+                { id: '상의',      icon: '👕', label: '상의' },
+                { id: '하의',      icon: '👖', label: '하의' },
+                { id: '벨트',      icon: '🪢', label: '벨트' },
+                { id: '판매',      icon: '💰', label: '판매' },
               ].map(tab => {
                 const active = shopSection === tab.id;
                 return (
                   <button key={tab.id} tabIndex={-1} onClick={() => setShopSection(tab.id)} style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
-                    padding: '7px 13px',
-                    border: `1px solid ${active ? 'rgba(100,180,255,0.5)' : 'rgba(255,255,255,0.1)'}`,
-                    borderBottom: active ? '1px solid #0f2035' : '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '8px 8px 0 0',
-                    background: active ? '#0f2035' : 'rgba(255,255,255,0.04)',
-                    color: active ? '#88ccff' : 'rgba(255,255,255,0.5)',
-                    fontSize: 12, fontWeight: active ? 700 : 400,
+                    padding: '4px 9px',
+                    border: `1px solid ${active ? 'rgba(100,180,255,0.6)' : 'rgba(255,255,255,0.12)'}`,
+                    borderRadius: 6,
+                    background: active ? 'rgba(100,180,255,0.18)' : 'rgba(255,255,255,0.04)',
+                    color: active ? '#88ccff' : 'rgba(255,255,255,0.45)',
+                    fontSize: 11, fontWeight: active ? 700 : 400,
                     cursor: 'pointer', whiteSpace: 'nowrap',
-                    transition: 'all 0.15s',
-                    marginBottom: active ? -1 : 0,
-                    position: 'relative', zIndex: active ? 1 : 0,
+                    transition: 'all 0.12s',
                   }}>
-                    <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
+                    {tab.icon} {tab.label}
                   </button>
                 );
               })}
             </div>
-            <div style={{ borderTop: '1px solid rgba(100,180,255,0.2)', marginBottom: 0 }} />
+            <div style={{ borderTop: '1px solid rgba(100,180,255,0.15)', margin: '0 12px 4px' }} />
 
-            {shopSection === '낚시' && <div className="section">
+            {shopSection === '낚시대' && <div className="section">
               <div className="section-title">낚시대</div>
               {Object.entries(RODS).map(([key, rod]) => {
                 const owned = gs.ownedRods.includes(key);
@@ -2172,7 +2181,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '생활' && <div className="section">
+            {shopSection === '신발' && <div className="section">
               <div className="section-title">신발 (이동속도)</div>
               {Object.entries(BOOTS).map(([key, boot]) => {
                 const owned = (gs.ownedBoots ?? ['기본신발']).includes(key);
@@ -2208,7 +2217,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '낚시' && <div className="section">
+            {shopSection === '미끼' && <div className="section">
               <div className="section-title">미끼</div>
               {Object.entries(BAIT).map(([key, bait]) => {
                 const isPerm = bait.type === 'permanent';
@@ -2240,7 +2249,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '낚시' && <div className="section">
+            {shopSection === '미끼DIY' && <div className="section">
               <div className="section-title">🌿 미끼 DIY 제작</div>
               <div style={{ fontSize: 11, color: '#aaa', marginBottom: 6 }}>허브 + 광석 조합으로 커스텀 미끼 제작</div>
               {Object.entries(BAIT_RECIPES).map(([key, recipe]) => {
@@ -2305,7 +2314,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '생활' && <div className="section">
+            {shopSection === '요리도구' && <div className="section">
               <div className="section-title">요리 도구</div>
               {Object.entries(COOKWARE).map(([key, cw]) => {
                 const owned = (gs.ownedCookware ?? []).includes(key);
@@ -2337,7 +2346,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '낚시' && <div className="section">
+            {shopSection === '해양장비' && <div className="section">
               <div className="section-title">🌊 해양 장비 (바다 낚시)</div>
               {Object.entries(MARINE_GEAR).map(([key, gear]) => {
                 const owned = (gs.ownedMarineGear ?? []).includes(key);
@@ -2373,7 +2382,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '채굴' && <div className="section">
+            {shopSection === '곡괭이' && <div className="section">
               <div className="section-title">⛏ 곡괭이 (채굴 도구)</div>
               {Object.entries(PICKAXES).map(([key, px]) => {
                 const owned = (gs.ownedPickaxes ?? ['나무곡괭이']).includes(key);
@@ -2409,7 +2418,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '채굴' && <div className="section">
+            {shopSection === '채집도구' && <div className="section">
               <div className="section-title">🌿 채집 도구</div>
               {Object.entries(GATHER_TOOLS).map(([key, gt]) => {
                 const owned = (gs.ownedGatherTools ?? ['맨손']).includes(key);
@@ -2445,7 +2454,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '의류' && <div className="section">
+            {shopSection === '모자' && <div className="section">
               <div className="section-title">🎩 모자</div>
               {Object.entries(HATS).map(([key, hat]) => {
                 const owned = (gs.ownedHats ?? []).includes(key);
@@ -2487,7 +2496,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '의류' && <div className="section">
+            {shopSection === '낚시복' && <div className="section">
               <div className="section-title">🧥 낚시복</div>
               {Object.entries(FISHING_OUTFITS).map(([key, outfit]) => {
                 const owned = (gs.ownedOutfits ?? ['기본낚시복']).includes(key);
@@ -2538,7 +2547,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '의류' && <div className="section">
+            {shopSection === '상의' && <div className="section">
               <div className="section-title">👕 상의</div>
               {Object.entries(TOPS).map(([key, item]) => {
                 const owned = (gs.ownedTops ?? ['기본상의']).includes(key);
@@ -2583,7 +2592,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '의류' && <div className="section">
+            {shopSection === '하의' && <div className="section">
               <div className="section-title">👖 하의</div>
               {Object.entries(BOTTOMS).map(([key, item]) => {
                 const owned = (gs.ownedBottoms ?? ['기본하의']).includes(key);
@@ -2628,7 +2637,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '의류' && <div className="section">
+            {shopSection === '벨트' && <div className="section">
               <div className="section-title">🪢 벨트</div>
               {Object.entries(BELTS).map(([key, item]) => {
                 const owned = (gs.ownedBelts ?? []).includes(key);
@@ -2673,7 +2682,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '낚시' && <div className="section">
+            {shopSection === '낚싯대스킨' && <div className="section">
               <div className="section-title">🎨 낚싯대 스킨</div>
               {Object.entries(ROD_SKINS).filter(([key, skin]) => !skin.questOnly || (gs.ownedRodSkins ?? []).includes(key)).map(([key, skin]) => {
                 const owned = (gs.ownedRodSkins ?? ['기본스킨']).includes(key);
@@ -2720,7 +2729,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '낚시' && <div className="section">
+            {shopSection === '낚시터' && <div className="section">
               <div className="section-title">🪑 낚시터 꾸미기</div>
               {Object.entries(SPOT_DECOS).map(([key, deco]) => {
                 const owned = (gs.spotDecos ?? []).includes(key) || key === '기본의자';
@@ -2752,7 +2761,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '생활' && <div className="section">
+            {shopSection === '펫에그' && <div className="section">
               <div className="section-title">🥚 펫 에그</div>
               {Object.entries(PETS).map(([key, pet]) => {
                 const egg = (gs.petEggs ?? {})[key];
@@ -3071,7 +3080,7 @@ export default function Sidebar(props) {
               );
             })()}
 
-            {shopSection === '생활' && <div className="section">
+            {shopSection === '씨앗' && <div className="section">
               <div className="section-title">🌱 씨앗 구매</div>
               {Object.entries(SEEDS).map(([key, sd]) => {
                 const discount = getShopDiscount(gs.npcAffinity);
@@ -3110,7 +3119,7 @@ export default function Sidebar(props) {
               })}
             </div>}
 
-            {shopSection === '생활' && <div className="section">
+            {shopSection === '펫간식' && <div className="section">
               <div className="section-title">🍖 펫 간식</div>
               {!gs.activePet ? (
                 <div className="empty">활성 펫이 없습니다. 펫을 장착하세요.</div>

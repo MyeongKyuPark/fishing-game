@@ -326,6 +326,7 @@ export default function App() {
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
   const indoorRoomRef = useRef(null);
   useEffect(() => { indoorRoomRef.current = indoorRoom; }, [indoorRoom]);
+  const lastExitTimeRef = useRef(0);
 
   // Weather: deterministic per room+time, update when period changes
   const [weather, setWeather] = useState(() => getWeather(null, Date.now()));
@@ -2644,7 +2645,7 @@ export default function App() {
     // 대화창 열기 + 첫 접촉 친밀도 소량 부여
     const npcAffinityKey = npcName === '민준' ? '상인' : npcName === '수연' ? '요리사' : npcName === '미나' ? '여관주인' : npcName === '철수' ? '채굴사' : '은행원';
     gainNpcAffinity(npcAffinityKey, 0.3);
-    setNpcDialog(npcName);
+    setNpcDialog(npcAffinityKey); // use role key so NPCS lookup works
   }, [gainNpcAffinity]);
 
   const handleZoneNpcInteract = useCallback((npcId) => {
@@ -2705,7 +2706,11 @@ export default function App() {
   const myTitle = getTitle(gs);
   const currentSeason = getCurrentSeason();
 
-  const handleEnterRoom = (id) => { playEnterRoom(); setIndoorRoom(id); };
+  const handleEnterRoom = (id) => {
+    if (Date.now() - lastExitTimeRef.current < 2000) return; // prevent immediate re-entry after exit
+    playEnterRoom();
+    setIndoorRoom(id);
+  };
 
   const ZONE_INTRO = {
     '서쪽초원': [
@@ -2765,6 +2770,7 @@ export default function App() {
   }, [addMsg]);
 
   const handleExitRoom = () => {
+    lastExitTimeRef.current = Date.now();
     // Teleport player to the door exit position
     const door = DOOR_TRIGGERS.find(d => d.id === indoorRoom);
     if (door && gameRef.current?.player) {
@@ -3155,12 +3161,7 @@ nickname={nickname}
       {npcDialog && (
         <NpcDialogue
           npcKey={npcDialog}
-          affinity={gs.npcAffinity?.[
-            npcDialog === '민준' ? '상인' :
-            npcDialog === '수연' ? '요리사' :
-            npcDialog === '미나' ? '여관주인' :
-            npcDialog === '철수' ? '채굴사' : '은행원'
-          ] ?? 0}
+          affinity={gs.npcAffinity?.[npcDialog] ?? 0}
           onAction={(actionId) => handleNpcDialogAction(npcDialog, actionId)}
           onClose={() => setNpcDialog(null)}
         />
