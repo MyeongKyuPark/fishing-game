@@ -249,9 +249,11 @@ export const DOOR_TRIGGERS = [
 ];
 
 export function isInMineZone(px, py) {
+  const mz = ZONE_MINE_ZONES[_activeZone];
+  if (!mz) return false;
   const tx = Math.floor(px / TILE_SIZE);
   const ty = Math.floor(py / TILE_SIZE);
-  return tx >= MINE_ZONE.tx1 && tx <= MINE_ZONE.tx2 && ty >= MINE_ZONE.ty1 && ty <= MINE_ZONE.ty2;
+  return tx >= mz.tx1 && tx <= mz.tx2 && ty >= mz.ty1 && ty <= mz.ty2;
 }
 
 export function isInForestZone(px, py) {
@@ -604,6 +606,21 @@ export const ZONE_BONUSES = {
   '남쪽심해': { fishSellMult: 1.25, rarityBonus: 0.08 },       // deep sea: +25% fish sell price, +8% rare chance
 };
 
+// ── Zone Mine Zones & Entrances ───────────────────────────────────────────────
+// 동쪽절벽: left stone cliff (cols 0-13, rows 0-17)
+// 북쪽고원: top-left stone corner (cols 0-14, rows 0-7)
+const ZONE_MINE_ZONES = {
+  '마을':    MINE_ZONE,
+  '동쪽절벽': { tx1: 0, ty1: 0, tx2: 13, ty2: 17 },
+  '북쪽고원': { tx1: 0, ty1: 0, tx2: 14, ty2: 7 },
+};
+
+const ZONE_MINE_ENTRANCES = {
+  '마을':    MINE_ENTRANCE,
+  '동쪽절벽': { tx: 13, ty: 10 },   // right edge of cliff stone zone
+  '북쪽고원': { tx: 13, ty: 6 },    // bottom edge of highland stone zone
+};
+
 // ── Active Zone State (mutable module-level) ──────────────────────────────────
 let _activeZone = '마을';
 
@@ -612,7 +629,23 @@ export function getActiveZone() { return _activeZone; }
 export function getActiveChairs() { return ZONE_CHAIRS[_activeZone] ?? FISHING_CHAIRS; }
 export function getActiveDoors() { return _activeZone === '마을' ? DOOR_TRIGGERS : []; }
 export function getActiveForest() { return ZONE_FOREST[_activeZone] ?? null; }
-export function getActiveMineEntrance() { return _activeZone === '마을' ? MINE_ENTRANCE : null; }
+export function getActiveMineEntrance() { return ZONE_MINE_ENTRANCES[_activeZone] ?? null; }
+
+// Traveling NPCs in outer zones — tile positions for detection & rendering
+export const ZONE_TRAVEL_NPCS = {
+  '서쪽초원': { id: '행상인',    name: '행상인',      icon: '🧳', color: '#ddaa44', tx: 20, ty: 12 },
+  '동쪽절벽': { id: '노련한광부', name: '노련한 광부',  icon: '🪨', color: '#aa8866', tx: 20, ty: 12 },
+  '북쪽고원': { id: '산신령',    name: '산신령',      icon: '🌫', color: '#aaddff', tx: 20, ty: 10 },
+  '남쪽심해': { id: '심해탐험가', name: '심해 탐험가',  icon: '🤿', color: '#4488ff', tx: 20, ty: 12 },
+};
+
+// Zone unlock requirements — checked in App.jsx to populate gameRef.current.unlockedZones
+export const ZONE_UNLOCK_REQ = {
+  '서쪽초원': null,  // always unlocked
+  '동쪽절벽': { stat: 'oreMined', min: 10, desc: '광석 채굴 10회 이상 필요' },
+  '북쪽고원': { stat: 'exploredZones', min: 2, desc: '탐험 구역 2곳 이상 완료 필요' },
+  '남쪽심해': { marineGear: '스쿠버다이빙세트', desc: '스쿠버다이빙세트 장착 필요' },
+};
 
 export function getFishingZone(px, py, marineGear, fishAbil) {
   const tx = Math.floor(px / TILE_SIZE);

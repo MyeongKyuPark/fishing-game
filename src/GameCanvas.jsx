@@ -5,7 +5,7 @@ import { getSettings } from './settingsManager';
 import {
   CHAIR_RANGE, PLAYER_START_X, PLAYER_START_Y, pickOre, pickHerb,
   COOKING_TX, COOKING_TY,
-  ZONE_CONNECTIONS, ZONE_TILES, ZONE_LABELS,
+  ZONE_CONNECTIONS, ZONE_TILES, ZONE_LABELS, ZONE_TRAVEL_NPCS,
   setActiveZone, getActiveZone, getActiveChairs, getActiveDoors,
   getActiveForest, getActiveMineEntrance,
 } from './mapData';
@@ -34,7 +34,7 @@ export default function GameCanvas({
   nickname, title, titleColor,
   otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, onNearActionChange,
   hairColor, bodyColor, skinColor, gender,
-  spotDecos, onZoneTransition,
+  spotDecos, onZoneTransition, onCancelReturn, onZoneBlocked, onZoneNpcInteract,
 }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange });
@@ -47,6 +47,10 @@ export default function GameCanvas({
   const onNearDoorChangeRef = useRef(onNearDoorChange);
   const onNearActionChangeRef = useRef(onNearActionChange);
   const onZoneTransitionRef = useRef(onZoneTransition);
+  const onCancelReturnRef = useRef(onCancelReturn);
+  const onZoneBlockedRef = useRef(onZoneBlocked);
+  const onZoneNpcInteractRef = useRef(onZoneNpcInteract);
+  const nearZoneNpcRef = useRef(null);
   const nearDoorRef = useRef(null);
   const nearActionZoneRef = useRef(null);
   const zoneCooldownRef = useRef(false);
@@ -64,6 +68,9 @@ export default function GameCanvas({
   useEffect(() => { onNearDoorChangeRef.current = onNearDoorChange; });
   useEffect(() => { onNearActionChangeRef.current = onNearActionChange; });
   useEffect(() => { onZoneTransitionRef.current = onZoneTransition; });
+  useEffect(() => { onCancelReturnRef.current = onCancelReturn; });
+  useEffect(() => { onZoneBlockedRef.current = onZoneBlocked; });
+  useEffect(() => { onZoneNpcInteractRef.current = onZoneNpcInteract; });
   useEffect(() => { hairColorRef.current = hairColor ?? '#5a3010'; }, [hairColor]);
   useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
   useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
@@ -173,6 +180,11 @@ export default function GameCanvas({
           if (nearDoorRef.current) onEnterRoomRef.current?.(nearDoorRef.current.id);
         }
       }
+      if ((e.key === 'f' || e.key === 'F') && nearZoneNpcRef.current) {
+        if (document.activeElement?.tagName !== 'INPUT') {
+          onZoneNpcInteractRef.current?.(nearZoneNpcRef.current.id);
+        }
+      }
     };
     const up = (e) => { if (gameRef.current) delete gameRef.current.keys[e.key]; };
     window.addEventListener('keydown', down);
@@ -239,6 +251,8 @@ export default function GameCanvas({
           }
         }
         const spd = ACCEL * dt / 16;
+        const moving = keys.ArrowLeft || keys.ArrowRight || keys.ArrowUp || keys.ArrowDown || g.clickTarget;
+        if (moving) onCancelReturnRef.current?.();
         if (keys.ArrowLeft)  { player.vx -= spd; player.facing = 'left';  g.clickTarget = null; }
         if (keys.ArrowRight) { player.vx += spd; player.facing = 'right'; g.clickTarget = null; }
         if (keys.ArrowUp)    { player.vy -= spd; player.facing = 'up';    g.clickTarget = null; }
@@ -265,18 +279,27 @@ export default function GameCanvas({
 
           if (transDir) {
             const nextZone = conn[transDir];
-            setActiveZone(nextZone);
-            setActiveTiles(ZONE_TILES[nextZone]);
-            if (transDir === 'west')  player.x = (MAP_W - 3) * TILE_SIZE;
-            else if (transDir === 'east')  player.x = 3 * TILE_SIZE;
-            else if (transDir === 'north') player.y = (MAP_H - 3) * TILE_SIZE;
-            else if (transDir === 'south') player.y = 3 * TILE_SIZE;
-            player.vx = 0; player.vy = 0;
-            g.clickTarget = null;
-            zoneCooldownRef.current = true;
-            setTimeout(() => { zoneCooldownRef.current = false; }, 2000);
-            zoneLabelRef.current = { text: ZONE_LABELS[nextZone] ?? nextZone, expiry: Date.now() + 3000 };
-            onZoneTransitionRef.current?.(nextZone, transDir);
+            const unlocked = gameRef.current?.unlockedZones;
+            if (unlocked && !unlocked.includes(nextZone)) {
+              // Zone locked — bounce player back and notify
+              player.vx = 0; player.vy = 0;
+              zoneCooldownRef.current = true;
+              setTimeout(() => { zoneCooldownRef.current = false; }, 1500);
+              onZoneBlockedRef.current?.(nextZone);
+            } else {
+              setActiveZone(nextZone);
+              setActiveTiles(ZONE_TILES[nextZone]);
+              if (transDir === 'west')  player.x = (MAP_W - 3) * TILE_SIZE;
+              else if (transDir === 'east')  player.x = 3 * TILE_SIZE;
+              else if (transDir === 'north') player.y = (MAP_H - 3) * TILE_SIZE;
+              else if (transDir === 'south') player.y = 3 * TILE_SIZE;
+              player.vx = 0; player.vy = 0;
+              g.clickTarget = null;
+              zoneCooldownRef.current = true;
+              setTimeout(() => { zoneCooldownRef.current = false; }, 2000);
+              zoneLabelRef.current = { text: ZONE_LABELS[nextZone] ?? nextZone, expiry: Date.now() + 3000 };
+              onZoneTransitionRef.current?.(nextZone, transDir);
+            }
           }
         }
 
@@ -386,6 +409,22 @@ export default function GameCanvas({
           onNearActionChangeRef.current?.(zone);
         }
         g.nearActionZone = zone;
+      }
+
+      // ── Zone traveling NPC proximity ──
+      {
+        const activeZone = getActiveZone();
+        const zoneNpc = ZONE_TRAVEL_NPCS[activeZone] ?? null;
+        let nearNpc = null;
+        if (zoneNpc) {
+          const nx2 = zoneNpc.tx * TILE_SIZE + TILE_SIZE / 2;
+          const ny2 = zoneNpc.ty * TILE_SIZE + TILE_SIZE / 2;
+          if (Math.hypot(player.x - nx2, player.y - ny2) <= TILE_SIZE * 2.5) {
+            nearNpc = zoneNpc;
+          }
+        }
+        nearZoneNpcRef.current = nearNpc;
+        g.nearZoneNpc = nearNpc;
       }
 
       // ── Camera ──
@@ -569,6 +608,69 @@ export default function GameCanvas({
         ctx.restore();
       } else if (zoneLabelRef.current && Date.now() >= zoneLabelRef.current.expiry) {
         zoneLabelRef.current = null;
+      }
+
+      // Zone traveling NPC rendering
+      {
+        const activeZone = getActiveZone();
+        const zoneNpc = ZONE_TRAVEL_NPCS[activeZone];
+        if (zoneNpc) {
+          const nx2 = zoneNpc.tx * TILE_SIZE + TILE_SIZE / 2 - camX;
+          const ny2 = zoneNpc.ty * TILE_SIZE + TILE_SIZE / 2 - camY;
+          if (nx2 > -40 && nx2 < W + 40 && ny2 > -60 && ny2 < H + 20) {
+            const bob = Math.sin(performance.now() / 600) * 2;
+            // Shadow
+            ctx.save();
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(nx2, ny2 + 14, 12, 5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Body circle
+            ctx.fillStyle = zoneNpc.color + '33';
+            ctx.strokeStyle = zoneNpc.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(nx2, ny2 - 8 + bob, 14, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            // Emoji icon
+            ctx.font = '20px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(zoneNpc.icon, nx2, ny2 - 8 + bob);
+            ctx.textBaseline = 'alphabetic';
+            // Name label
+            ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
+            ctx.textAlign = 'center';
+            const nameW = ctx.measureText(zoneNpc.name).width;
+            ctx.fillStyle = 'rgba(20,20,40,0.75)';
+            ctx.beginPath();
+            ctx.roundRect(nx2 - nameW / 2 - 5, ny2 - 34 + bob, nameW + 10, 16, 4);
+            ctx.fill();
+            ctx.fillStyle = zoneNpc.color;
+            ctx.fillText(zoneNpc.name, nx2, ny2 - 22 + bob);
+            // Interact hint when near
+            if (nearZoneNpcRef.current?.id === zoneNpc.id) {
+              const hint = '[F] 대화하기';
+              const hw = ctx.measureText(hint).width;
+              const pulse = 0.8 + 0.2 * Math.sin(performance.now() / 300);
+              ctx.globalAlpha = pulse;
+              ctx.fillStyle = 'rgba(20,20,40,0.85)';
+              ctx.beginPath();
+              ctx.roundRect(nx2 - hw / 2 - 7, ny2 - 54 + bob, hw + 14, 18, 5);
+              ctx.fill();
+              ctx.strokeStyle = zoneNpc.color;
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.roundRect(nx2 - hw / 2 - 7, ny2 - 54 + bob, hw + 14, 18, 5);
+              ctx.stroke();
+              ctx.fillStyle = '#fff';
+              ctx.fillText(hint, nx2, ny2 - 41 + bob);
+              ctx.globalAlpha = 1;
+            }
+            ctx.restore();
+          }
+        }
       }
 
       // Marine gear: water ripples + boat hull (before player)

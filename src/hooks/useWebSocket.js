@@ -386,6 +386,17 @@ export function useWebSocket(params) {
 
   useEffect(() => { if (gameRef.current) gameRef.current.farmPlots = gs.farmPlots ?? []; }, [gs.farmPlots]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!gameRef.current) return;
+    const oreMined = gs.achStats?.oreMined ?? 0;
+    const exploredCount = (gs.exploredZones ?? []).length;
+    const unlocked = ['마을', '서쪽초원'];
+    if (oreMined >= 10) unlocked.push('동쪽절벽');
+    if (exploredCount >= 2) unlocked.push('북쪽고원');
+    if (gs.marineGear === '스쿠버다이빙세트') unlocked.push('남쪽심해');
+    gameRef.current.unlockedZones = unlocked;
+  }, [gs.marineGear, gs.achStats, gs.exploredZones]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Rain auto-waters crops ────────────────────────────────────────────────
   useEffect(() => {
     if (weather?.id !== 'rain') return;

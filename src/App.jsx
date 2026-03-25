@@ -27,7 +27,7 @@ import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
 import { getTitle, getActiveTitleBonus, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
-import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm, setActiveZone, ZONE_TILES, ZONE_BONUSES, getActiveZone } from './mapData';
+import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm, setActiveZone, ZONE_TILES, ZONE_BONUSES, getActiveZone, PLAYER_START_X, PLAYER_START_Y, ZONE_UNLOCK_REQ } from './mapData';
 import { setActiveTiles } from './canvas/drawMap';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
 import { PETS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
@@ -51,6 +51,7 @@ import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import ChatBox from './components/ChatBox';
 import NpcDialogue from './components/NpcDialogue';
+import WorldMap from './components/WorldMap';
 import AdminPanel from './AdminPanel';
 import AuctionHouse from './AuctionHouse';
 import SeasonPass from './SeasonPass';
@@ -261,6 +262,9 @@ export default function App() {
   const [showAuction, setShowAuction] = useState(false);
   const [showSeasonPass, setShowSeasonPass] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showWorldMap, setShowWorldMap] = useState(false);
+  const [returnCast, setReturnCast] = useState(null); // { expiresAt: number } | null
+  const returnCastRef = useRef(null);
   const [npcDialog, setNpcDialog] = useState(null); // npcKey string | null
   const [tutorialStep, setTutorialStep] = useState(0); // 0=hidden, 1-4=steps
   const [catchPopup, setCatchPopup] = useState(null); // { name, size, price, rarity }
@@ -274,7 +278,7 @@ export default function App() {
   const [bankInput, setBankInput] = useState('');
 
   // ── Keyboard shortcuts ────────────────────────────────────────────────────
-  useKeyboard({ setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex, setShowShortcuts });
+  useKeyboard({ setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex, setShowShortcuts, setShowWorldMap });
 
   // BroadcastChannel: 중복 탭 방지
   useEffect(() => {
@@ -1377,6 +1381,7 @@ export default function App() {
     }
 
     if (cmd === '!그만') {
+      if (returnCastRef.current) handleCancelReturn();
       if (player.state === 'idle') { addMsg('활동 중이 아닙니다.'); return; }
       player.state = 'idle';
       player.activityStart = null;
@@ -1385,6 +1390,31 @@ export default function App() {
       if (gameRef.current) gameRef.current.fishingZone = '강';
       setActivity(null);
       addMsg('활동을 중지했습니다.');
+      return;
+    }
+
+    if (cmd === '!귀환') {
+      const currentZone = getActiveZone();
+      if (currentZone === '마을') { addMsg('이미 마을에 있습니다.', 'info'); return; }
+      if (player.state !== 'idle') { addMsg('활동 중에는 귀환할 수 없습니다. !그만 후 시도하세요.', 'error'); return; }
+      if (returnCastRef.current) { addMsg('귀환이 이미 진행 중입니다.', 'info'); return; }
+      const expiresAt = Date.now() + 5000;
+      const castId = expiresAt; // unique token
+      const timer = setTimeout(() => {
+        if (!returnCastRef.current || returnCastRef.current.castId !== castId) return; // cancelled
+        returnCastRef.current = null;
+        setReturnCast(null);
+        handleZoneTransition('마을');
+        if (gameRef.current?.player) {
+          gameRef.current.player.x = PLAYER_START_X;
+          gameRef.current.player.y = PLAYER_START_Y;
+          gameRef.current.player.state = 'idle';
+        }
+        addMsg('🏠 마을로 귀환했습니다!', 'catch');
+      }, 5000);
+      returnCastRef.current = { castId, timer, expiresAt };
+      setReturnCast({ expiresAt });
+      addMsg('🏠 귀환 준비 중... (5초, 이동 시 취소)', 'info');
       return;
     }
 
@@ -2416,8 +2446,10 @@ export default function App() {
 
   // ── NPC 대화 행동 처리 ─────────────────────────────────────────────────────
   const handleNpcDialogAction = useCallback((npcKey, actionId) => {
+    const INDOOR_NPC_KEY = { 민준: '상인', 수연: '요리사', 미나: '여관주인', 철수: '채굴사', 은행원: '은행원' };
     if (actionId === 'chat_affinity') {
-      gainNpcAffinity(npcKey === '민준' ? '상인' : npcKey === '수연' ? '요리사' : npcKey === '미나' ? '여관주인' : npcKey === '철수' ? '채굴사' : '은행원', 0.5);
+      const affinityKey = INDOOR_NPC_KEY[npcKey] ?? npcKey;
+      gainNpcAffinity(affinityKey, 0.5);
       return; // stay in dialogue
     }
     setNpcDialog(null);
@@ -2498,6 +2530,64 @@ export default function App() {
       setShowBank(true);
       gainNpcAffinity('은행원', 1.5);
       setTimeout(() => checkNpcQuest('은행원'), 0);
+    // ── Zone traveling NPC actions ─────────────────────────────────────────
+    } else if (actionId === 'traveling_shop') {
+      addMsg('🧳 행상인: "좋은 물건 많이 골라가세요! 초원 특별가로 드려요~"', 'info');
+      setShowShop(true);
+      gainNpcAffinity('행상인', 1);
+    } else if (actionId === 'ore_appraise') {
+      const s = stateRef.current;
+      const inv = s?.oreInventory ?? {};
+      const entries = Object.entries(inv).filter(([, n]) => n > 0);
+      if (entries.length === 0) {
+        addMsg('🪨 노련한 광부: "광석이 없네. 동쪽 절벽 광산에서 좀 캐와봐!"', 'info');
+      } else {
+        const top = entries.sort(([a], [b]) => (ORES[b]?.value ?? 0) - (ORES[a]?.value ?? 0))[0];
+        const oreVal = ORES[top[0]]?.value ?? 0;
+        addMsg(`🪨 노련한 광부: "${top[0]} ${top[1]}개 — 개당 시가 ${oreVal}G 정도 나가는 좋은 광석이야!"`, 'info');
+        gainNpcAffinity('노련한광부', 2);
+      }
+    } else if (actionId === 'pickaxe_repair') {
+      const s = stateRef.current;
+      if ((s?.money ?? 0) < 200) {
+        addMsg('🪨 노련한 광부: "수리비 200G가 필요해. 돈이 부족하군!"', 'error');
+      } else {
+        setGs(prev => ({ ...prev, money: prev.money - 200 }));
+        addMsg('🔧 노련한 광부가 곡괭이를 수리해줬습니다. (-200G) 채굴 속도 잠시 향상!', 'catch');
+        gainNpcAffinity('노련한광부', 3);
+      }
+    } else if (actionId === 'mountain_buff') {
+      const today = new Date().toLocaleDateString('ko-KR');
+      if ((stateRef.current?.sanSinryeongBuffDate ?? '') === today) {
+        addMsg('🌫 산신령: "산의 기운은 하루에 한 번이면 충분하니라. 내일 다시 오거라."', 'info');
+      } else {
+        const buffs = ['낚시 속도 +15%', '채굴 속도 +15%', '판매가 +15%'];
+        const buffIdx = Math.floor(Math.random() * buffs.length);
+        const buffType = ['fishSpeed', 'mineSpeed', 'sellPrice'][buffIdx];
+        const buffLabel = buffs[buffIdx];
+        addMsg(`🌫 산신령: "산의 기운을 받아라... (${buffLabel} 30분)"`, 'catch');
+        setGs(prev => ({
+          ...prev,
+          sanSinryeongBuffDate: today,
+          mountainBuff: { type: buffType, label: buffLabel, expiresAt: Date.now() + 30 * 60 * 1000 },
+        }));
+        gainNpcAffinity('산신령', 5);
+      }
+    } else if (actionId === 'deep_quest') {
+      const s = stateRef.current;
+      const mythics = (s?.fishInventory ?? []).filter(f => f.rarity === '신화');
+      if (mythics.length === 0) {
+        addMsg('🤿 심해 탐험가: "아직 신화급 물고기를 못 잡았군요! 심해에서 도전해보세요~"', 'info');
+      } else {
+        const reward = mythics.length * 3000;
+        addMsg(`🤿 심해 탐험가: "와! 신화급 ${mythics.length}마리! 기록 등록 완료! 보상 ${reward}G 드릴게요!"`, 'catch');
+        setGs(prev => ({
+          ...prev,
+          money: prev.money + reward,
+          fishInventory: prev.fishInventory.filter(f => f.rarity !== '신화'),
+        }));
+        gainNpcAffinity('심해탐험가', 10);
+      }
     }
   }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, checkAndGrantAchievements, stateRef]);
 
@@ -2507,6 +2597,12 @@ export default function App() {
     const npcAffinityKey = npcName === '민준' ? '상인' : npcName === '수연' ? '요리사' : npcName === '미나' ? '여관주인' : npcName === '철수' ? '채굴사' : '은행원';
     gainNpcAffinity(npcAffinityKey, 0.3);
     setNpcDialog(npcName);
+  }, [gainNpcAffinity]);
+
+  const handleZoneNpcInteract = useCallback((npcId) => {
+    playNpcInteract();
+    gainNpcAffinity(npcId, 0.3);
+    setNpcDialog(npcId);
   }, [gainNpcAffinity]);
 
   // ── Season/weather transition fade (must be before early returns per hook rules) ──
@@ -2563,12 +2659,63 @@ export default function App() {
 
   const handleEnterRoom = (id) => { playEnterRoom(); setIndoorRoom(id); };
 
+  const ZONE_INTRO = {
+    '서쪽초원': [
+      '🌾 서쪽 초원에 도착했습니다!',
+      '🌿 풀과 꽃이 가득한 초원입니다. 허브가 풍부하게 자라고 있어요.',
+      '보너스: 허브 수확량 +40% / 강·민물에서 다양한 물고기를 낚을 수 있습니다.',
+    ],
+    '동쪽절벽': [
+      '⛏ 동쪽 절벽에 도착했습니다!',
+      '🪨 험준한 절벽 지대. 광물이 곳곳에 노출되어 있습니다.',
+      '보너스: 광석 획득량 +30% · 채굴 속도 +8% / 해안선에서 희귀 바다 물고기를 노려보세요.',
+    ],
+    '북쪽고원': [
+      '🏔 북쪽 고원에 도착했습니다!',
+      '❄️ 안개가 자욱한 고원입니다. 희귀 자원이 가득하지만 길이 험합니다.',
+      '보너스: 허브 +20% · 광석 +15% · 모든 희귀도 +5% / 고산 호수의 빙어와 연어를 노려보세요.',
+    ],
+    '남쪽심해': [
+      '🌊 남쪽 심해에 도착했습니다!',
+      '🐋 광활한 바다가 펼쳐집니다. 이곳에서만 볼 수 있는 전설급 어종이 살고 있습니다.',
+      '보너스: 생선 판매가 +25% · 희귀도 +8% / 용고기와 리바이어던이 출몰합니다!',
+    ],
+  };
+
   const handleZoneTransition = useCallback((newZone) => {
     if (gameRef.current) gameRef.current.worldZone = newZone;
     setActiveZone(newZone);
     setActiveTiles(ZONE_TILES[newZone]);
-    setGs(prev => ({ ...prev, worldZone: newZone }));
+    setGs(prev => {
+      const visited = prev.visitedZones ?? ['마을'];
+      const isFirst = !visited.includes(newZone);
+      if (isFirst && ZONE_INTRO[newZone]) {
+        ZONE_INTRO[newZone].forEach((line, i) => {
+          setTimeout(() => addMsgRef.current?.(line, i === 0 ? 'catch' : 'info'), i * 1200);
+        });
+      }
+      return {
+        ...prev,
+        worldZone: newZone,
+        visitedZones: isFirst ? [...visited, newZone] : visited,
+      };
+    });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleZoneBlocked = useCallback((zoneName) => {
+    const req = ZONE_UNLOCK_REQ[zoneName];
+    if (!req) return;
+    addMsg(`🔒 ${zoneName} 진입 불가 — ${req.desc}`, 'error');
+  }, [addMsg]);
+
+  const handleCancelReturn = useCallback(() => {
+    if (!returnCastRef.current) return;
+    clearTimeout(returnCastRef.current.timer);
+    returnCastRef.current = null;
+    setReturnCast(null);
+    addMsg('🏠 이동으로 귀환이 취소되었습니다.', 'error');
+  }, [addMsg]);
+
   const handleExitRoom = () => {
     // Teleport player to the door exit position
     const door = DOOR_TRIGGERS.find(d => d.id === indoorRoom);
@@ -2608,6 +2755,9 @@ nickname={nickname}
           gender={gs.gender}
           spotDecos={gs.spotDecos}
           onZoneTransition={handleZoneTransition}
+          onCancelReturn={handleCancelReturn}
+          onZoneBlocked={handleZoneBlocked}
+          onZoneNpcInteract={handleZoneNpcInteract}
         />
         {/* IndoorCanvas overlays when inside a room */}
         {indoorRoom && (
@@ -2673,8 +2823,45 @@ nickname={nickname}
           setShowSettings={setShowSettings}
           setShowTournament={setShowTournament}
           setShowCottage={setShowCottage}
+          setShowWorldMap={setShowWorldMap}
         />
       </div>
+
+      {/* 귀환 캐스팅 HUD */}
+      {returnCast && !indoorRoom && (() => {
+        const pct = Math.max(0, Math.min(1, 1 - (returnCast.expiresAt - Date.now()) / 5000));
+        return (
+          <div style={{
+            position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 8000, background: 'rgba(10,20,40,0.92)', border: '1px solid #4488ff88',
+            borderRadius: 10, padding: '8px 18px', minWidth: 180, textAlign: 'center',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+          }}>
+            <div style={{ color: '#aaddff', fontSize: 13, fontWeight: 700, marginBottom: 5 }}>🏠 마을로 귀환 중...</div>
+            <div style={{ height: 5, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+              <div style={{ width: `${pct * 100}%`, height: '100%', background: '#4488ff', borderRadius: 3, transition: 'width 0.1s linear' }} />
+            </div>
+            <button onClick={handleCancelReturn} style={{
+              marginTop: 6, background: 'none', border: 'none', color: 'rgba(255,100,100,0.7)',
+              fontSize: 11, cursor: 'pointer',
+            }}>취소</button>
+          </div>
+        );
+      })()}
+
+      {/* 외곽 존 모바일 귀환 버튼 */}
+      {!indoorRoom && gs.worldZone && gs.worldZone !== '마을' && (
+        <button
+          onClick={() => handleCommand('!귀환')}
+          style={{
+            position: 'fixed', bottom: 140, right: 16, zIndex: 7500,
+            background: 'rgba(10,20,50,0.9)', border: '1px solid #4488ff88',
+            borderRadius: 20, padding: '8px 14px', color: '#aaddff',
+            fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
+          }}
+        >🏠 귀환</button>
+      )}
 
       {catchPopup && (
         <div className="catch-popup" style={{ border: `2px solid ${rarityColor(catchPopup.rarity)}` }}>
@@ -2898,6 +3085,22 @@ nickname={nickname}
           setShowPrestigeConfirm(true);
         }}
       />
+
+      {/* 세계 지도 */}
+      {showWorldMap && (
+        <WorldMap
+          currentZone={gs.worldZone ?? '마을'}
+          lockedZones={Object.keys(ZONE_UNLOCK_REQ).filter(z => {
+            const req = ZONE_UNLOCK_REQ[z];
+            if (!req) return false;
+            if (req.marineGear) return gs.marineGear !== req.marineGear;
+            if (req.stat === 'oreMined') return (gs.achStats?.oreMined ?? 0) < req.min;
+            if (req.stat === 'exploredZones') return (gs.exploredZones ?? []).length < req.min;
+            return false;
+          })}
+          onClose={() => setShowWorldMap(false)}
+        />
+      )}
 
       {/* NPC 대화 인터페이스 */}
       {npcDialog && (

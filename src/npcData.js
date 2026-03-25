@@ -44,6 +44,26 @@ export const NPCS = {
       { at: 80, label: 'VIP 고객',  reward: '오프라인 수입 최대 2배 증폭' },
     ],
   },
+  행상인: {
+    name: '행상인', icon: '🧳', color: '#ddaa44',
+    desc: '서쪽 초원을 누비는 여행 상인. 허브·씨앗·소모품을 판매한다.',
+    thresholds: [],
+  },
+  노련한광부: {
+    name: '노련한 광부', icon: '🪨', color: '#aa8866',
+    desc: '동쪽 절벽의 베테랑 광부. 광석 감정과 곡괭이 수리를 해준다.',
+    thresholds: [],
+  },
+  산신령: {
+    name: '산신령', icon: '🌫', color: '#aaddff',
+    desc: '북쪽 고원의 신령. 하루 한 번 낚시·채굴·판매 중 하나를 강화하는 버프를 내려준다.',
+    thresholds: [],
+  },
+  심해탐험가: {
+    name: '심해 탐험가', icon: '🤿', color: '#4488ff',
+    desc: '남쪽 심해를 탐험하는 모험가. 희귀 물고기를 보여주면 특별 보상을 준다.',
+    thresholds: [],
+  },
 };
 
 export function getAffinityLevel(affinity, npcKey) {

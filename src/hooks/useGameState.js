@@ -107,7 +107,7 @@ export const DEFAULT_STATE = {
   petExp: {},
   innBuff: null,
   innRestAt: null,
-  npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, 채굴사: 0, 은행원: 0 },
+  npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, 채굴사: 0, 은행원: 0, 행상인: 0, 노련한광부: 0, 산신령: 0, 심해탐험가: 0 },
   exploredZones: [],
   farmPlots: [],
   farmExpansionCount: 0,
@@ -117,6 +117,8 @@ export const DEFAULT_STATE = {
   bankLoan: 0,
   mineDepth: 1,
   merchantBaitDate: '',
+  sanSinryeongBuffDate: '',
+  mountainBuff: null,
   npcQuestStep: {},
   selectedJob: null,
   shownSeasonStories: [],
@@ -177,6 +179,7 @@ export const DEFAULT_STATE = {
   equippedTitle: null,   // null = 자동 (최고 달성 칭호), string = 장착한 칭호 label
   // World zones
   worldZone: '마을',
+  visitedZones: ['마을'],
 };
 
 export const SAVE_VERSION = 2;
@@ -267,7 +270,7 @@ export function loadSave(nickname) {
       petExp: Object.fromEntries(Object.entries(s.petExp ?? {}).map(([k, v]) => [k, typeof v === 'number' ? v : 0])),
       innBuff: s.innBuff ?? null,
       innRestAt: s.innRestAt ?? null,
-      npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, 채굴사: 0, 은행원: 0, ...(s.npcAffinity ?? {}) },
+      npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, 채굴사: 0, 은행원: 0, 행상인: 0, 노련한광부: 0, 산신령: 0, 심해탐험가: 0, ...(s.npcAffinity ?? {}) },
       exploredZones: s.exploredZones ?? [],
       farmPlots: s.farmPlots ?? [],
       farmExpansionCount: s.farmExpansionCount ?? 0,
@@ -276,6 +279,8 @@ export function loadSave(nickname) {
       bankLastInterest: s.bankLastInterest ?? null,
       bankLoan: s.bankLoan ?? 0,
       merchantBaitDate: s.merchantBaitDate ?? '',
+      sanSinryeongBuffDate: s.sanSinryeongBuffDate ?? '',
+      mountainBuff: s.mountainBuff ?? null,
       npcQuestStep: s.npcQuestStep ?? {},
       selectedJob: s.selectedJob ?? null,
       shownSeasonStories: s.shownSeasonStories ?? [],
@@ -324,6 +329,7 @@ export function loadSave(nickname) {
       lastSeasonReset: s.lastSeasonReset ?? '',
       equippedTitle: s.equippedTitle ?? null,
       worldZone: s.worldZone ?? '마을',
+      visitedZones: s.visitedZones ?? ['마을'],
     };
   } catch { return DEFAULT_STATE; }
 }

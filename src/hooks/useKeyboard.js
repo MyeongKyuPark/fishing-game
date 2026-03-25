@@ -1,7 +1,7 @@
 // ── Keyboard Shortcuts Hook ───────────────────────────────────────────────────
 import { useEffect } from 'react';
 
-export function useKeyboard({ setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex, setShowShortcuts }) {
+export function useKeyboard({ setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex, setShowShortcuts, setShowWorldMap }) {
   useEffect(() => {
     const handleKey = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -13,6 +13,9 @@ export function useKeyboard({ setShowInv, setShowShop, setShowStats, setShowRank
         setShowQuest(false);
         setShowDex(false);
         setShowShortcuts?.(false);
+        setShowWorldMap?.(false);
+      } else if (e.key === 'm' || e.key === 'M') {
+        setShowWorldMap?.(v => !v);
       } else if (e.key === '?') {
         setShowShortcuts?.(v => !v);
       } else if (e.key === 'i' || e.key === 'I') {
@@ -31,5 +34,5 @@ export function useKeyboard({ setShowInv, setShowShop, setShowStats, setShowRank
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex, setShowShortcuts]);
+  }, [setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex, setShowShortcuts, setShowWorldMap]);
 }
