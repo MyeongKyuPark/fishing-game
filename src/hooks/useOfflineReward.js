@@ -1,7 +1,7 @@
 // ── Offline Reward Hook ───────────────────────────────────────────────────────
 import { useEffect } from 'react';
 import { loadSave, checkDailyBonus, getDailyQuests, SAVE_VERSION, saveKey } from './useGameState';
-import { FURNITURE } from '../gameData';
+import { FURNITURE, COTTAGE_LEVEL_BONUSES } from '../gameData';
 import { getActiveTitleBonus } from '../titleData';
 import { setActiveZone, ZONE_TILES } from '../mapData';
 import { setActiveTiles } from '../canvas/drawMap';
@@ -50,7 +50,9 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
     const bankOffMult = bankAff >= 80 ? 2.0 : 1.0;
     const furnitureOffMult = placedFurniture.reduce((acc, f) => acc * (FURNITURE[f.key]?.bonus?.offlineMult ?? 1.0), 1.0);
     const titleOffBonus = getActiveTitleBonus(saved).offlineBonus ?? 0;
-    const offlineMult = innOffMult * bankOffMult * furnitureOffMult * (1 + titleOffBonus);
+    const cottageLevel = saved.cottageLevel ?? 1;
+    const cottageOffBonus = COTTAGE_LEVEL_BONUSES[cottageLevel]?.offlineBonus ?? 0;
+    const offlineMult = innOffMult * bankOffMult * furnitureOffMult * (1 + titleOffBonus) * (1 + cottageOffBonus);
     const offlineReward = Math.floor(effectiveMins * 10 * offlineMult);
     // Restore zone module state from save (prevents blank map on reload)
     const savedZone = base.worldZone ?? '마을';
@@ -95,6 +97,7 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
       if (innOffMult > 1) multParts.push('여관주인 ×1.5');
       if (bankOffMult > 1) multParts.push('은행원 ×2');
       if (furnitureOffMult > 1) multParts.push(`가구 ×${furnitureOffMult.toFixed(2)}`);
+      if (cottageOffBonus > 0) multParts.push(`오두막 Lv${cottageLevel} +${Math.round(cottageOffBonus * 100)}%`);
       const multLabel = multParts.length > 0 ? ` (${multParts.join(', ')})` : '';
       setTimeout(() => addMsgRef.current(`💤 자리 비운 ${awayMins}분 동안 +${offlineReward}G 획득!${multLabel} (최대 2.5시간)`, 'catch'), 1800);
     }

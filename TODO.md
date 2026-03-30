@@ -835,3 +835,66 @@
 - [x] 전체 빌드 확인 (`npm run build`) ✅
 
 *마지막 업데이트: 2026-03-29*
+
+---
+
+## Phase 15 — 엔드게임 심화 & 소셜 완성
+
+> Phase 14까지 완성된 8존 월드, 전설 장비 제작, 존별 일일 챌린지를 바탕으로, 최고 수준 플레이어를 위한 엔드게임 루프 완성 및 소셜/멀티플레이 경험 극대화.
+
+### 15-1. 세계 보스 이벤트 시스템 (World Boss Event)
+
+- [ ] `ranking.js` — `damageServerBoss(amount, nickname)` 시그니처 확장: Firestore transaction 내 `contributors.${nickname} += amount` 업데이트
+- [ ] `ranking.js` — `distributeServerBossRewards(bossData)` 함수 신규 작성: 기여도 비례 보상 → `sendPlayerMail()` 발송
+- [ ] `App.jsx` — `damageServerBoss` 호출 3곳 모두 `nickname` 인자 전달
+- [ ] `App.jsx` — `serverBoss` onSnapshot에서 `hp <= 0 && !data.rewarded` 감지 시 `distributeServerBossRewards()` 호출
+- [ ] `App.jsx` — `DEFAULT_STATE` + `loadSave()` — `bossContribHistory: []` 추가
+- [ ] `AdminPanel.jsx` — 보스 스폰 UI: 보스 3종 드롭다운 + HP 슬라이더 + zoneName
+- [ ] `components/TopBar.jsx` — 보스 HP 바 색상 3단계 (녹→황→적) + 기여자 수 표시
+- [ ] 업적 2종: '보스 참전자', '보스 처치자'
+- [ ] 칭호 1종: '용사의 귀환' (보스 3회 상위 기여)
+
+### 15-2. NPC 선물 시스템 (NPC Gift System)
+
+- [x] `npcData.js` — `NPCS` 각 항목에 `giftPrefs: { liked, favoriteItem, likedGain, favoriteGain }` 추가 (9종 NPC 전체)
+- [x] `DEFAULT_STATE` + `loadSave()` — `npcGiftDate: ''`, `npcGiftCountToday: 0` 추가
+- [x] `App.jsx` — `handleNpcGift(npcKey, itemKey)` 콜백: 1일 3회 한도, 인벤토리 차감, 친밀도 부여, NPC 전용 대사
+- [x] `components/NpcDialogue.jsx` — 모든 NPC 패널에 "선물하기" 버튼 + 인벤토리 드롭다운
+- [x] `components/Sidebar.jsx` — 관계도 탭 NPC 카드에 선호 아이템 힌트 (친밀도 30+ 공개)
+- [x] 업적 2종: 선물의 달인' (20회), '마음의 전달자' (선호 아이템 5회)
+- [x] 칭호 1종: 타이드헤이븐의 친구' (전체 NPC 80+ 달성)
+
+### 15-3. 시즌 리그 & 플레이어 프로필 카드
+
+- [ ] `ranking.js` — `claimSeasonReward(nickname, rank)` 함수: 순위별 보상 우편함 발송
+- [ ] `Leaderboard.jsx` — '🎖 시즌 리그' 탭 추가
+- [ ] `DEFAULT_STATE` + `loadSave()` — `seasonRewardClaimed: {}` 추가
+- [ ] `components/ProfileCard.jsx` — 신규: 닉네임/칭호/아바타/통계/도감완성률/대표업적 카드
+- [ ] `App.jsx` — 로그인 시 이전 시즌 보상 자동 지급 (1회 보장)
+- [ ] `components/Sidebar.jsx` — 스탯 패널 "내 프로필 카드" 버튼 추가
+- [ ] 업적 1종: '기록의 증인' (공유하기 1회)
+
+### 15-4. 존별 낚시 미니게임 변형
+
+- [x] `TidalMinigame.jsx` — 신규: 조류 타이밍 게임 (항구마을/남쪽심해, 보통 이상 희귀도 10% 확률)
+- [x] `IceHoleMinigame.jsx` — 신규: 얼음 구멍 선택 게임 (설산정상 전체 낚시)
+- [x] `App.jsx` — 존 확인 후 해당 미니게임 state 설정 및 콜백 구현
+- [x] `App.jsx` — `DEFAULT_STATE` + `loadSave()` — `tidalGameWins: 0`, `iceHoleGameWins: 0`
+- [x] 업적 2종: 조류를 타는 자' (10회 성공), '얼음 낚시 달인' (20회 성공)
+
+### 15-5. 오두막 업그레이드 시스템
+
+- [x] `DEFAULT_STATE` + `loadSave()` — `cottage.level: 1` 추가
+- [x] `gameData.js` — `COTTAGE_UPGRADE_REQS`, `COTTAGE_LEVEL_BONUSES` 상수 추가
+- [x] `App.jsx` — `handleCottageUpgrade(targetLevel)` 콜백: 재료 검증 + 차감 + 레벨 증가
+- [x] `App.jsx` — 오프라인 수입에 `COTTAGE_LEVEL_BONUSES[cottage.level].offlineBonus` 적용
+- [x] `components/CottagePanel.jsx` — 오두막 레벨 / 업그레이드 버튼 UI 추가
+- [x] 업적 2종: 내 집 마련' (레벨 2), '꿈의 집' (레벨 4)
+- [x] 칭호 1종: 타이드헤이븐의 집주인' (레벨 4)
+
+### Phase 15 공통
+
+- [x] 신규 `DEFAULT_STATE` 필드 전체 `loadSave()` 마이그레이션 확인
+- [x] `npm run build` 최종 빌드 확인 ✅
+
+*마지막 업데이트: 2026-03-30*

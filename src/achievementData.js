@@ -77,6 +77,15 @@ export const ACHIEVEMENTS = [
   { id: 'harbor_fish_30',  label: '항구의 어부',    desc: '항구 마을에서 물고기 30마리 낚기',     icon: '⚓', type: 'harborFishCount',  goal: 30,  reward: { money: 15000 } },
   { id: 'temple_ore_10',   label: '신전의 탐험가',  desc: '고대 신전에서 고대광석 10개 채굴',     icon: '🏺', type: 'templeOreCount',   goal: 10,  reward: { money: 20000 } },
   { id: 'snow_mastery',    label: '설산 정복자',    desc: '설산 정상에서 활동 (숙련도 exp 10 이상)', icon: '❄️', type: 'snowMasteryTime',  goal: 10,  reward: { money: 12000 } },
+  // Phase 15-2: NPC 선물
+  { id: 'gift_20',         label: '선물의 달인',    desc: 'NPC에게 선물 20회',                     icon: '💝', type: 'npcGiftTotal',    goal: 20,  reward: { money: 8000 } },
+  { id: 'gift_fav_5',      label: '마음의 전달자',  desc: 'NPC 선호 아이템 선물 5회',              icon: '💕', type: 'npcGiftFavorite', goal: 5,   reward: { money: 15000 } },
+  // Phase 15-4: 존별 낚시 미니게임
+  { id: 'tidal_10',        label: '조류를 타는 자', desc: '조류 타이밍 게임 10회 성공',            icon: '🌊', type: 'tidalGameWins',   goal: 10,  reward: { money: 10000 } },
+  { id: 'ice_hole_20',     label: '얼음 낚시 달인', desc: '얼음 구멍 선택 게임 20회 성공',         icon: '❄️', type: 'iceHoleGameWins',  goal: 20,  reward: { money: 12000 } },
+  // Phase 15-5: 오두막 업그레이드
+  { id: 'cottage_lv2',     label: '내 집 마련',     desc: '오두막 레벨 2 달성',                    icon: '🏠', type: 'cottageLevel',    goal: 2,   reward: { money: 5000 } },
+  { id: 'cottage_lv4',     label: '꿈의 집',        desc: '오두막 레벨 4 달성',                    icon: '🏡', type: 'cottageLevel',    goal: 4,   reward: { money: 50000 } },
 ];
 
 /** Check which new achievements were just unlocked.

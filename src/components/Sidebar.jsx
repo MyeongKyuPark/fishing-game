@@ -71,6 +71,8 @@ export default function Sidebar(props) {
     buyPickaxe, buyGatherTool,
     setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
     handlePetEvolve, handleChooseJobClass,
+    handleCottageUpgrade,
+    setShowProfileCard,
   } = props;
 
   const myTitle = getTitle(gs);
@@ -284,7 +286,15 @@ export default function Sidebar(props) {
           <div className="panel" onClick={e => e.stopPropagation()}>
             <div className="panel-head">
               <span>📊 상태창</span>
-              <button tabIndex={-1} onClick={() => setShowStats(false)}>✕</button>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {setShowProfileCard && (
+                  <button tabIndex={-1} onClick={() => setShowProfileCard(true)}
+                    style={{ fontSize: 12, padding: '2px 8px', background: '#1a3a6a', border: '1px solid #44aaff', borderRadius: 6, color: '#88ddff', cursor: 'pointer' }}>
+                    🪪 내 프로필
+                  </button>
+                )}
+                <button tabIndex={-1} onClick={() => setShowStats(false)}>✕</button>
+              </div>
             </div>
 
             {/* Tabs */}
@@ -1468,6 +1478,14 @@ export default function Sidebar(props) {
                       ))}
                       {next && <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>다음: [{next.label}] 호감도 {next.at} — {next.reward}</div>}
                       {!next && affinity >= 80 && <div style={{ fontSize: 11, color: npc.color, marginTop: 2 }}>최고 관계 달성!</div>}
+                      {/* Phase 15-2: 선물 힌트 */}
+                      {npc.giftPrefs && (
+                        <div style={{ marginTop: 4, fontSize: 11, color: '#ff99bb' }}>
+                          💝 선물 선호: {affinity >= 30
+                            ? `${(npc.giftPrefs.liked ?? []).join(', ')} / ⭐ ${npc.giftPrefs.favoriteItem}`
+                            : '???  (친밀도 30 이상 달성 시 공개)'}
+                        </div>
+                      )}
                       {(() => {
                         const npcQuests = NPC_QUESTS[npcKey];
                         if (!npcQuests) return null;
@@ -4578,6 +4596,7 @@ export default function Sidebar(props) {
           gs={gs} setGs={setGs} nickname={nickname}
           onClose={() => setShowCottage(false)}
           addMsg={addMsg}
+          handleCottageUpgrade={handleCottageUpgrade}
         />
       )}
 

@@ -207,6 +207,20 @@ export const DEFAULT_STATE = {
   // Phase 14: 존 일일 챌린지
   zoneChallengeDate: '',    // 마지막 챌린지 날짜 (reset 감지)
   zoneChallengeProgress: {}, // { [zone]: { id, progress, claimed } }
+  // Phase 15-2: NPC 선물 시스템
+  npcGiftDate: '',
+  npcGiftCountToday: 0,
+  npcGiftFavoriteCount: 0, // 업적용: 선호 아이템 선물 총 횟수
+  npcGiftTotalCount: 0,    // 업적용: 선물 총 횟수
+  // Phase 15-4: 존별 낚시 미니게임
+  tidalGameWins: 0,
+  iceHoleGameWins: 0,
+  // Phase 15-5: 오두막 업그레이드
+  cottageLevel: 1,
+  // Phase 15-3: 시즌 보상
+  seasonRewardClaimed: {},
+  // Phase 15-1: 보스 기여 이력
+  bossContribHistory: [],
 };
 
 export const SAVE_VERSION = 2;
@@ -384,6 +398,16 @@ export function loadSave(nickname) {
       // Phase 14
       zoneChallengeDate: s.zoneChallengeDate ?? '',
       zoneChallengeProgress: s.zoneChallengeProgress ?? {},
+      // Phase 15
+      npcGiftDate: s.npcGiftDate ?? '',
+      npcGiftCountToday: s.npcGiftCountToday ?? 0,
+      npcGiftFavoriteCount: s.npcGiftFavoriteCount ?? 0,
+      npcGiftTotalCount: s.npcGiftTotalCount ?? 0,
+      tidalGameWins: s.tidalGameWins ?? 0,
+      iceHoleGameWins: s.iceHoleGameWins ?? 0,
+      cottageLevel: s.cottageLevel ?? 1,
+      seasonRewardClaimed: s.seasonRewardClaimed ?? {},
+      bossContribHistory: s.bossContribHistory ?? [],
     };
   } catch { return DEFAULT_STATE; }
 }

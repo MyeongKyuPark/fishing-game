@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { FURNITURE, FISH } from '../gameData';
+import { FURNITURE, FISH, COTTAGE_UPGRADE_REQS, COTTAGE_LEVEL_BONUSES } from '../gameData';
 import { ACHIEVEMENTS } from '../achievementData';
 import { rarityColor } from '../hooks/useGameState';
 import { saveCottagePublic, fetchCottage, incrementCottageVisit, addGuestbookEntry, fetchGuestbook } from '../ranking';
 
 const TABS = ['인테리어', '상점', '트로피', '업적패', '방문', '방명록'];
 
-export default function CottagePanel({ gs, setGs, nickname, onClose, addMsg }) {
+export default function CottagePanel({ gs, setGs, nickname, onClose, addMsg, handleCottageUpgrade }) {
   const [tab, setTab] = useState('인테리어');
   const [visitInput, setVisitInput] = useState('');
   const [visitData, setVisitData] = useState(null); // fetched cottage
@@ -220,6 +220,48 @@ export default function CottagePanel({ gs, setGs, nickname, onClose, addMsg }) {
                 </div>
               </>
             )}
+
+            {/* Phase 15-5: 오두막 업그레이드 */}
+            {handleCottageUpgrade && (() => {
+              const cottageLevel = gs.cottageLevel ?? 1;
+              const nextLevel = cottageLevel + 1;
+              const nextReq = COTTAGE_UPGRADE_REQS[nextLevel];
+              const currentBonus = COTTAGE_LEVEL_BONUSES[cottageLevel] ?? {};
+              const nextBonus = COTTAGE_LEVEL_BONUSES[nextLevel];
+              return (
+                <div style={{ marginTop: 14 }}>
+                  <div className="section-title">🏠 오두막 레벨</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0' }}>
+                    <span style={{ fontWeight: 700, color: '#ffcc44' }}>Lv.{cottageLevel}</span>
+                    <span style={{ fontSize: 12, color: '#88aacc' }}>
+                      가구 슬롯 {currentBonus.maxFurniture} / 오프라인 +{Math.round((currentBonus.offlineBonus ?? 0) * 100)}%
+                    </span>
+                    {cottageLevel >= 4 && <span style={{ fontSize: 12, color: '#ffcc44' }}>최고 등급!</span>}
+                  </div>
+                  {nextReq && nextBonus && (
+                    <div style={{ background: 'rgba(255,200,50,0.08)', borderRadius: 8, padding: 10, border: '1px solid rgba(255,200,50,0.2)' }}>
+                      <div style={{ fontSize: 12, color: '#ffcc44', marginBottom: 6 }}>다음 레벨 (Lv.{nextLevel}) 비용:</div>
+                      <div style={{ fontSize: 12, color: '#ccc', marginBottom: 4 }}>
+                        💰 {(nextReq.money ?? 0).toLocaleString()}G
+                        {Object.entries(nextReq.ore ?? {}).map(([ore, qty]) => (
+                          <span key={ore}> / {ore}×{qty}</span>
+                        ))}
+                        {(nextReq.fish ?? []).map(f => (
+                          <span key={f}> / {f}×1</span>
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#88ff88', marginBottom: 8 }}>
+                        ↑ 가구 슬롯 {nextBonus.maxFurniture} / 오프라인 +{Math.round(nextBonus.offlineBonus * 100)}%
+                      </div>
+                      <button onClick={() => handleCottageUpgrade(nextLevel)}
+                        style={{ width: '100%', padding: '7px 0', background: 'linear-gradient(90deg,#886600,#cc9900)', borderRadius: 8, border: 'none', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+                        🏠 업그레이드 → Lv.{nextLevel}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
 

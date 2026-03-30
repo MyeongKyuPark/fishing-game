@@ -286,6 +286,24 @@ export const TITLES = [
       return lv >= 3;
     },
   },
+  // Phase 15 titles
+  {
+    label: '타이드헤이븐의 친구', color: '#ff99cc',
+    unlockDesc: '모든 NPC 친밀도 80 이상 달성',
+    effectDesc: '친밀도 획득 +40% · 판매가 +8%',
+    bonus: { sellBonus: 0.08, affinityGainMult: 1.4 },
+    condition: (gs) => {
+      const aff = gs.npcAffinity ?? {};
+      return Object.values(aff).filter(v => v >= 80).length >= 9;
+    },
+  },
+  {
+    label: '타이드헤이븐의 집주인', color: '#ffcc44',
+    unlockDesc: '오두막 레벨 4 달성',
+    effectDesc: '오프라인 수입 추가 +10%',
+    bonus: { offlineBonus: 0.10 },
+    condition: (gs) => (gs.cottageLevel ?? 1) >= 4,
+  },
 ];
 
 // Auto title: highest-priority qualifying title

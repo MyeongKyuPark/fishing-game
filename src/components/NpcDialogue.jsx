@@ -278,11 +278,12 @@ function getRandChat(npcKey) {
 }
 
 // ── 컴포넌트 ─────────────────────────────────────────────────────────────────
-export default function NpcDialogue({ npcKey, affinity, onAction, onClose }) {
+export default function NpcDialogue({ npcKey, affinity, onAction, onGift, gs, onClose }) {
   const npc = NPCS[npcKey];
   const data = DIALOGUE[npcKey];
   const [currentLine, setCurrentLine] = useState(() => getGreeting(npcKey, affinity));
   const [isChatting, setIsChatting] = useState(false);
+  const [showGift, setShowGift] = useState(false);
 
   const affinityLevel = getAffinityLevel(affinity, npcKey);
   const affinityPct = Math.min(100, affinity);
@@ -301,8 +302,30 @@ export default function NpcDialogue({ npcKey, affinity, onAction, onClose }) {
       onClose();
       return;
     }
+    if (optId === 'gift') {
+      setShowGift(v => !v);
+      return;
+    }
     onAction(optId);
   }, [npcKey, onAction, onClose]);
+
+  // Build gift item list from gs inventory
+  const prefs = npc?.giftPrefs;
+  const giftItems = [];
+  if (prefs && gs) {
+    // fish in inventory matching liked/favorite
+    const allLiked = [...(prefs.liked ?? []), prefs.favoriteItem].filter(Boolean);
+    for (const name of allLiked) {
+      const hasFish = (gs.fishInventory ?? []).some(f => f.name === name);
+      const hasOre = (gs.oreInventory?.[name] ?? 0) > 0;
+      const hasHerb = (gs.herbInventory?.[name] ?? 0) > 0;
+      const hasCrop = (gs.cropInventory?.[name] ?? 0) > 0;
+      if (hasFish) giftItems.push({ key: name, type: 'fish', label: name, isFav: name === prefs.favoriteItem });
+      else if (hasOre) giftItems.push({ key: name, type: 'ore', label: name, isFav: name === prefs.favoriteItem });
+      else if (hasHerb) giftItems.push({ key: name, type: 'herb', label: name, isFav: name === prefs.favoriteItem });
+      else if (hasCrop) giftItems.push({ key: name, type: 'crop', label: name, isFav: name === prefs.favoriteItem });
+    }
+  }
 
   if (!npc || !data) return null;
 
@@ -429,7 +452,65 @@ export default function NpcDialogue({ npcKey, affinity, onAction, onClose }) {
               <span>{opt.label}</span>
             </button>
           ))}
+          {/* Phase 15-2: 선물하기 버튼 */}
+          {prefs && onGift && (
+            <button onClick={() => handleOption('gift')} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 14px', borderRadius: 10,
+              background: showGift ? '#ff447722' : '#ff447711',
+              border: `1px solid #ff447744`,
+              color: '#ffaacc', fontSize: 14, fontWeight: 600,
+              cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s',
+            }}>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>💝</span>
+              <span>선물하기 ({gs?.npcGiftCountToday ?? 0}/3)</span>
+            </button>
+          )}
         </div>
+
+        {/* 선물 패널 */}
+        {showGift && prefs && (
+          <div style={{
+            marginTop: 12, background: 'rgba(255,68,119,0.08)',
+            border: '1px solid #ff447733', borderRadius: 10, padding: 12,
+          }}>
+            <div style={{ fontSize: 12, color: '#ff99bb', marginBottom: 8 }}>
+              💝 선물할 아이템 선택 (1일 3회 한도)
+              {affinity < 30 && <span style={{ color: '#888', marginLeft: 8 }}>※ 선호 아이템은 친밀도 30 달성 후 힌트 공개</span>}
+            </div>
+            {giftItems.length === 0 ? (
+              <div style={{ fontSize: 12, color: '#888' }}>
+                선물 가능한 아이템이 없습니다.
+                <div style={{ marginTop: 4 }}>
+                  좋아하는 것: {affinity >= 30 ? (prefs.liked ?? []).join(', ') : '???'}
+                  {affinity >= 30 && <span> / 최애: {prefs.favoriteItem}</span>}
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {giftItems.map(item => (
+                  <button key={item.key} onClick={() => {
+                    if (onGift) onGift(item.key, item.type);
+                    setShowGift(false);
+                    setCurrentLine(item.isFav ? '정말 감사해요! 최고의 선물이에요!' : '고마워요!');
+                    setIsChatting(true);
+                  }} style={{
+                    padding: '5px 12px', borderRadius: 8, cursor: 'pointer',
+                    background: item.isFav ? '#ff880033' : '#44225533',
+                    border: item.isFav ? '1px solid #ff8800' : '1px solid #664455',
+                    color: item.isFav ? '#ffaa44' : '#e8c8d8',
+                    fontSize: 13, fontWeight: item.isFav ? 700 : 400,
+                  }}>
+                    {item.isFav ? '⭐ ' : ''}{item.label}
+                    <span style={{ color: '#aaa', marginLeft: 4, fontSize: 11 }}>
+                      +{item.isFav ? prefs.favoriteGain : prefs.likedGain}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
     </div>

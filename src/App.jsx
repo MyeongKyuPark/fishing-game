@@ -21,7 +21,8 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
-  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, TOPS, BOTTOMS, BELTS, ROD_SKINS, SPOT_DECOS, FURNITURE, BAIT_RECIPES, POINT_SHOP_ITEMS } from './gameData';
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, TOPS, BOTTOMS, BELTS, ROD_SKINS, SPOT_DECOS, FURNITURE, BAIT_RECIPES, POINT_SHOP_ITEMS,
+  COTTAGE_UPGRADE_REQS, COTTAGE_LEVEL_BONUSES } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
@@ -59,6 +60,9 @@ import AuctionHouse from './AuctionHouse';
 import SeasonPass from './SeasonPass';
 import TownHall from './components/TownHall';
 import PointShop from './components/PointShop';
+import TidalMinigame from './components/TidalMinigame';
+import IceHoleMinigame from './components/IceHoleMinigame';
+import ProfileCard from './components/ProfileCard';
 import { TOWN_BUILDINGS, getTownBonuses, subscribeTownProgress, contributeTown } from './townData';
 
 // Tournament rarity bonus: points added on top of fish size per rarity tier
@@ -285,6 +289,10 @@ export default function App() {
   // Phase 12 state
   const [showTownHall, setShowTownHall] = useState(false);
   const [showPointShop, setShowPointShop] = useState(false);
+  // Phase 15 state
+  const [tidalGame, setTidalGame] = useState(null); // { name, fd, size, finalPrice, rodKey, seaMsg, id }
+  const [iceHoleGame, setIceHoleGame] = useState(null); // { name, fd, size, finalPrice, rodKey, seaMsg, id }
+  const [showProfileCard, setShowProfileCard] = useState(false);
   const [mapTransitioning, setMapTransitioning] = useState(false);
   const [townLevels, setTownLevels] = useState({});
   const [returnCast, setReturnCast] = useState(null); // { expiresAt: number } | null
@@ -994,6 +1002,20 @@ export default function App() {
       return;
     }
 
+    // Phase 15-4: Zone minigame triggers (after resistance check, before normal catch)
+    const catchZone = getActiveZone();
+    const TIDAL_ZONES = ['항구마을', '남쪽심해'];
+    const TIDAL_RARITIES = ['보통', '희귀', '전설', '신화'];
+    if (TIDAL_ZONES.includes(catchZone) && TIDAL_RARITIES.includes(fd.rarity) && Math.random() < 0.10) {
+      setTidalGame({ name, fd, size, finalPrice, rodKey, seaMsg, id: Date.now() + Math.random() });
+      addMsg('🌊 조류가 강해집니다! 타이밍을 맞춰 낚아채세요!', 'catch');
+      return;
+    }
+    if (catchZone === '설산정상') {
+      setIceHoleGame({ name, fd, size, finalPrice, rodKey, seaMsg, id: Date.now() + Math.random() });
+      return;
+    }
+
     // 2% treasure chest
     if (Math.random() < 0.02) {
       const treasure = randInt(200, 800);
@@ -1292,6 +1314,94 @@ export default function App() {
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `${rg.name} 도주 💔`, age: 0, color: '#ff4444' };
   }, [resistanceGame, addMsg]);
+
+  // Phase 15-4: Tidal minigame result
+  const onTidalResult = useCallback((sizeBonus) => {
+    const tg = tidalGame;
+    if (!tg) return;
+    setTidalGame(null);
+    const { name, fd, finalPrice, seaMsg, id } = tg;
+    const bonusedSize = parseFloat((tg.size * (1 + sizeBonus)).toFixed(1));
+    const bonusedPrice = sizeBonus > 0 ? Math.round(finalPrice * (1 + sizeBonus)) : finalPrice;
+    const s = stateRef.current;
+    const speechAbil = s?.abilities?.화술?.value ?? 0;
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const updatedStats = {
+        ...prevStats,
+        fishCaught: (prevStats.fishCaught ?? 0) + 1,
+        tidalGameWins: (prevStats.tidalGameWins ?? 0) + (sizeBonus > 0 ? 1 : 0),
+      };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      const isNewRecord = bonusedSize > (prev.fishRecords?.[name]?.size ?? 0);
+      return {
+        ...prev,
+        fishInventory: [...prev.fishInventory, { name, size: bonusedSize, price: bonusedPrice, id }],
+        fishCaught: (prev.fishCaught ?? 0) + 1,
+        achStats: updatedStats,
+        tidalGameWins: (prev.tidalGameWins ?? 0) + (sizeBonus > 0 ? 1 : 0),
+        fishRecords: isNewRecord ? { ...prev.fishRecords, [name]: { size: bonusedSize, caughtAt: Date.now() } } : prev.fishRecords,
+      };
+    });
+    const bonusStr = sizeBonus > 0 ? ` 🌊 +${Math.round(sizeBonus * 100)}% 크기 보너스!` : '';
+    addMsg(`🐟 ${name} ${bonusedSize}cm 낚음! (${bonusedPrice}G)${seaMsg}${bonusStr}`, 'catch');
+    playFishCatch(fd.rarity);
+    setCatchPopup({ name, size: bonusedSize, price: bonusedPrice, rarity: fd.rarity, isNewRecord: bonusedSize > (stateRef.current?.fishRecords?.[name]?.size ?? 0) });
+    setTimeout(() => setCatchPopup(null), 800);
+    grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
+    grantAbility('화술', Math.floor(bonusedPrice / 100) * SELL_ABILITY_PER_100G * (1 + speechAbil * 0.005));
+    grantAbility('체력', STAMINA_GAIN);
+    advanceQuest('fish');
+    advanceZoneChallenge(getActiveZone(), 'zoneFish');
+    if (nicknameRef.current) { submitSeasonScore(nicknameRef.current, (seasonScoreRef.current ?? 0) + 1); seasonScoreRef.current = (seasonScoreRef.current ?? 0) + 1; }
+    incrementServerQuestProgress('fishCaught');
+    damageServerBoss(1);
+  }, [tidalGame, addMsg, grantAbility, advanceQuest, advanceZoneChallenge, checkAndGrantAchievements]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Phase 15-4: Ice hole minigame result
+  const onIceHoleResult = useCallback((upgradeRarity) => {
+    const ig = iceHoleGame;
+    if (!ig) return;
+    setIceHoleGame(null);
+    const { name, fd, size, finalPrice, seaMsg, id } = ig;
+    const s = stateRef.current;
+    const speechAbil = s?.abilities?.화술?.value ?? 0;
+    // Upgrade rarity label for display if success (doesn't change price much, just visual)
+    const displayRarity = upgradeRarity && fd.rarity === '흔함' ? '보통'
+      : upgradeRarity && fd.rarity === '보통' ? '희귀' : fd.rarity;
+    const finalPriceUpgraded = upgradeRarity ? Math.round(finalPrice * 1.2) : finalPrice;
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const updatedStats = {
+        ...prevStats,
+        fishCaught: (prevStats.fishCaught ?? 0) + 1,
+        iceHoleGameWins: (prevStats.iceHoleGameWins ?? 0) + (upgradeRarity ? 1 : 0),
+      };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      const isNewRecord = size > (prev.fishRecords?.[name]?.size ?? 0);
+      return {
+        ...prev,
+        fishInventory: [...prev.fishInventory, { name, size, price: finalPriceUpgraded, id }],
+        fishCaught: (prev.fishCaught ?? 0) + 1,
+        achStats: updatedStats,
+        iceHoleGameWins: (prev.iceHoleGameWins ?? 0) + (upgradeRarity ? 1 : 0),
+        fishRecords: isNewRecord ? { ...prev.fishRecords, [name]: { size, caughtAt: Date.now() } } : prev.fishRecords,
+      };
+    });
+    const bonusStr = upgradeRarity ? ` ❄️ 희귀도 상향! (${displayRarity})` : '';
+    addMsg(`🐟 ${name} ${size}cm 낚음! (${finalPriceUpgraded}G)${seaMsg}${bonusStr}`, 'catch');
+    playFishCatch(fd.rarity);
+    setCatchPopup({ name, size, price: finalPriceUpgraded, rarity: displayRarity, isNewRecord: size > (stateRef.current?.fishRecords?.[name]?.size ?? 0) });
+    setTimeout(() => setCatchPopup(null), 800);
+    grantAbility('낚시', FISH_ABILITY_GAIN[fd.rarity] ?? 0.30);
+    grantAbility('화술', Math.floor(finalPriceUpgraded / 100) * SELL_ABILITY_PER_100G * (1 + speechAbil * 0.005));
+    grantAbility('체력', STAMINA_GAIN);
+    advanceQuest('fish');
+    advanceZoneChallenge(getActiveZone(), 'zoneFish');
+    if (nicknameRef.current) { submitSeasonScore(nicknameRef.current, (seasonScoreRef.current ?? 0) + 1); seasonScoreRef.current = (seasonScoreRef.current ?? 0) + 1; }
+    incrementServerQuestProgress('fishCaught');
+    damageServerBoss(1);
+  }, [iceHoleGame, addMsg, grantAbility, advanceQuest, advanceZoneChallenge, checkAndGrantAchievements]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onOreMined = useCallback((oreName) => {
     // World-zone ore yield bonus (동쪽절벽 ×1.3, 북쪽고원 ×1.15)
@@ -3051,6 +3161,123 @@ export default function App() {
     }
   }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, checkAndGrantAchievements, stateRef]);
 
+  // Phase 15-2: NPC 선물 시스템
+  const handleNpcGift = useCallback((npcKey, itemKey, itemType) => {
+    const s = stateRef.current;
+    const today = new Date().toDateString();
+    if ((s?.npcGiftDate ?? '') !== today) {
+      // Reset gift count for new day
+      setGs(prev => ({ ...prev, npcGiftDate: today, npcGiftCountToday: 0 }));
+    }
+    const giftCount = (s?.npcGiftDate ?? '') === today ? (s?.npcGiftCountToday ?? 0) : 0;
+    if (giftCount >= 3) {
+      addMsg(`💝 오늘은 이미 선물을 3번 드렸어요. 내일 다시 와주세요!`, 'info');
+      return;
+    }
+    const npcDef = NPCS[npcKey];
+    if (!npcDef) return;
+    const prefs = npcDef.giftPrefs;
+    if (!prefs) return;
+    // Check if player has the item
+    let hasItem = false;
+    let removeItem = null;
+    if (itemType === 'fish') {
+      const fish = (s?.fishInventory ?? []).find(f => f.name === itemKey);
+      if (fish) { hasItem = true; removeItem = { type: 'fish', id: fish.id }; }
+    } else if (itemType === 'ore') {
+      if ((s?.oreInventory?.[itemKey] ?? 0) >= 1) { hasItem = true; removeItem = { type: 'ore', key: itemKey }; }
+    } else if (itemType === 'herb') {
+      if ((s?.herbInventory?.[itemKey] ?? 0) >= 1) { hasItem = true; removeItem = { type: 'herb', key: itemKey }; }
+    } else if (itemType === 'crop') {
+      if ((s?.cropInventory?.[itemKey] ?? 0) >= 1) { hasItem = true; removeItem = { type: 'crop', key: itemKey }; }
+    }
+    if (!hasItem) {
+      addMsg(`💝 선물로 줄 ${itemKey}이(가) 없어요.`, 'error');
+      return;
+    }
+    const isFavorite = itemKey === prefs.favoriteItem;
+    const affinityGain = isFavorite ? prefs.favoriteGain : prefs.likedGain;
+    // Remove item from inventory
+    setGs(prev => {
+      let next = { ...prev };
+      if (removeItem?.type === 'fish') {
+        next = { ...next, fishInventory: prev.fishInventory.filter(f => f.id !== removeItem.id) };
+      } else if (removeItem?.type === 'ore') {
+        next = { ...next, oreInventory: { ...prev.oreInventory, [removeItem.key]: Math.max(0, (prev.oreInventory?.[removeItem.key] ?? 0) - 1) } };
+      } else if (removeItem?.type === 'herb') {
+        next = { ...next, herbInventory: { ...prev.herbInventory, [removeItem.key]: Math.max(0, (prev.herbInventory?.[removeItem.key] ?? 0) - 1) } };
+      } else if (removeItem?.type === 'crop') {
+        next = { ...next, cropInventory: { ...prev.cropInventory, [removeItem.key]: Math.max(0, (prev.cropInventory?.[removeItem.key] ?? 0) - 1) } };
+      }
+      const newTotal = (prev.npcGiftTotalCount ?? 0) + 1;
+      const newFavorite = isFavorite ? (prev.npcGiftFavoriteCount ?? 0) + 1 : (prev.npcGiftFavoriteCount ?? 0);
+      const newStats = { ...(prev.achStats ?? {}), npcGiftTotal: newTotal, npcGiftFavorite: newFavorite };
+      setTimeout(() => checkAndGrantAchievements(newStats), 0);
+      return {
+        ...next,
+        npcGiftDate: today,
+        npcGiftCountToday: giftCount + 1,
+        npcGiftTotalCount: newTotal,
+        npcGiftFavoriteCount: newFavorite,
+        achStats: newStats,
+      };
+    });
+    gainNpcAffinity(npcKey, affinityGain);
+    const npcIcon = npcDef.icon ?? '🧑';
+    const npcName = npcDef.name ?? npcKey;
+    if (isFavorite) {
+      addMsg(`${npcIcon} ${npcName}: "어머! 이게 정말요?! 정말 좋아하는 선물이에요!" 💝 (친밀도 +${affinityGain})`, 'catch');
+    } else {
+      addMsg(`${npcIcon} ${npcName}: "고마워요, 정말 감사해요!" (친밀도 +${affinityGain})`, 'info');
+    }
+  }, [addMsg, gainNpcAffinity, checkAndGrantAchievements, stateRef]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Phase 15-5: 오두막 업그레이드
+  const handleCottageUpgrade = useCallback((targetLevel) => {
+    const s = stateRef.current;
+    const currentLevel = s?.cottageLevel ?? 1;
+    if (targetLevel !== currentLevel + 1) {
+      addMsg('오두막은 순서대로 업그레이드해야 합니다.', 'error');
+      return;
+    }
+    const req = COTTAGE_UPGRADE_REQS[targetLevel];
+    if (!req) return;
+    // Check money
+    if ((s?.money ?? 0) < req.money) {
+      addMsg(`💰 골드가 부족합니다. 필요: ${req.money.toLocaleString()}G`, 'error');
+      return;
+    }
+    // Check ore
+    for (const [ore, qty] of Object.entries(req.ore ?? {})) {
+      if ((s?.oreInventory?.[ore] ?? 0) < qty) {
+        addMsg(`⛏ ${ore}이(가) 부족합니다. 필요: ${qty}개`, 'error');
+        return;
+      }
+    }
+    // Check fish items
+    for (const fishName of (req.fish ?? [])) {
+      if (!(s?.fishInventory ?? []).some(f => f.name === fishName)) {
+        addMsg(`🐟 ${fishName}이(가) 인벤토리에 없습니다.`, 'error');
+        return;
+      }
+    }
+    // Deduct resources and upgrade
+    setGs(prev => {
+      let next = { ...prev, money: prev.money - req.money, cottageLevel: targetLevel };
+      for (const [ore, qty] of Object.entries(req.ore ?? {})) {
+        next = { ...next, oreInventory: { ...next.oreInventory, [ore]: Math.max(0, (next.oreInventory?.[ore] ?? 0) - qty) } };
+      }
+      for (const fishName of (req.fish ?? [])) {
+        const idx = next.fishInventory.findIndex(f => f.name === fishName);
+        if (idx >= 0) next = { ...next, fishInventory: [...next.fishInventory.slice(0, idx), ...next.fishInventory.slice(idx + 1)] };
+      }
+      const newStats = { ...(prev.achStats ?? {}), cottageLevel: targetLevel };
+      setTimeout(() => checkAndGrantAchievements(newStats), 0);
+      return { ...next, achStats: newStats };
+    });
+    addMsg(`🏠 오두막이 레벨 ${targetLevel}로 업그레이드됐습니다!`, 'catch');
+  }, [addMsg, checkAndGrantAchievements, stateRef]); // eslint-disable-line react-deps
+
   // Phase 14: claim zone challenge reward
   const claimZoneChallenge = useCallback((zone) => {
     const challenge = getZoneDailyChallenge(zone);
@@ -3597,10 +3824,12 @@ nickname={nickname}
         setGuildQuest={setGuildQuest}
         handlePetEvolve={handlePetEvolve}
         handleChooseJobClass={handleChooseJobClass}
+        handleCottageUpgrade={handleCottageUpgrade}
         showSettings={showSettings}
         setShowSettings={setShowSettings}
         showCottage={showCottage}
         setShowCottage={setShowCottage}
+        setShowProfileCard={setShowProfileCard}
         showMailbox={showMailbox}
         setShowMailbox={setShowMailbox}
         showSeasonLeague={showSeasonLeague}
@@ -3662,7 +3891,32 @@ nickname={nickname}
           npcKey={npcDialog}
           affinity={gs.npcAffinity?.[npcDialog] ?? 0}
           onAction={(actionId) => handleNpcDialogAction(npcDialog, actionId)}
+          onGift={(itemKey, itemType) => handleNpcGift(npcDialog, itemKey, itemType)}
+          gs={gs}
           onClose={() => setNpcDialog(null)}
+        />
+      )}
+
+      {/* Phase 15-4: Zone minigames */}
+      {tidalGame && (
+        <TidalMinigame
+          fishName={tidalGame.name}
+          rarity={tidalGame.fd?.rarity}
+          onResult={onTidalResult}
+        />
+      )}
+      {iceHoleGame && (
+        <IceHoleMinigame
+          onResult={onIceHoleResult}
+        />
+      )}
+
+      {/* Phase 15-3: Profile Card */}
+      {showProfileCard && (
+        <ProfileCard
+          gs={gs}
+          nickname={nickname}
+          onClose={() => setShowProfileCard(false)}
         />
       )}
 

@@ -755,6 +755,19 @@ export const POINT_SHOP_ITEMS = {
   포인트달인칭호:  { name: '포인트의 달인 칭호', icon: '🏆', cost: 1000, desc: '특별 칭호 영구 획득',                   itemType: 'title',     itemKey: '포인트의달인', qty: 1 },
 };
 
+// ── Phase 15-5: 오두막 업그레이드 시스템 ─────────────────────────────────────
+export const COTTAGE_UPGRADE_REQS = {
+  2: { money: 10000, ore: { 금광석: 5 } },
+  3: { money: 30000, ore: { 고대광석: 3 } },
+  4: { money: 80000, ore: { 빙정광석: 3 }, fish: ['항구왕새우'] },
+};
+export const COTTAGE_LEVEL_BONUSES = {
+  1: { maxFurniture: 12, offlineBonus: 0,    guestbookMax: 20 },
+  2: { maxFurniture: 20, offlineBonus: 0.05, guestbookMax: 30 },
+  3: { maxFurniture: 30, offlineBonus: 0.10, guestbookMax: 50 },
+  4: { maxFurniture: 48, offlineBonus: 0.20, guestbookMax: 100 },
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 export function weightedPick(table) {
   const total = table.reduce((s, e) => s + e.w, 0);
