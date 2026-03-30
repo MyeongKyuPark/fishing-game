@@ -57,6 +57,31 @@ export const JOBS = {
   },
 };
 
+// ── Phase 12-4: 전문 직업 분기 ────────────────────────────────────────────────
+export const JOB_CLASSES = {
+  낚시사: {
+    name: '전문 낚시사', icon: '🎣', color: '#44aaff',
+    desc: '낚시 속도 추가 -8%, 전설 어종 확률 +5%, 낚시 판매가 +10%',
+    bonus: { fishTimeMult: 0.92, legendaryBonus: 0.05, fishSellBonus: 0.10 },
+    reqLabel: '어빌리티 합산 200 이상',
+    titleLabel: '전문 낚시사',
+  },
+  광부: {
+    name: '전문 광부', icon: '⛏', color: '#ffaa44',
+    desc: '채굴 속도 추가 -8%, 광석 대박 확률 +8%, 광석 +1 (20% 확률)',
+    bonus: { mineTimeMult: 0.92, windfallBonus: 0.08, oreExtraChance: 0.20 },
+    reqLabel: '어빌리티 합산 200 이상',
+    titleLabel: '전문 광부',
+  },
+  요리사: {
+    name: '전문 요리사', icon: '🍳', color: '#ff8844',
+    desc: '요리 시간 -20%, 요리 판매가 +15%, 납품 보상 +10%',
+    bonus: { cookTimeMult: 0.80, cookSellBonus: 0.15, deliveryRewardBonus: 0.10 },
+    reqLabel: '어빌리티 합산 200 이상',
+    titleLabel: '전문 요리사',
+  },
+};
+
 /** Check which jobs the player can unlock */
 export function getAvailableJobs(abilities) {
   return Object.entries(JOBS).filter(([, job]) =>

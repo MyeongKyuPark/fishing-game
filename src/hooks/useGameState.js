@@ -64,7 +64,7 @@ export const DEFAULT_STATE = {
   ownedRods: ['초급낚시대'],
   rodEnhance: { 초급낚시대: 0 },
   fishInventory: [],
-  oreInventory: { 철광석: 0, 구리광석: 0, 수정: 0, 금광석: 0 },
+  oreInventory: { 철광석: 0, 구리광석: 0, 수정: 0, 금광석: 0, 고대광석: 0, 빙정광석: 0 },
   fishCaught: 0,
   boots: '기본신발',
   ownedBoots: ['기본신발'],
@@ -107,7 +107,7 @@ export const DEFAULT_STATE = {
   petExp: {},
   innBuff: null,
   innRestAt: null,
-  npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, 채굴사: 0, 은행원: 0, 행상인: 0, 노련한광부: 0, 산신령: 0, 심해탐험가: 0 },
+  npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, 채굴사: 0, 은행원: 0, 행상인: 0, 노련한광부: 0, 산신령: 0, 심해탐험가: 0, 어시장상인: 0, 선장: 0, 유물학자: 0, 설인: 0 },
   exploredZones: [],
   farmPlots: [],
   farmExpansionCount: 0,
@@ -181,6 +181,32 @@ export const DEFAULT_STATE = {
   worldZone: '마을',
   visitedZones: ['마을'],
   zoneMastery: {},
+  // Phase 12-1: 펫 진화
+  evolvedPets: {},
+  specialItems: {},
+  evolutionGemDate: '',
+  // Phase 12-2: 계절 축제
+  festivalEndDate: null,
+  festivalSeasonSeen: [],
+  festivalParticipated: [],
+  // Phase 12-3: 마을 발전
+  myTownContributions: {},
+  // Phase 12-4: 전문 직업
+  jobClass: null,
+  // Phase 12-5: 활동 포인트
+  activityPoints: 0,
+  totalPointsEarned: 0,
+  ownedPointTitles: [],
+  ownedSpecialFurniture: [],
+  // Phase 13: new zone actions
+  setiDrinkDate: '',        // 설인 따뜻한 음료 1일 1회
+  harborFishCount: 0,       // 항구마을 낚시 마릿수 (업적용)
+  harborFishSellTotal: 0,   // 항구마을 판매 누적 골드 (칭호용)
+  templeOreCount: 0,        // 고대신전 고대광석 채굴 수 (업적용)
+  snowMasteryTime: 0,       // 설산정상 활동 exp (업적용)
+  // Phase 14: 존 일일 챌린지
+  zoneChallengeDate: '',    // 마지막 챌린지 날짜 (reset 감지)
+  zoneChallengeProgress: {}, // { [zone]: { id, progress, claimed } }
 };
 
 export const SAVE_VERSION = 2;
@@ -228,7 +254,7 @@ export function loadSave(nickname) {
       ownedRods,
       rodEnhance,
       fishInventory: s.fishInventory ?? [],
-      oreInventory: { ...DEFAULT_STATE.oreInventory, ...s.oreInventory },
+      oreInventory: { 철광석: 0, 구리광석: 0, 수정: 0, 금광석: 0, 고대광석: 0, 빙정광석: 0, ...(s.oreInventory ?? {}) },
       fishCaught: s.fishCaught ?? 0,
       boots: s.boots ?? '기본신발',
       ownedBoots: s.ownedBoots ?? ['기본신발'],
@@ -271,7 +297,7 @@ export function loadSave(nickname) {
       petExp: Object.fromEntries(Object.entries(s.petExp ?? {}).map(([k, v]) => [k, typeof v === 'number' ? v : 0])),
       innBuff: s.innBuff ?? null,
       innRestAt: s.innRestAt ?? null,
-      npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, 채굴사: 0, 은행원: 0, 행상인: 0, 노련한광부: 0, 산신령: 0, 심해탐험가: 0, ...(s.npcAffinity ?? {}) },
+      npcAffinity: { 상인: 0, 요리사: 0, 여관주인: 0, 채굴사: 0, 은행원: 0, 행상인: 0, 노련한광부: 0, 산신령: 0, 심해탐험가: 0, 어시장상인: 0, 선장: 0, 유물학자: 0, 설인: 0, ...(s.npcAffinity ?? {}) },
       exploredZones: s.exploredZones ?? [],
       farmPlots: s.farmPlots ?? [],
       farmExpansionCount: s.farmExpansionCount ?? 0,
@@ -332,6 +358,32 @@ export function loadSave(nickname) {
       worldZone: s.worldZone ?? '마을',
       visitedZones: s.visitedZones ?? ['마을'],
       zoneMastery: s.zoneMastery ?? {},
+      // Phase 12-1
+      evolvedPets: s.evolvedPets ?? {},
+      specialItems: s.specialItems ?? {},
+      evolutionGemDate: s.evolutionGemDate ?? '',
+      // Phase 12-2
+      festivalEndDate: s.festivalEndDate ?? null,
+      festivalSeasonSeen: s.festivalSeasonSeen ?? [],
+      festivalParticipated: s.festivalParticipated ?? [],
+      // Phase 12-3
+      myTownContributions: s.myTownContributions ?? {},
+      // Phase 12-4
+      jobClass: s.jobClass ?? null,
+      // Phase 12-5
+      activityPoints: s.activityPoints ?? 0,
+      totalPointsEarned: s.totalPointsEarned ?? 0,
+      ownedPointTitles: s.ownedPointTitles ?? [],
+      ownedSpecialFurniture: s.ownedSpecialFurniture ?? [],
+      // Phase 13
+      setiDrinkDate: s.setiDrinkDate ?? '',
+      harborFishCount: s.harborFishCount ?? 0,
+      harborFishSellTotal: s.harborFishSellTotal ?? 0,
+      templeOreCount: s.templeOreCount ?? 0,
+      snowMasteryTime: s.snowMasteryTime ?? 0,
+      // Phase 14
+      zoneChallengeDate: s.zoneChallengeDate ?? '',
+      zoneChallengeProgress: s.zoneChallengeProgress ?? {},
     };
   } catch { return DEFAULT_STATE; }
 }

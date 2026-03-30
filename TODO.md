@@ -630,3 +630,208 @@
 - ✅ TopBar 존 HUD 칩: Lv뱃지 표시
 
 *마지막 업데이트: 2026-03-25*
+
+---
+
+## Phase 12 — 펫 진화 · 계절 축제 · 마을 발전 · 전문 직업
+
+### 12-1. 펫 진화 시스템
+
+현재 펫은 Lv5가 최대이며 이후 성장 경로가 없음. 진화로 엔드게임 펫 콘텐츠 추가.
+
+- ✅ `petData.js` — EVOLVED_PETS 5종 추가: 스타피시(수달 진화), 크리스탈두더지(두더지 진화), 문라이트캣(고양이 진화), 천룡(아기용 진화), 불사조(봉황 진화)
+  - 진화형 펫은 원본 펫 보너스 × 1.5 + 고유 2차 효과 보유
+- ✅ 진화 조건: 해당 펫 Lv5 + 진화석(evolutionGem) 1개 + 신화 광석(mythicOre) 5개
+  - `evolutionGem`: `!진화석` 채팅 명령어로 5000G에 구매 (1일 1개 한정)
+  - `mythicOre`: 북쪽고원 채굴 시 3% 확률 드롭
+- ✅ `DEFAULT_STATE` + `loadSave()` — `evolvedPets: {}`, `specialItems: {}`, `evolutionGemDate: ''` 필드 추가
+- ✅ App.jsx `handlePetEvolve` 콜백 — 조건 검증 → 재료 차감 → evolvedPets에 기록 → activePet 업데이트
+- ✅ 펫 패널 UI — Lv5 달성 펫에 "진화 가능" 배지 + 진화 버튼, 재료 부족 시 비활성화 + 툴팁
+- ✅ 진화 연출 — `pet-evolving` (brightness flash) + `pet-evolved-icon` (pop-in) CSS keyframe 애니메이션
+- ✅ 업적 1종: '진화의 증인' (펫 1마리 진화 완료)
+
+### 12-2. 계절 축제 이벤트
+
+각 계절 전환 후 3일간 지속되는 축제 기간. 기존 seasonData.js 확장.
+
+- ✅ `seasonData.js` — SEASONS 각 항목에 `festival` 프로퍼티 추가
+- ✅ `DEFAULT_STATE` + `loadSave()` — `festivalEndDate: null`, `festivalSeasonSeen: []`, `festivalParticipated: []` 필드 추가
+- ✅ App.jsx — 계절 전환 감지 (로그인 시) festivalSeasonSeen에 없는 계절이면 festivalEndDate = Date.now() + 72h 설정
+- ✅ `isFestivalActive(gs)` 유틸 함수 구현
+- ✅ 낚시/판매/채굴/채집 콜백에 `isFestivalActive()` 체크 후 season.festival 보너스 적용
+- ✅ TopBar — 축제 기간 중 "🎉 축제 Xh" 배지 + 툴팁
+- ✅ 축제 기간 NPC 대화 — 민준/수연/미나/철수 개별 축제 인사 대사 분기
+- ✅ 업적 1종: '축제의 주인공' (4계절 축제 기간 중 각 1회 이상 활동)
+
+### 12-3. 마을 발전 시스템 (Town Development)
+
+멀티플레이어 공동 기여로 마을 시설 업그레이드. Firebase 공유 카운터 활용.
+
+- ✅ Firebase `town_progress/{buildingId}` — `{ level, totalContribution }` 문서
+- ✅ `townData.js` 신규 파일 — TOWN_BUILDINGS 4종 + `getTownBonuses()` + `subscribeTownProgress()` + `contributeTown()`
+- ✅ `DEFAULT_STATE` + `loadSave()` — `myTownContributions: {}` 추가
+- ✅ App.jsx `handleTownContribute` 콜백 — 인벤토리 차감 + Firebase increment + 친밀도 +0.5
+- ✅ Firebase onSnapshot으로 `townLevels` state 실시간 관리
+- ✅ 낚시/채굴/허브/요리 콜백에 townBonuses 적용
+- ✅ TownHall.jsx 컴포넌트 — 건물 4개 카드, 레벨바, 기여 버튼
+- ✅ TopBar "🏘 마을" 버튼 + 단축키 `T`
+- ✅ 업적 2종: '마을 일꾼', '마을 대부'
+
+### 12-4. 전문 직업 분기 (Job Specialization)
+
+어빌리티 합산 200 이상 달성 시 낚시사/광부/요리사 중 하나를 영구 선택.
+
+- ✅ `jobData.js` — `JOB_CLASSES` 3종 추가 (기존 JOBS와 별도)
+- ✅ `DEFAULT_STATE` + `loadSave()` — `jobClass: null` 추가
+- ✅ App.jsx `handleChooseJobClass` 콜백 — 어빌리티 합산 200+ 검증 → jobClass 영구 설정
+- ✅ 스탯 패널 직업 전문화 UI — 조건 미달 시 잠금, 달성 시 3종 카드 선택
+- ✅ 조건 충족 시 "직업 선택 가능!" 채팅 알림 (1회만)
+- ✅ 낚시/채굴/요리 콜백에 jobClass 보너스 적용
+- ✅ 칭호 3종: '전문 낚시사', '전문 광부', '전문 요리사'
+- ✅ 스탯 패널 — 현재 직업 및 보너스 요약 표시
+
+### 12-5. 활동 포인트 상점 (Point Shop)
+
+낚시/채굴/채집 활동으로 쌓이는 포인트로 한정 아이템 교환. 골드와 분리된 보조 화폐.
+
+- ✅ `DEFAULT_STATE` + `loadSave()` — `activityPoints: 0`, `totalPointsEarned: 0`, `ownedPointTitles: []`, `ownedSpecialFurniture: []` 추가
+- ✅ 포인트 획득: 낚시 +1/+3/+10, 채굴 대박 +5, 허브 채집 +1, 일일퀘스트 +20, 납품 +10
+- ✅ `POINT_SHOP_ITEMS` in gameData.js — 8종 교환 아이템
+- ✅ `PointShop.jsx` 컴포넌트 — 포인트 잔액, 교환 목록, 교환 확인
+- ✅ App.jsx `handlePointExchange` 콜백
+- ✅ TopBar — `⭐ NNNpt` 잔액 칩 + "⭐ 포인트 상점" 버튼
+- ✅ 업적 1종: '포인트 수집가' (누적 1000pt)
+- ✅ 칭호 1종: '포인트의 달인' (포인트 상점 구매)
+
+*마지막 업데이트: 2026-03-29 → 구현 완료 2026-03-29*
+
+---
+
+## Phase 13 — 포켓몬 스타일 멀티맵 월드 확장
+
+> 사용자 요청: "포켓몬처럼 맵이 여러 개였으면 좋겠어"
+> 현재 5개 존(마을·서쪽초원·동쪽절벽·북쪽고원·남쪽심해) 구조를 확장, 3개 신규 맵 추가 + 전환 연출 강화.
+
+### 13-1. 맵 전환 연출 (Pokémon-style Transition)
+
+현재 존 이동은 즉시 전환. 포켓몬처럼 화면 와이프 + 도착 메시지로 개선.
+
+- [x] `App.css` — `@keyframes mapWipeIn` / `mapWipeOut` 추가: 검정 화면이 좌→우 밀려오며 전환 (0.3s)
+- [x] `App.jsx` — `mapTransitioning` state (boolean) 추가
+- [x] `handleZoneTransition` — 이동 시 `mapTransitioning = true` → 0.15s 후 존 전환 → 0.15s 후 `mapTransitioning = false`
+- [x] `GameCanvas.jsx` 또는 최상위 래퍼 — `mapTransitioning`일 때 검정 오버레이 렌더
+- [x] 새 존 도착 시 채팅에 "📍 [존이름]에 도착했습니다!" 메시지 (방문 횟수도 표시)
+- [ ] WorldMap UI — 현재 이동 가능한 연결 존 강조 표시 (화살표 애니메이션)
+
+### 13-2. 항구 마을 (Harbor Town) — 신규 맵
+
+남쪽심해 남쪽에 연결. 항구 도시 느낌의 넓은 바다 낚시 중심 맵.
+
+- [x] `mapData.js` — `buildMapHarbor()` 함수 추가 (70×50):
+  - 상단 절반: 항구 건물 구역 (어시장·창고·선착장 건물 타일)
+  - 하단 절반: 넓은 바다 (WATER) + 부두 3곳
+  - 중앙: 항구 대로 (PATH), 등대 (BUILDING, 우측 상단)
+  - 낚시 의자 12개 (부두 및 방파제)
+  - 채집 구역: 해조류 채취 (동쪽 해안)
+- [x] `ZONE_TILES`, `ZONE_LABELS`, `ZONE_CONNECTIONS` — 항구마을 추가
+- [x] `ZONE_BONUSES` — 항구마을: `{ fishSellMult: 1.40, seaRarityBonus: 0.10 }`
+- [x] `ZONE_CHAIRS` — 항구마을 낚시 의자 등록
+- [x] `ZONE_FOREST` — 항구마을 해조류 채취 구역 등록
+- [x] `ZONE_UNLOCK_REQ` — 항구마을: 남쪽 심해 방문 + 광산 3층 이상 필요
+- [x] `ZONE_TRAVEL_NPCS` — 항구마을 NPC 2종 (어시장상인, 선장)
+- [x] `npcData.js` — 어시장상인·선장 NPC 추가
+- [x] `DEFAULT_STATE.npcAffinity` + `loadSave()` — 어시장상인·선장 키 추가
+- [x] 항구마을 전용 어종 3종 (날치, 심해문어, 항구왕새우)
+- [x] `ZONE_FISH` — 항구마을 어종 가중치 테이블 추가
+- [x] `handleNpcDialogAction` — 어시장상인 `sell_market` 액션 구현
+- [x] `NpcDialogue.jsx` — 어시장상인·선장 대화 추가
+- [x] 업적 1종: '항구의 어부'
+- [x] 칭호 1종: '항구의 왕'
+
+### 13-3. 고대 신전 (Ancient Temple) — 신규 맵
+
+동쪽절벽 동쪽에 연결. 유적 탐험 + 유물 발굴 + 고대 어종 중심.
+
+- [x] `mapData.js` — `buildMapTemple()` 함수 추가
+- [x] `ZONE_TILES`, `ZONE_LABELS`, `ZONE_CONNECTIONS` — 고대신전 추가
+- [x] `ZONE_BONUSES` — 고대신전: `{ oreMult: 1.5, rarityBonus: 0.15, fishSellMult: 1.10 }`
+- [x] `ZONE_CHAIRS` — 고대신전 낚시 의자 등록
+- [x] `ZONE_UNLOCK_REQ` — 고대신전: 챕터4 완료 + 탐험 구역 3곳 필요
+- [x] `ZONE_TRAVEL_NPCS` — 고대신전 NPC 1종 (유물학자)
+- [x] `npcData.js` — 유물학자 NPC 추가
+- [x] `DEFAULT_STATE.npcAffinity` + `loadSave()` — 유물학자 키 추가
+- [x] 고대신전 전용 어종 2종 (고대잉어, 신전수호어)
+- [x] 고대신전 전용 광석 1종 (고대광석)
+- [x] `handleNpcDialogAction` — 유물학자 `appraise_artifact` 액션 구현
+- [x] `NpcDialogue.jsx` — 유물학자 대화 추가
+- [x] 업적 1종: '신전의 탐험가'
+- [x] 칭호 1종: '유적의 수호자'
+
+### 13-4. 설산 정상 (Snow Summit) — 신규 맵
+
+북쪽고원 북쪽에 연결. 극한 환경 + 빙정 채굴 + 얼음낚시 중심.
+
+- [x] `mapData.js` — `buildMapSnow()` 함수 추가
+- [x] `TILE` — `SNOW: 8` 새 타일 타입 추가
+- [x] `ZONE_TILES`, `ZONE_LABELS`, `ZONE_CONNECTIONS` — 설산정상 추가
+- [x] `ZONE_BONUSES` — 설산정상: `{ oreMult: 1.6, rarityBonus: 0.12 }`
+- [x] `ZONE_CHAIRS` — 설산정상 낚시 의자 등록
+- [x] `ZONE_UNLOCK_REQ` — 설산정상: 북쪽고원 숙련도 Lv3+ 필요
+- [x] `ZONE_TRAVEL_NPCS` — 설산정상 NPC 1종 (설인)
+- [x] `npcData.js` — 설인 NPC 추가
+- [x] `DEFAULT_STATE.npcAffinity` + `loadSave()` — 설인 키 추가
+- [x] 설산 전용 어종 2종 (얼음빙어, 설산용)
+- [x] 설산 전용 광석 1종 (빙정광석)
+- [x] `handleNpcDialogAction` — 설인 `warm_drink` 액션 구현
+- [x] `DEFAULT_STATE` + `loadSave()` — `setiDrinkDate: ''` 추가
+- [x] `NpcDialogue.jsx` — 설인 대화 추가
+- [x] 업적 1종: '설산 정복자'
+- [x] 칭호 1종: '설산의 은둔자'
+
+### 13-5. 맵 확장 지원 인프라
+
+새 맵 3개 추가에 따른 공통 인프라 정비.
+
+- [x] `ZONE_UNLOCK_REQ` — 새 존 3개 잠금 조건 처리
+- [x] `WorldMap.jsx` — 8존 확장 그리드 (5행×7열)로 재설계
+- [x] `zoneMastery` — 새 3개 존도 활동 시 exp 획득
+- [x] `ZONE_FISH` — 새 3개 존의 어종 가중치 테이블 추가
+- [x] `useWebSocket.js` — 새 존 잠금 해제 조건 계산 추가
+- [x] NPC 친밀도 — 어시장상인·선장·유물학자·설인 키 등록
+- [x] 전체 빌드 확인 (`npm run build`) ✅
+- [ ] WorldMap — 이동 가능 연결 존 강조 표시 (화살표 애니메이션) *(선택적)*
+
+*마지막 업데이트: 2026-03-29*
+
+---
+
+## Phase 14 — 존 일일 챌린지 & 전설 장비 제작
+
+> 8개 존 콘텐츠 심화: 매일 존별 특별 목표 + 희귀 재료 조합으로 전설 장비 제작
+
+### 14-1. 존 일일 챌린지 시스템
+
+- [x] `zoneChallengeData.js` — 8개 존별 챌린지 풀 (3~5종) 정의
+- [x] `useGameState.js` — `zoneChallengeDate`, `zoneChallengeProgress` state 추가
+- [x] `useOfflineReward.js` — 날짜 변경 시 존 챌린지 진행도 초기화
+- [x] `App.jsx` — `advanceZoneChallenge(zone, type, amount)` 콜백 추가
+- [x] `App.jsx` — `claimZoneChallenge(zone)` 콜백 추가
+- [x] `App.jsx` — 낚시/채굴/채집/판매 콜백에서 `advanceZoneChallenge` 호출
+- [x] `WorldMap.jsx` — 존 카드에 챌린지 뱃지 (📋/✅) 표시
+- [x] `WorldMap.jsx` — 현재 존 상세 패널에 챌린지 진행 바 + 수령 버튼 추가
+- [x] 보상: 골드 + 존 숙련도 exp
+
+### 14-2. 전설 장비 제작
+
+- [x] `gameData.js` — `전설낚시대` 추가 (timeMult 0.50, sellBonus +15%, rarityBonus +8%)
+  - 재료: 금광석×5, 고대광석×3, 빙정광석×2 + 항구왕새우·신전수호어·설산용 각 1마리
+  - 조건: 고급낚시대 강화 80 이상
+- [x] `gameData.js` — `전설곡괭이` 추가 (timeMult 0.40, windfallBonus +10%)
+  - 재료: 금광석×8, 고대광석×5, 빙정광석×3
+  - 조건: 금곡괭이 강화 80 이상
+- [x] `Sidebar.jsx` — "전설 제작" 탭 추가 (재료 현황 + 제작 버튼)
+- [x] `App.jsx` — 전설낚시대 sellBonus, rarityBonus 낚시 계산에 반영
+- [x] `App.jsx` — 전설곡괭이 windfallBonus 채굴 계산에 반영
+- [x] 전체 빌드 확인 (`npm run build`) ✅
+
+*마지막 업데이트: 2026-03-29*

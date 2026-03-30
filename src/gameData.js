@@ -2,7 +2,7 @@ export const TILE_SIZE = 32;
 export const MAP_W = 70;
 export const MAP_H = 50;
 
-export const TILE = { GRASS: 0, WATER: 1, STONE: 2, WOOD: 3, SAND: 4, BUILDING: 5, PATH: 6, FOREST: 7 };
+export const TILE = { GRASS: 0, WATER: 1, STONE: 2, WOOD: 3, SAND: 4, BUILDING: 5, PATH: 6, FOREST: 7, SNOW: 8 };
 
 export const TILE_COLOR = [
   '#4a7c3a', // GRASS
@@ -13,9 +13,10 @@ export const TILE_COLOR = [
   '#5a3a28', // BUILDING
   '#9e8050', // PATH
   '#2d5a1e', // FOREST
+  '#ddeeff', // SNOW
 ];
 
-export const WALKABLE = [true, false, true, true, true, false, true, true];
+export const WALKABLE = [true, false, true, true, true, false, true, true, true];
 
 // ── Fish ─────────────────────────────────────────────────────────────────────
 export const FISH = {
@@ -83,6 +84,17 @@ export const FISH = {
   고대철갑상어: { minSz: 150, maxSz: 600, price: 2750, rarity: '희귀' },
   용아귀:     { minSz: 90, maxSz: 360, price: 3250, rarity: '희귀' },
   타이드헤이븐리바이어던: { minSz: 1500, maxSz: 6000, price: 20000, rarity: '신화' },
+  // Phase 13: Zone-exclusive fish
+  날치:       { minSz: 20, maxSz: 60,  price: 420,  rarity: '보통', reqZone: '항구마을' },
+  심해문어:   { minSz: 40, maxSz: 120, price: 1800, rarity: '희귀', reqZone: '항구마을' },
+  항구왕새우: { minSz: 25, maxSz: 80,  price: 4500, rarity: '전설', reqZone: '항구마을' },
+  고대잉어:   { minSz: 60, maxSz: 200, price: 2200, rarity: '희귀', reqZone: '고대신전' },
+  신전수호어: { minSz: 80, maxSz: 280, price: 6000, rarity: '전설', reqZone: '고대신전' },
+  얼음빙어:   { minSz: 10, maxSz: 30,  price: 600,  rarity: '보통', reqZone: '설산정상' },
+  설산용:     { minSz: 100, maxSz: 400, price: 8000, rarity: '전설', reqZone: '설산정상' },
+  // Phase 15: Night-exclusive fish
+  달빛장어:   { minSz: 50, maxSz: 180, price: 2400, rarity: '희귀', reqTimePeriod: 'night' },
+  별빛도미:   { minSz: 30, maxSz: 100, price: 5500, rarity: '전설', reqTimePeriod: 'night' },
 };
 
 // ── Ability-gated fish tables (낚시 ability determines available fish pool) ──
@@ -92,11 +104,12 @@ export const ABILITY_FISH = [
   { minAbil: 20, table: [{ f:'꽁치',w:20},{f:'강꼬치고기',w:18},{f:'황다랑어',w:16},{f:'금눈돔',w:14},{f:'배스',w:8},{f:'도미',w:8},{f:'무지개퍼치',w:8},{f:'벚꽃붕어',w:10},{f:'단풍잉어',w:10}] },
   { minAbil: 30, table: [{ f:'연어',w:16},{f:'황금붕어',w:13},{f:'오징어',w:16},{f:'낙지',w:14},{f:'금눈돔',w:12},{f:'해마',w:8},{f:'황금장어',w:8},{f:'삼치',w:7},{f:'벚꽃붕어',w:10},{f:'단풍잉어',w:10}] },
   { minAbil: 40, table: [{ f:'참치',w:18},{f:'광어',w:20},{f:'감성돔',w:16},{f:'황금붕어',w:8},{f:'연어',w:6},{f:'전갱이',w:8},{f:'보석복어',w:8},{f:'달빛가오리',w:6},{f:'불꽃송어',w:10},{f:'빙어왕',w:10}] },
-  { minAbil: 50, table: [{ f:'우럭',w:18},{f:'뱀장어',w:16},{f:'황새치',w:14},{f:'참치',w:10},{f:'감성돔',w:8},{f:'부시리',w:10},{f:'달빛가오리',w:8},{f:'불꽃송어',w:10},{f:'빙어왕',w:10}] },
+  { minAbil: 50, table: [{ f:'우럭',w:18},{f:'뱀장어',w:16},{f:'황새치',w:14},{f:'참치',w:10},{f:'감성돔',w:8},{f:'부시리',w:10},{f:'달빛가오리',w:8},{f:'달빛장어',w:6},{f:'불꽃송어',w:10},{f:'빙어왕',w:10}] },
   { minAbil: 60, table: [{ f:'고대철갑상어',w:10},{f:'용아귀',w:8},{f:'우럭',w:14},{f:'황새치',w:12},{f:'뱀장어',w:12},{f:'부시리',w:11},{f:'개복치',w:11},{f:'참치',w:16},{f:'빙어왕',w:10}] },
   { minAbil: 65, table: [{ f:'우럭',w:14},{f:'황새치',w:12},{f:'뱀장어',w:12},{f:'부시리',w:11},{f:'개복치',w:11},{f:'참치',w:16},{f:'고대철갑상어',w:12},{f:'용아귀',w:10},{f:'빙어왕',w:10}] },
-  { minAbil: 70, table: [{ f:'황새치',w:16},{f:'용고기',w:20},{f:'고대어',w:16},{f:'우럭',w:10},{f:'뱀장어',w:8},{f:'불사조고기',w:7},{f:'개복치',w:7},{f:'타이드헤이븐리바이어던',w:5},{f:'빙어',w:8}] },
+  { minAbil: 70, table: [{ f:'황새치',w:16},{f:'용고기',w:20},{f:'고대어',w:16},{f:'우럭',w:10},{f:'뱀장어',w:8},{f:'불사조고기',w:7},{f:'개복치',w:7},{f:'타이드헤이븐리바이어던',w:5},{f:'빙어',w:8},{f:'별빛도미',w:6}] },
 ];
+
 
 /** Get fish table matching current 낚시 ability value */
 export function getAbilityFishTable(abilValue) {
@@ -130,6 +143,19 @@ export const RODS = {
     timeMult: 0.70,
     reqRod: '중급낚시대', reqEnhance: 50,
   },
+  // Phase 14: Legendary rod (crafted, not bought)
+  전설낚시대: {
+    name: '전설 낚시대', price: 0, color: '#ff44ff',
+    catchTimeRange: [2500, 6000],
+    timeMult: 0.50,
+    sellBonus: 0.15,
+    rarityBonus: 0.08,
+    reqRod: '고급낚시대', reqEnhance: 80,
+    craftMats: { 금광석: 5, 고대광석: 3, 빙정광석: 2 },
+    craftFish: ['항구왕새우', '신전수호어', '설산용'],
+    desc: '전설의 재료로 빚은 낚시대. 낚시 속도 +50%, 판매가 +15%, 희귀도 +8%',
+    isCrafted: true,
+  },
 };
 
 // ── Rod enhancement (강화) ───────────────────────────────────────────────────
@@ -159,6 +185,9 @@ export const ORES = {
   구리광석: { price: 50,  color: '#b87333', mineRange: [7000, 14000],  w: 30 },
   수정:     { price: 100, color: '#a8d8ea', mineRange: [12000, 22000], w: 20 },
   금광석:   { price: 350, color: '#ffd700', mineRange: [18000, 35000], w: 8  },
+  // Phase 13: Zone-exclusive ores
+  고대광석: { price: 800, color: '#cc9944', mineRange: [20000, 40000], w: 3, reqZone: '고대신전' },
+  빙정광석: { price: 500, color: '#aaddff', mineRange: [15000, 30000], w: 5, reqZone: '설산정상' },
 };
 
 // ── Pickaxes ─────────────────────────────────────────────────────────────────
@@ -166,6 +195,13 @@ export const PICKAXES = {
   나무곡괭이: { name: '나무 곡괭이', price: 0,    timeMult: 1.00, color: '#8B6914', desc: '기본 채굴 도구' },
   철곡괭이:   { name: '철 곡괭이',   price: 300,  timeMult: 0.80, color: '#808080', desc: '채광 속도 +20%', upgradeMats: { 철광석: 5 } },
   금곡괭이:   { name: '금 곡괭이',   price: 1500, timeMult: 0.60, color: '#FFD700', desc: '채광 속도 +40%', upgradeMats: { 금광석: 3, 철광석: 3 } },
+  // Phase 14: Legendary pickaxe (crafted)
+  전설곡괭이: { name: '전설 곡괭이', price: 0,    timeMult: 0.40, color: '#ff44ff', desc: '채광 속도 +60%, 대박 +10%',
+    reqPickaxe: '금곡괭이', reqEnhance: 80,
+    craftMats: { 금광석: 8, 고대광석: 5, 빙정광석: 3 },
+    windfallBonus: 0.10,
+    isCrafted: true,
+  },
 };
 
 export function pickaxeEnhanceCost(enhLevel) { return 40 + enhLevel * 15; }
@@ -484,6 +520,19 @@ export const ZONE_FISH = {
     { f:'용고기', w:8 }, { f:'고대어', w:7 }, { f:'고대철갑상어', w:5 },
     { f:'타이드헤이븐리바이어던', w:2 }, { f:'용아귀', w:3 },
   ],
+  // Phase 13: New zone fish tables
+  '항구마을': [
+    { f:'날치', w:30 }, { f:'심해문어', w:15 }, { f:'항구왕새우', w:5 },
+    { f:'황금장어', w:12 }, { f:'삼치', w:18 }, { f:'달빛가오리', w:10 }, { f:'보석복어', w:10 },
+  ],
+  '고대신전': [
+    { f:'고대잉어', w:20 }, { f:'신전수호어', w:8 }, { f:'고대철갑상어', w:12 },
+    { f:'황금붕어', w:20 }, { f:'뱀장어', w:18 }, { f:'황새치', w:12 }, { f:'용아귀', w:10 },
+  ],
+  '설산정상': [
+    { f:'얼음빙어', w:35 }, { f:'설산용', w:6 }, { f:'빙어', w:25 },
+    { f:'빙어왕', w:15 }, { f:'연어', w:12 }, { f:'황금붕어', w:7 },
+  ],
 };
 
 export const FISHING_ZONES = {
@@ -654,6 +703,7 @@ export const ROD_SKINS = {
   불꽃스킨: { name: '불꽃 스킨', color: '#ff4444', desc: '불꽃 낚싯대 외형', price: 3000, upgradeMats: { 폭풍석: 3 } },
   광부스킨: { name: '광부 스킨', color: '#cc7733', desc: '철수의 의뢰 보상 — 광부의 낚싯대', price: 0, questOnly: true },
   용의가호스킨: { name: '용의 가호 스킨', color: '#ff88ff', desc: '용고기를 5마리 잡으면 해금', price: 0, reqMythic: '용고기', reqCount: 5 },
+  별빛낚싯대: { name: '별빛 낚싯대', icon: '✨', color: '#aaddff', price: 0 },
 };
 
 // ── Fishing spot decorations (낚시터 꾸미기) ──────────────────────────────────
@@ -692,6 +742,18 @@ export const SEASON_PASS_REWARDS = [
   { tier: 9,  reward: '시즌 전용 낚시복 스킨', type: 'cosmetic', item: 'seasonFishingSuit' },
   { tier: 10, reward: '골드 5000G + 시즌 칭호', type: 'special',  amount: 5000 },
 ];
+
+// ── Phase 12-5: 활동 포인트 상점 ─────────────────────────────────────────────
+export const POINT_SHOP_ITEMS = {
+  전설미끼:        { name: '전설 미끼',        icon: '🎣', cost: 50,   desc: '전설 어종 확률 대폭 증가',               itemType: 'bait',      itemKey: '전설미끼',    qty: 1 },
+  진화석:          { name: '진화석',           icon: '💎', cost: 200,  desc: '펫 진화에 필요한 귀한 돌',               itemType: 'special',   itemKey: 'evolutionGem', qty: 1 },
+  신화광석:        { name: '신화 광석',         icon: '🪨', cost: 150,  desc: '펫 진화 재료',                          itemType: 'special',   itemKey: 'mythicOre',   qty: 1 },
+  별빛낚싯대스킨:  { name: '별빛 낚싯대 스킨',  icon: '✨', cost: 300,  desc: '낚싯대에 별빛 스킨 적용',               itemType: 'rodSkin',   itemKey: '별빛낚싯대',  qty: 1 },
+  황금어항가구:    { name: '황금 어항 가구',    icon: '🐠', cost: 500,  desc: '오두막 특별 가구 — 판매가 +3%',         itemType: 'furniture', itemKey: '황금어항',    qty: 1 },
+  경험치포션:      { name: '경험치 포션',       icon: '⚗️', cost: 80,   desc: '모든 어빌리티 +5',                      itemType: 'consumable', itemKey: 'expPotion',  qty: 1 },
+  포인트파라솔:    { name: '포인트 파라솔',     icon: '⛱', cost: 120,  desc: '낚시터 파라솔 장식 (코스메틱)',          itemType: 'spotDeco',  itemKey: '포인트파라솔', qty: 1 },
+  포인트달인칭호:  { name: '포인트의 달인 칭호', icon: '🏆', cost: 1000, desc: '특별 칭호 영구 획득',                   itemType: 'title',     itemKey: '포인트의달인', qty: 1 },
+};
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 export function weightedPick(table) {

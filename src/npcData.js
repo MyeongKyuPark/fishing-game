@@ -64,6 +64,27 @@ export const NPCS = {
     desc: '남쪽 심해를 탐험하는 모험가. 희귀 물고기를 보여주면 특별 보상을 준다.',
     thresholds: [],
   },
+  // Phase 13: New zone NPCs
+  어시장상인: {
+    name: '어시장 상인', icon: '🐟', color: '#44ddaa',
+    desc: '항구 마을의 어시장을 운영. 생선을 비싸게 사들인다.',
+    thresholds: [],
+  },
+  선장: {
+    name: '선장', icon: '⚓', color: '#4466cc',
+    desc: '항구 마을의 베테랑 선장. 오랜 항해 이야기를 들려준다.',
+    thresholds: [],
+  },
+  유물학자: {
+    name: '유물학자', icon: '🏺', color: '#cc9944',
+    desc: '고대 신전을 연구하는 학자. 고대 광석을 감정해 준다.',
+    thresholds: [],
+  },
+  설인: {
+    name: '설인', icon: '❄️', color: '#aaddff',
+    desc: '설산 정상에 사는 신비로운 존재. 따뜻한 음료로 체력을 회복시켜 준다.',
+    thresholds: [],
+  },
 };
 
 export function getAffinityLevel(affinity, npcKey) {

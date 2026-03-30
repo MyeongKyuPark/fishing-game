@@ -5,6 +5,9 @@ import { RODS, FISH } from '../gameData';
 import { MINE_DEPTH_REQ, MINE_DEPTH_TIME } from '../hooks/useGameState';
 import { ZONE_LABELS } from '../mapData';
 
+// Phase 12-2: Festival active check
+const isFestivalActive = (gs) => !!(gs?.festivalEndDate && Date.now() < gs.festivalEndDate);
+
 export default function TopBar({
   gs, setGs, nickname, myTitle, roomTitle, weather, currentSeason, activity, isOnline,
   serverQuest, serverBoss, fishSurgeEvent, serverEvent,
@@ -17,6 +20,7 @@ export default function TopBar({
   setShowGuild, setShowMarket, setShowMobileMenu, showMobileMenu,
   setAppearanceDraft, setShowAppearance,
   setShowSettings, setShowTournament, setShowCottage, setShowWorldMap,
+  setShowTownHall, setShowPointShop,
 }) {
   const questHasClaim = (gs.dailyQuests ?? []).some(
     q => (gs.questProgress?.[q.id] ?? 0) >= q.goal && !gs.questClaimed?.[q.id]
@@ -59,6 +63,13 @@ export default function TopBar({
           <div className="hud-chip" style={{ color: '#88ccff', fontSize: 11 }}>
             💤 휴식 {Math.ceil((gs.innBuff.expiresAt - Date.now()) / 60000)}분
           </div>
+        )}
+        {isFestivalActive(gs) && (() => {
+          const remaining = Math.ceil((gs.festivalEndDate - Date.now()) / 3600000);
+          return <div className="hud-chip" style={{ background: '#ff88aa22', color: '#ff88aa' }} data-tooltip={`축제 보너스 남은 시간: ${remaining}시간`}>🎉 축제 {remaining}h</div>;
+        })()}
+        {(gs.activityPoints ?? 0) > 0 && (
+          <div className="hud-chip" data-tooltip="활동 포인트 — 포인트 상점에서 아이템 교환 가능">⭐ {gs.activityPoints}pt</div>
         )}
         {activity && (
           <div className={`hud-chip hud-active ${activity}`}>
@@ -211,6 +222,8 @@ export default function TopBar({
         <button tabIndex={-1} data-tooltip="내 오두막 꾸미기" onClick={() => { setShowCottage && setShowCottage(v => !v); setGs(prev => ({ ...prev, seenFeatures: [...new Set([...(prev.seenFeatures ?? []), 'cottage'])] })); }}>
           🏠 오두막{!(gs.seenFeatures ?? []).includes('cottage') ? <span style={{ fontSize: 9, background: '#ff4444', color: '#fff', borderRadius: 4, padding: '1px 4px', marginLeft: 3, verticalAlign: 'middle' }}>NEW</span> : ''}
         </button>
+        <button tabIndex={-1} data-tooltip="마을 발전 시스템 (T)" onClick={() => setShowTownHall?.(v => !v)}>🏘 마을</button>
+        <button tabIndex={-1} data-tooltip="활동 포인트 상점" onClick={() => setShowPointShop?.(v => !v)}>⭐ 포인트 상점</button>
         <button tabIndex={-1} data-tooltip="게임 설정" onClick={() => setShowSettings(v => !v)}>⚙️ 설정</button>
         {indoorRoom && <button tabIndex={-1} style={{ color: '#ffaaaa', borderColor: 'rgba(255,100,100,0.4)' }} onClick={handleExitRoom}>🚪 나가기</button>}
         {indoorRoom === 'mine' && <button tabIndex={-1} style={{ color: '#aaffcc', borderColor: 'rgba(100,255,150,0.4)' }} onClick={() => handleCommand('!광질')}>⛏ 광질</button>}

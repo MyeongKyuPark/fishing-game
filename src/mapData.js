@@ -512,6 +512,153 @@ function buildMapSouth() {
   return t;
 }
 
+function buildMapHarbor() {
+  const t = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILE.WATER));
+
+  // Harbor buildings — upper third
+  for (let r = 0; r <= 14; r++)
+    for (let c = 0; c < MAP_W; c++)
+      t[r][c] = TILE.GRASS;
+
+  // Main harbor road
+  for (let c = 0; c < MAP_W; c++) { t[8][c] = TILE.PATH; t[9][c] = TILE.PATH; }
+
+  // Fish market building: cols 5-18, rows 1-7
+  for (let r = 1; r <= 7; r++)
+    for (let c = 5; c <= 18; c++)
+      t[r][c] = TILE.BUILDING;
+  t[7][10] = TILE.PATH; t[7][11] = TILE.PATH;
+
+  // Warehouse building: cols 22-32, rows 1-7
+  for (let r = 1; r <= 7; r++)
+    for (let c = 22; c <= 32; c++)
+      t[r][c] = TILE.BUILDING;
+  t[7][26] = TILE.PATH; t[7][27] = TILE.PATH;
+
+  // Lighthouse: cols 60-64, rows 0-6
+  for (let r = 0; r <= 6; r++)
+    for (let c = 60; c <= 64; c++)
+      t[r][c] = TILE.BUILDING;
+  t[6][61] = TILE.PATH; t[6][62] = TILE.PATH;
+
+  // Sand beach: rows 15-17
+  for (let r = 15; r <= 17; r++)
+    for (let c = 0; c < MAP_W; c++)
+      t[r][c] = TILE.SAND;
+
+  // Main dock: rows 18-19, cols 0-69
+  for (let r = 18; r <= 19; r++)
+    for (let c = 0; c < MAP_W; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Pier 1 (west): rows 20-26, cols 5-15
+  for (let r = 20; r <= 26; r++)
+    for (let c = 5; c <= 15; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Pier 2 (center): rows 20-26, cols 30-42
+  for (let r = 20; r <= 26; r++)
+    for (let c = 30; c <= 42; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Pier 3 (east): rows 20-26, cols 55-65
+  for (let r = 20; r <= 26; r++)
+    for (let c = 55; c <= 65; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Seaweed area (east coast): cols 55-65, rows 1-12 (FOREST-like gather zone)
+  for (let r = 1; r <= 12; r++)
+    for (let c = 55; c <= 64; c++)
+      if (t[r][c] === TILE.GRASS) t[r][c] = TILE.FOREST;
+
+  return t;
+}
+
+function buildMapTemple() {
+  const t = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILE.STONE));
+
+  // Grassy courtyard: cols 15-55, rows 5-44
+  for (let r = 5; r <= 44; r++)
+    for (let c = 15; c <= 55; c++)
+      t[r][c] = TILE.GRASS;
+
+  // Temple interior (ancient hall): cols 20-50, rows 8-38
+  for (let r = 8; r <= 38; r++)
+    for (let c = 20; c <= 50; c++)
+      if (t[r][c] === TILE.GRASS) t[r][c] = TILE.PATH;
+
+  // Underground waterway (fishing): cols 18-52, rows 40-46
+  for (let r = 40; r <= 46; r++)
+    for (let c = 18; c <= 52; c++)
+      t[r][c] = TILE.WATER;
+
+  // Waterway bank paths
+  for (let c = 18; c <= 52; c++) t[39][c] = TILE.PATH;
+
+  // Treasure room: cols 30-40, rows 20-30
+  for (let r = 20; r <= 30; r++)
+    for (let c = 30; c <= 40; c++)
+      t[r][c] = TILE.WOOD;
+
+  // Main corridor (north-south): cols 33-37, rows 5-44
+  for (let r = 5; r <= 44; r++)
+    for (let c = 33; c <= 37; c++)
+      t[r][c] = TILE.PATH;
+
+  // West exit path: rows 22-26, cols 0-20
+  for (let r = 22; r <= 26; r++)
+    for (let c = 0; c <= 20; c++)
+      t[r][c] = TILE.PATH;
+
+  return t;
+}
+
+function buildMapSnow() {
+  const t = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILE.SNOW));
+
+  // Stone cliff: cols 0-14, rows 0-20
+  for (let r = 0; r <= 20; r++)
+    for (let c = 0; c <= 14; c++)
+      t[r][c] = TILE.STONE;
+
+  // Stone cliff: cols 55-69, rows 0-20
+  for (let r = 0; r <= 20; r++)
+    for (let c = 55; c <= 69; c++)
+      t[r][c] = TILE.STONE;
+
+  // Frozen lake (center): cols 22-48, rows 18-30
+  for (let r = 18; r <= 30; r++)
+    for (let c = 22; c <= 48; c++)
+      t[r][c] = TILE.WATER;
+
+  // Lakeside path
+  for (let c = 22; c <= 48; c++) t[17][c] = TILE.PATH;
+  for (let c = 22; c <= 48; c++) t[31][c] = TILE.PATH;
+
+  // Snow field (south): rows 32-49
+  for (let r = 32; r <= 49; r++)
+    for (let c = 0; c < MAP_W; c++)
+      if (t[r][c] === TILE.SNOW) t[r][c] = TILE.GRASS;
+
+  // Mine outcrops (stone clusters on snow)
+  for (const [r, c] of [
+    [5,20],[6,22],[8,18],[5,48],[7,50],[9,52],
+    [12,15],[13,30],[10,40],[11,55],
+    [14,25],[15,35],[14,45],[16,18],[16,55],
+  ]) if (t[r]?.[c] === TILE.SNOW) t[r][c] = TILE.STONE;
+
+  // Main vertical path: cols 33-35, rows 0-17
+  for (let r = 0; r <= 17; r++)
+    for (let c = 33; c <= 35; c++)
+      t[r][c] = TILE.PATH;
+
+  // South border (connects to 북쪽고원): row 49
+  for (let c = 0; c < MAP_W; c++)
+    if (t[49]?.[c] === TILE.SNOW || t[49]?.[c] === TILE.GRASS) t[49][c] = TILE.SAND;
+
+  return t;
+}
+
 // ── Zone Metadata ─────────────────────────────────────────────────────────────
 
 export const ZONE_TILES = {
@@ -520,6 +667,9 @@ export const ZONE_TILES = {
   '동쪽절벽': buildMapEast(),
   '북쪽고원': buildMapNorth(),
   '남쪽심해': buildMapSouth(),
+  '항구마을': buildMapHarbor(),
+  '고대신전': buildMapTemple(),
+  '설산정상': buildMapSnow(),
 };
 
 export const ZONE_LABELS = {
@@ -528,14 +678,20 @@ export const ZONE_LABELS = {
   '동쪽절벽': '⛏ 동쪽 절벽',
   '북쪽고원': '🏔 북쪽 고원',
   '남쪽심해': '🌊 남쪽 심해',
+  '항구마을': '⚓ 항구 마을',
+  '고대신전': '🏺 고대 신전',
+  '설산정상': '❄️ 설산 정상',
 };
 
 export const ZONE_CONNECTIONS = {
   '마을':    { west: '서쪽초원', east: '동쪽절벽', north: '북쪽고원', south: '남쪽심해' },
   '서쪽초원': { east: '마을' },
-  '동쪽절벽': { west: '마을' },
-  '북쪽고원': { south: '마을' },
-  '남쪽심해': { north: '마을' },
+  '동쪽절벽': { west: '마을', east: '고대신전' },
+  '북쪽고원': { south: '마을', north: '설산정상' },
+  '남쪽심해': { north: '마을', south: '항구마을' },
+  '항구마을': { north: '남쪽심해' },
+  '고대신전': { west: '동쪽절벽' },
+  '설산정상': { south: '북쪽고원' },
 };
 
 const ZONE_CHAIRS = {
@@ -586,6 +742,46 @@ const ZONE_CHAIRS = {
     { tx: 36, ty: 4, seaFishing: true, zone: '바다' },
     { tx: 39, ty: 4, seaFishing: true, zone: '바다' },
   ],
+  '항구마을': [
+    // Pier 1 (west)
+    { tx: 6,  ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 9,  ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 12, ty: 26, seaFishing: true, zone: '바다' },
+    // Pier 2 (center)
+    { tx: 31, ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 34, ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 37, ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 40, ty: 26, seaFishing: true, zone: '바다' },
+    // Pier 3 (east)
+    { tx: 56, ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 59, ty: 26, seaFishing: true, zone: '바다' },
+    { tx: 62, ty: 26, seaFishing: true, zone: '바다' },
+    // Main dock
+    { tx: 20, ty: 19, zone: '바다' }, { tx: 25, ty: 19, zone: '바다' },
+    { tx: 45, ty: 19, zone: '바다' }, { tx: 50, ty: 19, zone: '바다' },
+  ],
+  '고대신전': [
+    // Underground waterway (row 39 = north bank)
+    { tx: 20, ty: 39, zone: '민물' }, { tx: 25, ty: 39, zone: '민물' },
+    { tx: 30, ty: 39, zone: '민물' }, { tx: 35, ty: 39, zone: '민물' },
+    { tx: 40, ty: 39, zone: '민물' }, { tx: 45, ty: 39, zone: '민물' },
+    { tx: 50, ty: 39, zone: '민물' },
+    // Waterway south bank (row 47)
+    { tx: 22, ty: 47, zone: '민물' }, { tx: 32, ty: 47, zone: '민물' },
+    { tx: 42, ty: 47, zone: '민물' },
+  ],
+  '설산정상': [
+    // Frozen lake (north edge at row 17)
+    { tx: 23, ty: 17, zone: '민물' }, { tx: 27, ty: 17, zone: '민물' },
+    { tx: 32, ty: 17, zone: '민물' }, { tx: 37, ty: 17, zone: '민물' },
+    { tx: 42, ty: 17, zone: '민물' }, { tx: 47, ty: 17, zone: '민물' },
+    // Frozen lake south edge (row 31)
+    { tx: 25, ty: 31, zone: '민물' }, { tx: 35, ty: 31, zone: '민물' },
+    { tx: 45, ty: 31, zone: '민물' },
+    // Ice platform chairs (middle of lake)
+    { tx: 29, ty: 24, zone: '민물' }, { tx: 35, ty: 24, zone: '민물' },
+    { tx: 41, ty: 24, zone: '민물' },
+  ],
 };
 
 const ZONE_FOREST = {
@@ -594,31 +790,38 @@ const ZONE_FOREST = {
   '동쪽절벽': { tx1: 48, ty1: 3, tx2: 63, ty2: 16 },
   '북쪽고원': { tx1: 50, ty1: 0, tx2: 65, ty2: 22 },
   '남쪽심해': { tx1: 25, ty1: 17, tx2: 36, ty2: 26 },
+  '항구마을': { tx1: 55, ty1: 1, tx2: 64, ty2: 12 }, // seaweed / coastal gather
+  '설산정상': { tx1: 10, ty1: 32, tx2: 60, ty2: 45 }, // snow field herb gather
 };
 
 // ── Zone Bonuses ─────────────────────────────────────────────────────────────
 // Passive bonuses applied when the player is in each world zone
 export const ZONE_BONUSES = {
   '마을':    {},
-  '서쪽초원': { herbMult: 1.4, fishSellMult: 0.95 },          // lush meadow: +40% herb yield, -5% fish sell (no ocean)
-  '동쪽절벽': { oreMult: 1.3, mineTimeReduction: 0.08 },       // mineral cliffs: +30% ore yield, -8% mining time
-  '북쪽고원': { herbMult: 1.2, oreMult: 1.15, rarityBonus: 0.05 }, // highland: herb/ore/rarity bonus
-  '남쪽심해': { fishSellMult: 1.25, rarityBonus: 0.08 },       // deep sea: +25% fish sell price, +8% rare chance
+  '서쪽초원': { herbMult: 1.4, fishSellMult: 0.95 },
+  '동쪽절벽': { oreMult: 1.3, mineTimeReduction: 0.08 },
+  '북쪽고원': { herbMult: 1.2, oreMult: 1.15, rarityBonus: 0.05 },
+  '남쪽심해': { fishSellMult: 1.25, rarityBonus: 0.08 },
+  '항구마을': { fishSellMult: 1.40, rarityBonus: 0.10 },       // harbor: +40% fish sell, +10% rarity
+  '고대신전': { oreMult: 1.5, rarityBonus: 0.15, fishSellMult: 1.10 }, // temple: +50% ore, +15% rarity, +10% fish sell
+  '설산정상': { oreMult: 1.6, mineTimeReduction: 0.05, rarityBonus: 0.12, fishSellMult: 1.05 }, // summit: +60% ore, +12% rarity
 };
 
 // ── Zone Mine Zones & Entrances ───────────────────────────────────────────────
-// 동쪽절벽: left stone cliff (cols 0-13, rows 0-17)
-// 북쪽고원: top-left stone corner (cols 0-14, rows 0-7)
 const ZONE_MINE_ZONES = {
   '마을':    MINE_ZONE,
   '동쪽절벽': { tx1: 0, ty1: 0, tx2: 13, ty2: 17 },
   '북쪽고원': { tx1: 0, ty1: 0, tx2: 14, ty2: 7 },
+  '고대신전': { tx1: 0, ty1: 5, tx2: 14, ty2: 45 },  // stone walls
+  '설산정상': { tx1: 0, ty1: 0, tx2: 14, ty2: 20 },  // left stone cliff
 };
 
 const ZONE_MINE_ENTRANCES = {
   '마을':    MINE_ENTRANCE,
-  '동쪽절벽': { tx: 13, ty: 10 },   // right edge of cliff stone zone
-  '북쪽고원': { tx: 13, ty: 6 },    // bottom edge of highland stone zone
+  '동쪽절벽': { tx: 13, ty: 10 },
+  '북쪽고원': { tx: 13, ty: 6 },
+  '고대신전': { tx: 14, ty: 24 },  // west corridor entrance
+  '설산정상': { tx: 14, ty: 12 },  // cliff entrance
 };
 
 // ── Active Zone State (mutable module-level) ──────────────────────────────────
@@ -630,6 +833,12 @@ export function getActiveChairs() { return ZONE_CHAIRS[_activeZone] ?? FISHING_C
 export function getActiveDoors() { return _activeZone === '마을' ? DOOR_TRIGGERS : []; }
 export function getActiveForest() { return ZONE_FOREST[_activeZone] ?? null; }
 export function getActiveMineEntrance() { return ZONE_MINE_ENTRANCES[_activeZone] ?? null; }
+/** Returns zone travel NPCs always as an array (handles both object and array values) */
+export function getActiveZoneNpcs() {
+  const v = ZONE_TRAVEL_NPCS[_activeZone];
+  if (!v) return [];
+  return Array.isArray(v) ? v : [v];
+}
 
 // Traveling NPCs in outer zones — tile positions for detection & rendering
 export const ZONE_TRAVEL_NPCS = {
@@ -637,6 +846,12 @@ export const ZONE_TRAVEL_NPCS = {
   '동쪽절벽': { id: '노련한광부', name: '노련한 광부',  icon: '🪨', color: '#aa8866', tx: 35, ty: 12 },
   '북쪽고원': { id: '산신령',    name: '산신령',      icon: '🌫', color: '#aaddff', tx: 20, ty: 10 },
   '남쪽심해': { id: '심해탐험가', name: '심해 탐험가',  icon: '🤿', color: '#4488ff', tx: 36, ty: 16 },
+  '항구마을': [
+    { id: '어시장상인', name: '어시장 상인', icon: '🐟', color: '#44ddaa', tx: 15, ty: 12 },
+    { id: '선장',       name: '선장',       icon: '⚓', color: '#4466cc', tx: 35, ty: 8  },
+  ],
+  '고대신전': { id: '유물학자',  name: '유물학자',    icon: '🏺', color: '#cc9944', tx: 35, ty: 25 },
+  '설산정상': { id: '설인',      name: '설인',        icon: '❄️', color: '#aaddff', tx: 20, ty: 10 },
 };
 
 // Zone unlock requirements — checked in App.jsx to populate gameRef.current.unlockedZones
@@ -645,6 +860,9 @@ export const ZONE_UNLOCK_REQ = {
   '동쪽절벽': { stat: 'oreMined', min: 10, desc: '광석 채굴 10회 이상 필요' },
   '북쪽고원': { stat: 'exploredZones', min: 2, desc: '탐험 구역 2곳 이상 완료 필요' },
   '남쪽심해': { marineGear: '스쿠버다이빙세트', desc: '스쿠버다이빙세트 장착 필요' },
+  '항구마을': { zone: '남쪽심해', mineDepth: 3, desc: '남쪽 심해 방문 + 광산 3층 이상 필요' },
+  '고대신전': { seenChapter4: true, exploredZones: 3, desc: '챕터4 완료 + 탐험 구역 3곳 필요' },
+  '설산정상': { zoneMastery: '북쪽고원', masteryMin: 60, desc: '북쪽 고원 숙련도 Lv3 이상 필요' },
 };
 
 export function getFishingZone(px, py, marineGear, fishAbil) {

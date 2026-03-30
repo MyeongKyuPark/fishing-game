@@ -67,6 +67,16 @@ export const ACHIEVEMENTS = [
   { id: 'zone_ore_100',  label: '절벽의 광부',   desc: '동쪽 절벽에서 광석 100개 채굴',         icon: '⛏',  type: 'zoneOreCount',      goal: 100, reward: { money: 8000 } },
   { id: 'zone_rare_30',  label: '고원의 수집가',  desc: '북쪽 고원에서 희귀 자원 30개 수집',     icon: '🏔', type: 'zoneRareCount',     goal: 30,  reward: { money: 10000 } },
   { id: 'zone_deep_5',   label: '심해의 전설',   desc: '남쪽 심해에서 전설/신화급 5마리 포획',  icon: '🌊', type: 'zoneDeepFishCount', goal: 5,   reward: { money: 20000 } },
+  // Phase 12
+  { id: 'pet_evolve',    label: '진화의 증인',   desc: '펫 1마리 진화 완료',                    icon: '🌟', type: 'petEvolveCount',    goal: 1,   reward: { money: 10000 } },
+  { id: 'festival_all',  label: '축제의 주인공', desc: '4계절 축제 기간 중 각 1회 이상 활동',   icon: '🎉', type: 'festivalParticipatedCount', goal: 4, reward: { money: 20000 } },
+  { id: 'town_first',    label: '마을 일꾼',     desc: '마을 발전에 첫 기여',                   icon: '🏘', type: 'townContribCount',  goal: 1,   reward: { money: 2000 } },
+  { id: 'town_100',      label: '마을 대부',     desc: '마을 발전 누적 기여 100회',             icon: '🏙', type: 'townContribCount',  goal: 100, reward: { money: 30000 } },
+  { id: 'points_1000',   label: '포인트 수집가', desc: '누적 활동 포인트 1000pt 달성',          icon: '⭐', type: 'totalPointsEarned', goal: 1000, reward: { money: 15000 } },
+  // Phase 13: New zone achievements
+  { id: 'harbor_fish_30',  label: '항구의 어부',    desc: '항구 마을에서 물고기 30마리 낚기',     icon: '⚓', type: 'harborFishCount',  goal: 30,  reward: { money: 15000 } },
+  { id: 'temple_ore_10',   label: '신전의 탐험가',  desc: '고대 신전에서 고대광석 10개 채굴',     icon: '🏺', type: 'templeOreCount',   goal: 10,  reward: { money: 20000 } },
+  { id: 'snow_mastery',    label: '설산 정복자',    desc: '설산 정상에서 활동 (숙련도 exp 10 이상)', icon: '❄️', type: 'snowMasteryTime',  goal: 10,  reward: { money: 12000 } },
 ];
 
 /** Check which new achievements were just unlocked.

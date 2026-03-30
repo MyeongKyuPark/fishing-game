@@ -29,9 +29,11 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
     }
     const questProgress = isNewDay ? {} : (saved.questProgress ?? {});
     const questClaimed = isNewDay ? {} : (saved.questClaimed ?? {});
+    const zoneChallengeProgress = isNewDay ? {} : (saved.zoneChallengeProgress ?? {});
     const loginStreak = Math.max(saved.achStats?.loginStreak ?? 0, streak);
     const baseAchStats = { ...(saved.achStats ?? {}), loginStreak };
     let base = { ...saved, dailyQuests: quests, questProgress, questClaimed, questDate: today,
+      zoneChallengeDate: today, zoneChallengeProgress,
       achStats: baseAchStats };
     if (!saved.firstLoginDate) {
       base.firstLoginDate = new Date().toISOString();

@@ -14,23 +14,24 @@ import { saveFishRecord, saveOverallFishRecord, broadcastAnnouncement,
   saveGoldRecord, saveAbilityRecord, saveAchievementRecord, submitSeasonScore, savePrestigeRecord,
   damageServerBoss } from './ranking';
 import { sendPartyInvite, joinParty, leaveParty, sendPartyMessage, clearPartyInvite } from './multiplay';
-import { JOBS, getAvailableJobs } from './jobData';
+import { JOBS, getAvailableJobs, JOB_CLASSES } from './jobData';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
   SMELT_RECIPES, JEWELRY_RECIPES, POTION_RECIPES, DISH_RECIPES, SEEDS, MAX_FARM_PLOTS,
   FARM_EXPANSION_PRICE, FARM_EXPANSION_SLOTS, FARM_MAX_EXPANSIONS,
   weightedPick, randInt, TILE_SIZE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
-  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, TOPS, BOTTOMS, BELTS, ROD_SKINS, SPOT_DECOS, FURNITURE, BAIT_RECIPES } from './gameData';
+  ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, TOPS, BOTTOMS, BELTS, ROD_SKINS, SPOT_DECOS, FURNITURE, BAIT_RECIPES, POINT_SHOP_ITEMS } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
   SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN } from './abilityData';
 import { getTitle, getActiveTitleBonus, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
-import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm, setActiveZone, ZONE_TILES, ZONE_BONUSES, getActiveZone, PLAYER_START_X, PLAYER_START_Y, ZONE_UNLOCK_REQ } from './mapData';
+import { getTimePeriod, msUntilNextTimePeriod } from './timeData';
+import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm, setActiveZone, ZONE_TILES, ZONE_LABELS, ZONE_BONUSES, getActiveZone, PLAYER_START_X, PLAYER_START_Y, ZONE_UNLOCK_REQ } from './mapData';
 import { setActiveTiles } from './canvas/drawMap';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
-import { PETS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
+import { PETS, EVOLVED_PETS, EVOLVE_REQUIREMENTS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
 import { NPCS, getAffinityLevel, getShopDiscount } from './npcData';
 import { EXPLORE_ZONES, checkZoneUnlock } from './explorationData';
 import MiniMap from './MiniMap';
@@ -44,6 +45,7 @@ import { listItem, buyItem, cancelListing, subscribeMarket, subscribeMyListings 
 import { SKIN_PRESETS, QUEST_POOL, MINE_DEPTH_ORE_MULT, MINE_DEPTH_REQ, MINE_DEPTH_TIME,
   getDailyQuests, DEFAULT_STATE, SAVE_VERSION, saveKey, loadSave, DAILY_BONUS,
   checkDailyBonus, STORY_CHAPTERS, rarityColor, useGameState } from './hooks/useGameState';
+import { getZoneDailyChallenge, todayStr } from './zoneChallengeData';
 import { useOfflineReward } from './hooks/useOfflineReward';
 import { useWebSocket } from './hooks/useWebSocket';
 import { useKeyboard } from './hooks/useKeyboard';
@@ -55,12 +57,20 @@ import WorldMap from './components/WorldMap';
 import AdminPanel from './AdminPanel';
 import AuctionHouse from './AuctionHouse';
 import SeasonPass from './SeasonPass';
+import TownHall from './components/TownHall';
+import PointShop from './components/PointShop';
+import { TOWN_BUILDINGS, getTownBonuses, subscribeTownProgress, contributeTown } from './townData';
 
 // Tournament rarity bonus: points added on top of fish size per rarity tier
 const TOURNAMENT_RARITY_BONUS = { 흔함: 0, 보통: 10, 희귀: 25, 전설: 60, 신화: 150 };
 
 // Zone mastery thresholds (cumulative exp → level 1-5)
 const ZONE_MASTERY_THRESHOLDS = [10, 30, 60, 100, 150];
+
+// Phase 12-2: Festival active check
+function isFestivalActive(gs) {
+  return !!(gs?.festivalEndDate && Date.now() < gs.festivalEndDate);
+}
 function getZoneMasteryLevel(zoneMastery, zone) {
   const exp = zoneMastery?.[zone] ?? 0;
   let lv = 0;
@@ -272,6 +282,11 @@ export default function App() {
   const [showSeasonPass, setShowSeasonPass] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [showWorldMap, setShowWorldMap] = useState(false);
+  // Phase 12 state
+  const [showTownHall, setShowTownHall] = useState(false);
+  const [showPointShop, setShowPointShop] = useState(false);
+  const [mapTransitioning, setMapTransitioning] = useState(false);
+  const [townLevels, setTownLevels] = useState({});
   const [returnCast, setReturnCast] = useState(null); // { expiresAt: number } | null
   const returnCastRef = useRef(null);
   const [npcDialog, setNpcDialog] = useState(null); // npcKey string | null
@@ -321,6 +336,18 @@ export default function App() {
     }, 60000);
   }, [nickname, gs.money, gs.abilities]);
 
+  // Phase 12-3: Town development Firebase subscription
+  useEffect(() => {
+    if (!nickname) return;
+    let unsub;
+    subscribeTownProgress((id, data) => {
+      setTownLevels(prev => ({ ...prev, [id]: data.level ?? 0 }));
+    }).then(u => { unsub = u; });
+    return () => { if (unsub) unsub(); };
+  }, [nickname]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const townBonuses = getTownBonuses(townLevels);
+
   // Multiplayer: cleanup on page close
   const roomIdRef = useRef(null);
   useEffect(() => { roomIdRef.current = roomId; }, [roomId]);
@@ -332,6 +359,22 @@ export default function App() {
   const [weather, setWeather] = useState(() => getWeather(null, Date.now()));
   useEffect(() => { weatherRef.current = weather; }, [weather]);
   useEffect(() => { if (gameRef.current) gameRef.current.weather = weather; }, [weather]);
+
+  // Phase 15: Day/Night cycle — updates on real-clock hour boundary
+  const [timePeriod, setTimePeriod] = useState(() => getTimePeriod());
+  useEffect(() => { if (gameRef.current) gameRef.current.timePeriod = timePeriod; }, [timePeriod]);
+  useEffect(() => {
+    const schedule = () => {
+      const ms = msUntilNextTimePeriod();
+      return setTimeout(() => {
+        setTimePeriod(getTimePeriod());
+        const id = setInterval(() => setTimePeriod(getTimePeriod()), 60 * 60 * 1000);
+        return () => clearInterval(id);
+      }, ms);
+    };
+    const t = schedule();
+    return () => clearTimeout(t);
+  }, []);
 
 
   // BGM: switch track on room change (only when in a channel)
@@ -407,6 +450,17 @@ export default function App() {
     return () => clearTimeout(t);
   }, [nickname]);
 
+  // Phase 12-4: Job class unlock notification
+  useEffect(() => {
+    if (!gs.jobClass && nickname) {
+      const total = Object.values(gs.abilities ?? {}).reduce((sum, a) => sum + (a?.value ?? 0), 0);
+      if (total >= 200 && !(gs.seenFeatures ?? []).includes('jobClass')) {
+        setGs(prev => ({ ...prev, seenFeatures: [...(prev.seenFeatures ?? []), 'jobClass'] }));
+        setTimeout(() => addMsgRef.current('🌟 어빌리티 합산 200 달성! 전문 직업을 선택할 수 있습니다. (상태창 → 직업 탭)', 'catch'), 1000);
+      }
+    }
+  }, [gs.abilities, gs.jobClass, nickname]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Save to localStorage keyed by nickname
   useEffect(() => {
     if (!nickname) return;
@@ -419,8 +473,6 @@ export default function App() {
     setMessages(prev => [...prev.slice(-120), { text, type }]);
   }, []);
   useEffect(() => { addMsgRef.current = addMsg; }, [addMsg]);
-
-  useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef });
 
   useWebSocket({
     nickname, roomId, myGuildId, partyId,
@@ -447,6 +499,7 @@ export default function App() {
   const achPopupRef = useRef(enqueueAchPopup);
   useEffect(() => { achPopupRef.current = enqueueAchPopup; }, [enqueueAchPopup]);
   const checkAndGrantAchievementsRef = useRef(null);
+  useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef });
 
   // Expire active potion (after addMsg to avoid TDZ)
   useEffect(() => {
@@ -605,7 +658,40 @@ export default function App() {
       if (messages.length > 0) {
         setTimeout(() => { messages.forEach(m => addMsg(m, 'catch')); }, 0);
       }
+      // Phase 12-5: quest completion gives +20 activity points
+      const completedCount = messages.length;
+      const questPts = completedCount * 20;
+      if (questPts > 0) {
+        return {
+          ...prev, questProgress: progress,
+          activityPoints: (prev.activityPoints ?? 0) + questPts,
+          totalPointsEarned: (prev.totalPointsEarned ?? 0) + questPts,
+        };
+      }
       return { ...prev, questProgress: progress };
+    });
+  }, [addMsg]);
+
+  // Phase 14: Zone daily challenge progress
+  const advanceZoneChallenge = useCallback((zone, type, amount = 1) => {
+    if (!zone) return;
+    const challenge = getZoneDailyChallenge(zone);
+    if (!challenge || challenge.type !== type) return;
+    setGs(prev => {
+      const zcp = { ...(prev.zoneChallengeProgress ?? {}) };
+      const entry = zcp[zone] ?? { id: challenge.id, progress: 0, claimed: false };
+      if (entry.claimed || entry.progress >= challenge.goal) return prev;
+      // If challenge rotated (new day but same key still running), confirm id matches
+      if (entry.id && entry.id !== challenge.id) {
+        zcp[zone] = { id: challenge.id, progress: amount, claimed: false };
+      } else {
+        const next = Math.min(challenge.goal, (entry.progress ?? 0) + amount);
+        zcp[zone] = { id: challenge.id, progress: next, claimed: false };
+        if (next >= challenge.goal && (entry.progress ?? 0) < challenge.goal) {
+          setTimeout(() => addMsg(`🗺 [${zone}] 존 챌린지 달성: ${challenge.label}! 보상 수령 가능`, 'catch'), 0);
+        }
+      }
+      return { ...prev, zoneChallengeProgress: zcp };
     });
   }, [addMsg]);
 
@@ -707,6 +793,9 @@ export default function App() {
     const worldZoneKey = `${worldZone}_${zone}`;
     if (ZONE_FISH[worldZoneKey]) {
       table = ZONE_FISH[worldZoneKey];
+    } else if (ZONE_FISH[worldZone]) {
+      // New world zones have their own dedicated fish table (항구마을, 고대신전, 설산정상)
+      table = ZONE_FISH[worldZone];
     } else if (zone === '심해' || zone === '민물' || zone === '바다' || zone === '황금연못') {
       table = ZONE_FISH[zone] ?? getAbilityFishTable(fishAbil);
     } else {
@@ -781,6 +870,12 @@ export default function App() {
       table = applyBoosts(table, { 희귀: 1 + r, 전설: 1 + r * 1.5, 신화: 1 + r * 2 });
     }
 
+    // Phase 14: legendary rod rarity bonus
+    const legendRodRarityBonus = RODS[s?.rod]?.rarityBonus ?? 0;
+    if (legendRodRarityBonus > 0) {
+      table = applyBoosts(table, { 희귀: 1 + legendRodRarityBonus, 전설: 1 + legendRodRarityBonus * 1.5, 신화: 1 + legendRodRarityBonus * 2 });
+    }
+
     // Apply exploration zone fish boosts
     const explored = s?.exploredZones ?? [];
     for (const zoneId of ['비밀낚시터', '고대유적']) {
@@ -824,11 +919,20 @@ export default function App() {
     const wMult = weatherRef.current?.fishMult ?? 1.0;
     if (wMult !== 1.0) table = table.map(e => ({ ...e, w: e.w * wMult }));
 
+    // Phase 15: time period rare bonus
+    const timeFishRareBonus = getTimePeriod().fishRareBonus ?? 0;
+    if (timeFishRareBonus > 0) {
+      table = applyBoosts(table, { 희귀: 1 + timeFishRareBonus, 전설: 1 + timeFishRareBonus * 1.5, 신화: 1 + timeFishRareBonus * 2 });
+    }
+
     // Filter out seasonal fish that don't match current season
+    // Filter out night-exclusive fish unless it's night period
     const currentSeasonId = getCurrentSeason()?.id ?? null;
+    const currentTimePeriodId = getTimePeriod().id;
     const filteredTable = table.filter(e => {
       const reqS = FISH[e.f]?.reqSeason;
-      return !reqS || reqS === currentSeasonId;
+      const reqT = FISH[e.f]?.reqTimePeriod;
+      return (!reqS || reqS === currentSeasonId) && (!reqT || reqT === currentTimePeriodId);
     });
     const pickTable = filteredTable.length > 0 ? filteredTable : table;
 
@@ -865,7 +969,14 @@ export default function App() {
     const mtnSellBonus = (mtnBuffSell?.type === 'sellPrice' && Date.now() < mtnBuffSell.expiresAt) ? 1.15 : 1.0;
     const deepMasteryLv = getZoneMasteryLevel(s?.zoneMastery, '남쪽심해');
     const deepMasteryBonus = (worldZone === '남쪽심해' && deepMasteryLv > 0) ? 1 + deepMasteryLv * 0.1 : 1.0;
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus * hatSellBonus * outfitSellBonus * topSellBonus * bottomSellBonus * beltSellBonus * titleSellBonus * furnitureSellBonus * worldZoneSellBonus * mtnSellBonus * deepMasteryBonus);
+    // Phase 12-2: festival fish price bonus
+    const festivalFishBonus = (isFestivalActive(s) && getCurrentSeason()?.festival?.fishPriceBonus) ? (1 + getCurrentSeason().festival.fishPriceBonus) : 1.0;
+    // Phase 12-3: town bonus
+    const townFishSellBonus = 1 + (townBonuses.fishSellBonus ?? 0);
+    // Phase 12-4: job class fish sell bonus
+    const jobClassFishSellBonus = 1 + (JOB_CLASSES[s?.jobClass]?.bonus?.fishSellBonus ?? 0);
+    const legendRodSellBonus = 1 + (RODS[s?.rod]?.sellBonus ?? 0);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus * hatSellBonus * outfitSellBonus * topSellBonus * bottomSellBonus * beltSellBonus * titleSellBonus * furnitureSellBonus * worldZoneSellBonus * mtnSellBonus * deepMasteryBonus * festivalFishBonus * townFishSellBonus * jobClassFishSellBonus * legendRodSellBonus);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -925,6 +1036,10 @@ export default function App() {
       const zoneDeepFishCount = (getActiveZone() === '남쪽심해' && isLegendaryOrMythic)
         ? (prevStats.zoneDeepFishCount ?? 0) + 1
         : (prevStats.zoneDeepFishCount ?? 0);
+      // Phase 12-5: activity points
+      const fishPts = (fd.rarity === '전설' || fd.rarity === '신화') ? 10 : (fd.rarity === '희귀') ? 3 : 1;
+      const newTotalPts = (prevStats.totalPointsEarned ?? 0) + fishPts;
+      const p13Zone = getActiveZone();
       const updatedStats = {
         ...prevStats,
         fishCaught: newFishCaught,
@@ -933,17 +1048,34 @@ export default function App() {
         speciesCount: newSpeciesCount,
         maxMoney: newMaxMoney,
         zoneDeepFishCount,
+        totalPointsEarned: newTotalPts,
+        harborFishCount: p13Zone === '항구마을' ? (prevStats.harborFishCount ?? 0) + 1 : (prevStats.harborFishCount ?? 0),
+        snowMasteryTime: p13Zone === '설산정상' ? (prevStats.snowMasteryTime ?? 0) + 1 : (prevStats.snowMasteryTime ?? 0),
       };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       const prevRecord = prev.fishRecords?.[name]?.size ?? 0;
       const isNewRecord = size > prevRecord;
       const newSpXP = (prev.seasonPassXP ?? 0) + 1;
       const newSpTier = Math.min(10, Math.floor(newSpXP / 50));
-      // Zone mastery exp: 남쪽심해 +1 per fish caught there
+      // Zone mastery exp
       const fishActiveZone = getActiveZone();
-      const newZoneMastery = fishActiveZone === '남쪽심해'
-        ? { ...(prev.zoneMastery ?? {}), '남쪽심해': (prev.zoneMastery?.['남쪽심해'] ?? 0) + 1 }
+      const fishZoneMasteryZones = ['남쪽심해', '항구마을', '고대신전', '설산정상'];
+      const newZoneMastery = fishZoneMasteryZones.includes(fishActiveZone)
+        ? { ...(prev.zoneMastery ?? {}), [fishActiveZone]: (prev.zoneMastery?.[fishActiveZone] ?? 0) + 1 }
         : (prev.zoneMastery ?? {});
+      // Phase 13: harbor fish count tracking
+      const newHarborFishCount = fishActiveZone === '항구마을' ? (prev.harborFishCount ?? 0) + 1 : (prev.harborFishCount ?? 0);
+      const newSnowMasteryTime = fishActiveZone === '설산정상' ? (prev.snowMasteryTime ?? 0) + 1 : (prev.snowMasteryTime ?? 0);
+      // Phase 12-2: festival participation tracking
+      const festSeasonId = getCurrentSeason()?.id;
+      const newFestParticipated = (isFestivalActive(prev) && festSeasonId && !(prev.festivalParticipated ?? []).includes(festSeasonId))
+        ? [...(prev.festivalParticipated ?? []), festSeasonId]
+        : (prev.festivalParticipated ?? []);
+      if (newFestParticipated.length > (prev.festivalParticipated ?? []).length) {
+        const festUpdated = { ...updatedStats, festivalParticipatedCount: newFestParticipated.length };
+        Object.assign(updatedStats, festUpdated);
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      }
       return {
         ...prev,
         fishInventory: [...prev.fishInventory, { name, size, price: finalPrice, id }],
@@ -955,10 +1087,21 @@ export default function App() {
         seasonPassXP: newSpXP,
         seasonPassTier: newSpTier,
         zoneMastery: newZoneMastery,
+        activityPoints: (prev.activityPoints ?? 0) + fishPts,
+        totalPointsEarned: (prev.totalPointsEarned ?? 0) + fishPts,
+        festivalParticipated: newFestParticipated,
+        harborFishCount: newHarborFishCount,
+        snowMasteryTime: newSnowMasteryTime,
       };
     });
     const prevRecord = stateRef.current?.fishRecords?.[name]?.size ?? 0;
     const isNewRecord = size > prevRecord;
+    // Phase 14: zone challenge advancement
+    const fishZone = getActiveZone();
+    advanceZoneChallenge(fishZone, 'zoneFish');
+    if (fd.rarity === '희귀' || fd.rarity === '전설' || fd.rarity === '신화') {
+      advanceZoneChallenge(fishZone, 'zoneRare');
+    }
     addMsg(`🐟 ${name} ${size}cm 낚음! (${finalPrice}G)${seaMsg}${isNewRecord ? ' 🏆 신기록!' : ''}`, 'catch');
     playFishCatch(fd.rarity);
     setCatchPopup({ name, size, price: finalPrice, rarity: fd.rarity, isNewRecord });
@@ -1139,7 +1282,7 @@ export default function App() {
     grantAbility('화술', Math.floor(finalPrice / 100) * SELL_ABILITY_PER_100G * (1 + speechAbil * 0.005));
     grantAbility('체력', STAMINA_GAIN * seasonStaminaMult);
     advanceQuest('fish');
-  }, [resistanceGame, addMsg, grantAbility, advanceQuest, checkAndGrantAchievements]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [resistanceGame, addMsg, grantAbility, advanceQuest, advanceZoneChallenge, checkAndGrantAchievements]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onResistanceFail = useCallback(() => {
     const rg = resistanceGame;
@@ -1163,23 +1306,45 @@ export default function App() {
       const oreSpecies = Object.keys(newOreLog).filter(k => newOreLog[k] > 0).length;
       const zoneOreCount = oreActiveZone === '동쪽절벽' ? (prevStats.zoneOreCount ?? 0) + oreCount : (prevStats.zoneOreCount ?? 0);
       const zoneRareCount = oreActiveZone === '북쪽고원' ? (prevStats.zoneRareCount ?? 0) + oreCount : (prevStats.zoneRareCount ?? 0);
-      const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + oreCount, oreSpecies, zoneOreCount, zoneRareCount };
+      const templeOreCount = (oreActiveZone === '고대신전' && oreName === '고대광석') ? (prevStats.templeOreCount ?? 0) + oreCount : (prevStats.templeOreCount ?? 0);
+      // Phase 12-5: activity points
+      const updatedStats = { ...prevStats, oreMined: (prevStats.oreMined ?? 0) + oreCount, oreSpecies, zoneOreCount, zoneRareCount, templeOreCount, totalPointsEarned: (prevStats.totalPointsEarned ?? 0) + 1 };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       const newSpXP2 = (prev.seasonPassXP ?? 0) + 1;
       // Zone mastery exp: 동쪽절벽 or 북쪽고원
       const newZoneMasteryOre = { ...(prev.zoneMastery ?? {}) };
       if (oreActiveZone === '동쪽절벽') newZoneMasteryOre['동쪽절벽'] = (newZoneMasteryOre['동쪽절벽'] ?? 0) + 1;
       if (oreActiveZone === '북쪽고원') newZoneMasteryOre['북쪽고원'] = (newZoneMasteryOre['북쪽고원'] ?? 0) + 1;
+      if (oreActiveZone === '고대신전') newZoneMasteryOre['고대신전'] = (newZoneMasteryOre['고대신전'] ?? 0) + 1;
+      if (oreActiveZone === '설산정상') newZoneMasteryOre['설산정상'] = (newZoneMasteryOre['설산정상'] ?? 0) + 1;
+      // Phase 12-2: festival participation
+      const oreSeasonId = getCurrentSeason()?.id;
+      const newFestPartOre = (isFestivalActive(prev) && oreSeasonId && !(prev.festivalParticipated ?? []).includes(oreSeasonId))
+        ? [...(prev.festivalParticipated ?? []), oreSeasonId]
+        : (prev.festivalParticipated ?? []);
+      if (newFestPartOre.length > (prev.festivalParticipated ?? []).length) {
+        updatedStats.festivalParticipatedCount = newFestPartOre.length;
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      }
+      // Phase 12-4: job class extra ore chance
+      const jobClassExtraOre = (Math.random() < (JOB_CLASSES[prev.jobClass]?.bonus?.oreExtraChance ?? 0)) ? 1 : 0;
+      const totalOreCount = oreCount + jobClassExtraOre;
       return {
         ...prev,
-        oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + oreCount },
-        oreLog: newOreLog,
+        oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + totalOreCount },
+        oreLog: { ...newOreLog, [oreName]: (newOreLog[oreName] ?? 0) + jobClassExtraOre },
         achStats: updatedStats,
         seasonPassXP: newSpXP2,
         seasonPassTier: Math.min(10, Math.floor(newSpXP2 / 50)),
         zoneMastery: newZoneMasteryOre,
+        activityPoints: (prev.activityPoints ?? 0) + 1,
+        totalPointsEarned: (prev.totalPointsEarned ?? 0) + 1,
+        festivalParticipated: newFestPartOre,
+        templeOreCount: (oreActiveZone === '고대신전' && oreName === '고대광석') ? (prev.templeOreCount ?? 0) + totalOreCount : (prev.templeOreCount ?? 0),
       };
     });
+    // Phase 14: zone challenge advancement for ore
+    advanceZoneChallenge(oreActiveZone, 'zoneOre', oreCount);
     addMsg(`⛏ ${oreName} ${oreCount}개 채굴!${oreCount > 1 ? ' (광물이 풍부한 지역!)' : ''}`, 'mine');
     playOreMined();
     if (gameRef.current?.player)
@@ -1190,13 +1355,18 @@ export default function App() {
     const cheolsuWindfall = cheolsuAffinity >= 50 ? 0.05 : 0;
     const jobWindfallMult = JOBS[stateRef.current?.selectedJob]?.bonus?.windfallMult ?? 1.0;
     const outfitWindfallBonus = FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.windfallBonus ?? 0;
-    const windfallChance = (0.03 + (curDepth - 1) * 0.015 + cheolsuWindfall + (gameRef.current?.petBonus?.windfallBonus ?? 0) + outfitWindfallBonus) * jobWindfallMult;
+    // Phase 12-4: job class windfall bonus
+    const jobClassWindfallBonus = JOB_CLASSES[stateRef.current?.jobClass]?.bonus?.windfallBonus ?? 0;
+    const legendPickaxeWindfallBonus = PICKAXES[stateRef.current?.pickaxe]?.windfallBonus ?? 0;
+    const windfallChance = (0.03 + (curDepth - 1) * 0.015 + cheolsuWindfall + (gameRef.current?.petBonus?.windfallBonus ?? 0) + outfitWindfallBonus + jobClassWindfallBonus + legendPickaxeWindfallBonus) * jobWindfallMult;
     const windfall = Math.random() < windfallChance;
     if (windfall) {
       const extra = randInt(4, 9);
       setGs(prev => ({
         ...prev,
         oreInventory: { ...prev.oreInventory, [oreName]: (prev.oreInventory[oreName] || 0) + extra },
+        activityPoints: (prev.activityPoints ?? 0) + 5,
+        totalPointsEarned: (prev.totalPointsEarned ?? 0) + 5,
       }));
       addMsg(`💥 대박! ${oreName} ${extra}개 추가 획득!`, 'catch');
       if (gameRef.current?.player)
@@ -1230,6 +1400,11 @@ export default function App() {
       }));
       addMsg('🗿 고대 보석 1개 획득! (광산 고대 유적)', 'catch');
     }
+    // Phase 12-1: 신화 광석 — 북쪽고원 채굴 시 3% 확률
+    if (oreActiveZone === '북쪽고원' && Math.random() < 0.03) {
+      setGs(prev => ({ ...prev, specialItems: { ...(prev.specialItems ?? {}), mythicOre: (prev.specialItems?.mythicOre ?? 0) + 1 } }));
+      addMsg('💎 신화 광석 1개 획득! (희귀!)', 'catch');
+    }
     // Guild quest contribution + weekly competition
     if (myGuildIdRef.current) {
       contributeGuildQuest(myGuildIdRef.current, 'oreMined', 1);
@@ -1237,7 +1412,7 @@ export default function App() {
     }
     // Server boss: deal damage on ore mined
     damageServerBoss(1);
-  }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkAndGrantAchievements, miningMinigame]);
+  }, [addMsg, grantAbility, advanceQuest, advanceZoneChallenge, gainNpcAffinity, checkAndGrantAchievements, miningMinigame]);
 
   const onHerbGathered = useCallback((herbName) => {
     // World-zone herb yield bonus (서쪽초원 ×1.4, 북쪽고원 ×1.2)
@@ -1245,34 +1420,54 @@ export default function App() {
     const zoneBon = ZONE_BONUSES[herbActiveZone] ?? {};
     const herbMasteryLv = getZoneMasteryLevel(stateRef.current?.zoneMastery, herbActiveZone);
     const herbMasteryBonus = (herbActiveZone === '서쪽초원' && herbMasteryLv > 0 && Math.random() < herbMasteryLv * 0.1) ? 1 : 0;
-    const herbCount = ((zoneBon.herbMult && Math.random() < (zoneBon.herbMult - 1)) ? 2 : 1) + herbMasteryBonus;
+    // Phase 12-2: festival herb yield bonus
+    const festivalHerbBonus = (isFestivalActive(stateRef.current) && getCurrentSeason()?.festival?.herbYieldBonus)
+      ? (Math.random() < getCurrentSeason().festival.herbYieldBonus ? 1 : 0) : 0;
+    // Phase 12-3: town herb yield bonus
+    const townHerbBonus = (townBonuses.herbYieldBonus > 0 && Math.random() < townBonuses.herbYieldBonus) ? 1 : 0;
+    const herbCount = ((zoneBon.herbMult && Math.random() < (zoneBon.herbMult - 1)) ? 2 : 1) + herbMasteryBonus + festivalHerbBonus + townHerbBonus;
     setGs(prev => {
       const prevStats = prev.achStats ?? {};
       const newHerbLog = { ...(prev.herbLog ?? {}), [herbName]: ((prev.herbLog ?? {})[herbName] ?? 0) + herbCount };
       const herbSpecies = Object.keys(newHerbLog).filter(k => newHerbLog[k] > 0).length;
       const zoneHerbCount = herbActiveZone === '서쪽초원' ? (prevStats.zoneHerbCount ?? 0) + herbCount : (prevStats.zoneHerbCount ?? 0);
       const zoneRareHerb = herbActiveZone === '북쪽고원' ? (prevStats.zoneRareCount ?? 0) + herbCount : (prevStats.zoneRareCount ?? 0);
-      const updatedStats = { ...prevStats, herbGathered: (prevStats.herbGathered ?? 0) + herbCount, herbSpecies, zoneHerbCount, zoneRareCount: Math.max(prevStats.zoneRareCount ?? 0, zoneRareHerb) };
+      const updatedStats = { ...prevStats, herbGathered: (prevStats.herbGathered ?? 0) + herbCount, herbSpecies, zoneHerbCount, zoneRareCount: Math.max(prevStats.zoneRareCount ?? 0, zoneRareHerb), totalPointsEarned: (prevStats.totalPointsEarned ?? 0) + 1 };
       setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
       // Zone mastery exp
       const newZoneMasteryHerb = { ...(prev.zoneMastery ?? {}) };
       if (herbActiveZone === '서쪽초원') newZoneMasteryHerb['서쪽초원'] = (newZoneMasteryHerb['서쪽초원'] ?? 0) + 1;
       if (herbActiveZone === '북쪽고원') newZoneMasteryHerb['북쪽고원'] = (newZoneMasteryHerb['북쪽고원'] ?? 0) + 1;
+      // Phase 12-2: festival participation
+      const herbSeasonId = getCurrentSeason()?.id;
+      const newFestPartHerb = (isFestivalActive(prev) && herbSeasonId && !(prev.festivalParticipated ?? []).includes(herbSeasonId))
+        ? [...(prev.festivalParticipated ?? []), herbSeasonId]
+        : (prev.festivalParticipated ?? []);
+      if (newFestPartHerb.length > (prev.festivalParticipated ?? []).length) {
+        updatedStats.festivalParticipatedCount = newFestPartHerb.length;
+        setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      }
       return {
         ...prev,
         herbInventory: { ...(prev.herbInventory ?? {}), [herbName]: ((prev.herbInventory ?? {})[herbName] || 0) + herbCount },
         herbLog: newHerbLog,
         achStats: updatedStats,
         zoneMastery: newZoneMasteryHerb,
+        activityPoints: (prev.activityPoints ?? 0) + 1,
+        totalPointsEarned: (prev.totalPointsEarned ?? 0) + 1,
+        festivalParticipated: newFestPartHerb,
       };
     });
+    // Phase 14: zone challenge advancement for herb
+    const herbZoneForChallenge = getActiveZone();
+    advanceZoneChallenge(herbZoneForChallenge, 'zoneHerb', herbCount);
     addMsg(`🌿 ${herbName} ${herbCount}개 채집!${herbCount > 1 ? ' (풍요로운 지역 보너스!)' : ''}`, 'catch');
     if (gameRef.current?.player)
       gameRef.current.player.floatText = { text: `+${herbName}`, age: 0, color: HERBS[herbName]?.color ?? '#8c4' };
     grantAbility('체력', 0.1);
     grantAbility('채집', 0.5);
     advanceQuest('herb');
-  }, [addMsg, grantAbility, advanceQuest, checkAndGrantAchievements]);
+  }, [addMsg, grantAbility, advanceQuest, advanceZoneChallenge, checkAndGrantAchievements]);
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
 
@@ -1328,6 +1523,30 @@ export default function App() {
        '/파티탈퇴 – 파티에서 탈퇴',
        '/파티 [메시지] – 파티원에게 메시지 전송',
       ].forEach(t => addMsg(t));
+      return;
+    }
+
+    if (cmd === '!진화석') {
+      const today = new Date().toDateString();
+      if (stateRef.current?.evolutionGemDate === today) { addMsg('오늘은 이미 진화석을 구매했습니다. (1일 1개 한도)', 'error'); return; }
+      if ((stateRef.current?.money ?? 0) < 5000) { addMsg('진화석 구매에 5000G가 필요합니다.', 'error'); return; }
+      setGs(prev => ({
+        ...prev,
+        money: prev.money - 5000,
+        specialItems: { ...(prev.specialItems ?? {}), evolutionGem: (prev.specialItems?.evolutionGem ?? 0) + 1 },
+        evolutionGemDate: today,
+      }));
+      addMsg('💎 진화석 1개 구매! (5000G)', 'catch');
+      return;
+    }
+
+    if (cmd === '!포인트상점' || cmd === '!포인트') {
+      setShowPointShop(v => !v);
+      return;
+    }
+
+    if (cmd === '!마을' || cmd === '!마을발전') {
+      setShowTownHall(v => !v);
       return;
     }
 
@@ -1489,6 +1708,7 @@ export default function App() {
         const mtnBuff = gameRef.current?.mountainBuff;
         const mtnFishMult = (mtnBuff?.type === 'fishSpeed' && Date.now() < mtnBuff.expiresAt) ? 0.85 : 1.0;
         const seasonFishBonus = getCurrentSeason()?.fishSpeedBonus ?? 0;
+        const timePeriodFishMult = 1 + (getTimePeriod().fishTimeBonus ?? 0); // Phase 15
         const hatFishMult = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
         const outfitFishMult = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
         const topFishMult = TOPS[s.top]?.bonus?.fishTimeMult ?? 1.0;
@@ -1497,7 +1717,7 @@ export default function App() {
         const spotDecoFishMult = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
         const titleFishMult = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * mtnFishMult * hatFishMult * outfitFishMult * topFishMult * bottomFishMult * beltFishMult * spotDecoFishMult * titleFishMult
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * mtnFishMult * timePeriodFishMult * hatFishMult * outfitFishMult * topFishMult * bottomFishMult * beltFishMult * spotDecoFishMult * titleFishMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1562,6 +1782,7 @@ export default function App() {
       const mtnBuff2 = gameRef.current?.mountainBuff;
       const mtnFishMult2 = (mtnBuff2?.type === 'fishSpeed' && Date.now() < mtnBuff2.expiresAt) ? 0.85 : 1.0;
       const seasonFishBonus2 = getCurrentSeason()?.fishSpeedBonus ?? 0;
+      const timePeriodFishMult2 = 1 + (getTimePeriod().fishTimeBonus ?? 0); // Phase 15
       const hatFishMult2 = HATS[s.hat]?.bonus?.fishTimeMult ?? 1.0;
       const outfitFishMult2 = FISHING_OUTFITS[s.outfit]?.bonus?.fishTimeMult ?? 1.0;
       const topFishMult2 = TOPS[s.top]?.bonus?.fishTimeMult ?? 1.0;
@@ -1570,7 +1791,7 @@ export default function App() {
       const spotDecoFishMult2 = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
       const titleFishMult2 = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * mtnFishMult2 * hatFishMult2 * outfitFishMult2 * topFishMult2 * bottomFishMult2 * beltFishMult2 * spotDecoFishMult2 * titleFishMult2
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * mtnFishMult2 * timePeriodFishMult2 * hatFishMult2 * outfitFishMult2 * topFishMult2 * bottomFishMult2 * beltFishMult2 * spotDecoFishMult2 * titleFishMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -1640,7 +1861,13 @@ export default function App() {
       const worldZoneMineReduction = ZONE_BONUSES[getActiveZone()]?.mineTimeReduction ?? 0;
       const mtnBuffMine = gameRef.current?.mountainBuff;
       const mtnMineMult = (mtnBuffMine?.type === 'mineSpeed' && Date.now() < mtnBuffMine.expiresAt) ? 0.85 : 1.0;
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * topMineMult * bottomMineMult * titleMineMult * (1 - worldZoneMineReduction) * mtnMineMult);
+      // Phase 12-2: festival mine speed bonus
+      const festivalMineMult = (isFestivalActive(s) && getCurrentSeason()?.festival?.mineSpeedBonus) ? (1 - getCurrentSeason().festival.mineSpeedBonus) : 1.0;
+      // Phase 12-3: town mine speed bonus
+      const townMineMult = 1 - (townBonuses.mineSpeedBonus ?? 0);
+      // Phase 12-4: job class mine time mult
+      const jobClassMineMult = JOB_CLASSES[s?.jobClass]?.bonus?.mineTimeMult ?? 1.0;
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * topMineMult * bottomMineMult * titleMineMult * (1 - worldZoneMineReduction) * mtnMineMult * festivalMineMult * townMineMult * jobClassMineMult);
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();
@@ -1717,6 +1944,7 @@ export default function App() {
       playSellSound(total);
       grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
       advanceQuest('sell', total);
+      advanceZoneChallenge(getActiveZone(), 'zoneSell', total);
       gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
       return;
     }
@@ -1987,7 +2215,10 @@ export default function App() {
       const cookDoubleChance = (stateRef.current?.npcAffinity?.요리사 ?? 0) >= 50 ? 0.15 : 0;
       const cookedDouble = Math.random() < cookDoubleChance;
       const outfitDishMult = 1 + (FISHING_OUTFITS[stateRef.current?.outfit]?.bonus?.cookPriceMult ?? 0) + (JOBS[stateRef.current?.selectedJob]?.bonus?.cookPriceMult ?? 0);
-      const dishEarned = Math.round(recipe.price * outfitDishMult * (cookedDouble ? 2 : 1));
+      // Phase 12-3/12-4: town and job class cook sell bonus
+      const townCookSellBonus = 1 + (townBonuses.cookSellBonus ?? 0);
+      const jobClassCookSellBonus = 1 + (JOB_CLASSES[stateRef.current?.jobClass]?.bonus?.cookSellBonus ?? 0);
+      const dishEarned = Math.round(recipe.price * outfitDishMult * townCookSellBonus * jobClassCookSellBonus * (cookedDouble ? 2 : 1));
       // Consume ingredients and add gold
       setGs(prev => {
         const newCrops = { ...(prev.cropInventory ?? {}) };
@@ -2122,6 +2353,113 @@ export default function App() {
 
     addMsg(`알 수 없는 명령어. !도움말 확인`, 'error');
   }, [addMsg, advanceQuest, grantAbility, gainNpcAffinity, pendingInvite, nickname, roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Phase 12-1: 펫 진화 ────────────────────────────────────────────────────
+  const handlePetEvolve = useCallback((evolvedKey) => {
+    const req = EVOLVE_REQUIREMENTS[evolvedKey];
+    if (!req) return;
+    const s = stateRef.current;
+    const petLevel = (s?.petLevels ?? {})[req.basePet] ?? 1;
+    if (petLevel < 5) { addMsg('⚠️ 펫 레벨 5 이상이어야 진화할 수 있습니다.', 'error'); return; }
+    const gems = (s?.specialItems?.evolutionGem ?? 0);
+    const mythics = (s?.specialItems?.mythicOre ?? 0);
+    if (gems < req.evolutionGem) { addMsg(`⚠️ 진화석 ${req.evolutionGem}개 필요 (보유: ${gems}개)`, 'error'); return; }
+    if (mythics < req.mythicOre) { addMsg(`⚠️ 신화 광석 ${req.mythicOre}개 필요 (보유: ${mythics}개)`, 'error'); return; }
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const newEvolveCount = (prevStats.petEvolveCount ?? 0) + 1;
+      const updatedStats = { ...prevStats, petEvolveCount: newEvolveCount };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      return {
+        ...prev,
+        specialItems: {
+          ...(prev.specialItems ?? {}),
+          evolutionGem: (prev.specialItems?.evolutionGem ?? 0) - req.evolutionGem,
+          mythicOre: (prev.specialItems?.mythicOre ?? 0) - req.mythicOre,
+        },
+        evolvedPets: { ...(prev.evolvedPets ?? {}), [req.basePet]: evolvedKey },
+        achStats: updatedStats,
+      };
+    });
+    addMsg(`✨ ${req.basePet}이(가) ${EVOLVED_PETS[evolvedKey].name}(으)로 진화했습니다!`, 'catch');
+  }, [addMsg, checkAndGrantAchievements]);
+
+  // ── Phase 12-4: 전문 직업 선택 ───────────────────────────────────────────
+  const handleChooseJobClass = useCallback((className) => {
+    if (stateRef.current?.jobClass) { addMsg('전문 직업은 한 번만 선택할 수 있습니다.', 'error'); return; }
+    const s = stateRef.current;
+    const totalAbil = Object.values(s?.abilities ?? {}).reduce((sum, a) => sum + (a?.value ?? 0), 0);
+    if (totalAbil < 200) { addMsg(`⚠️ 어빌리티 합산 200 이상 필요 (현재: ${Math.floor(totalAbil)})`, 'error'); return; }
+    const cls = JOB_CLASSES[className];
+    if (!cls) return;
+    setGs(prev => ({ ...prev, jobClass: className }));
+    addMsg(`⭐ 전문 직업 선택: ${cls.name}! ${cls.desc}`, 'catch');
+  }, [addMsg]);
+
+  // ── Phase 12-3: 마을 발전 기여 ───────────────────────────────────────────
+  const handleTownContribute = useCallback(async (buildingId, itemName, itemType, qty) => {
+    const s = stateRef.current;
+    if (itemType === 'fish') {
+      const fishCount = (s?.fishInventory ?? []).filter(f => f.name === itemName).length;
+      if (fishCount < qty) { addMsg(`물고기 인벤토리에 ${itemName}이 부족합니다.`, 'error'); return; }
+    } else if (itemType === 'ore') {
+      if ((s?.oreInventory?.[itemName] ?? 0) < qty) { addMsg(`광석 인벤토리에 ${itemName}이 부족합니다.`, 'error'); return; }
+    } else if (itemType === 'herb') {
+      if ((s?.herbInventory?.[itemName] ?? 0) < qty) { addMsg(`허브 인벤토리에 ${itemName}이 부족합니다.`, 'error'); return; }
+    }
+    setGs(prev => {
+      const prevStats = prev.achStats ?? {};
+      const newContrib = (prevStats.townContribCount ?? 0) + qty;
+      const updatedStats = { ...prevStats, townContribCount: newContrib };
+      setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
+      let next = { ...prev, achStats: updatedStats, myTownContributions: { ...(prev.myTownContributions ?? {}), [buildingId]: ((prev.myTownContributions ?? {})[buildingId] ?? 0) + qty } };
+      if (itemType === 'fish') {
+        let skipCount = qty;
+        next = { ...next, fishInventory: prev.fishInventory.filter(f => { if (f.name === itemName && skipCount > 0) { skipCount--; return false; } return true; }) };
+      } else if (itemType === 'ore') {
+        next = { ...next, oreInventory: { ...prev.oreInventory, [itemName]: (prev.oreInventory[itemName] ?? 0) - qty } };
+      } else if (itemType === 'herb') {
+        next = { ...next, herbInventory: { ...prev.herbInventory, [itemName]: (prev.herbInventory[itemName] ?? 0) - qty } };
+      }
+      return next;
+    });
+    try {
+      const newLv = await contributeTown(buildingId, qty);
+      addMsg(`🏘 ${TOWN_BUILDINGS[buildingId].name} 기여 완료! (${qty}개) 현재 Lv${newLv}`, 'catch');
+    } catch {
+      addMsg('마을 기여 중 오류가 발생했습니다.', 'error');
+    }
+    gainNpcAffinity('상인', 0.5);
+  }, [addMsg, gainNpcAffinity, checkAndGrantAchievements]);
+
+  // ── Phase 12-5: 포인트 교환 ───────────────────────────────────────────────
+  const handlePointExchange = useCallback((itemKey) => {
+    const item = POINT_SHOP_ITEMS[itemKey];
+    if (!item) return;
+    const s = stateRef.current;
+    if ((s?.activityPoints ?? 0) < item.cost) { addMsg(`⚠️ 포인트 부족 (필요: ${item.cost}pt)`, 'error'); return; }
+    setGs(prev => {
+      let next = { ...prev, activityPoints: (prev.activityPoints ?? 0) - item.cost };
+      if (item.itemType === 'bait') {
+        next = { ...next, baitInventory: { ...(prev.baitInventory ?? {}), [item.itemKey]: ((prev.baitInventory ?? {})[item.itemKey] ?? 0) + item.qty }, ownedBait: prev.ownedBait?.includes(item.itemKey) ? prev.ownedBait : [...(prev.ownedBait ?? []), item.itemKey] };
+      } else if (item.itemType === 'special') {
+        next = { ...next, specialItems: { ...(prev.specialItems ?? {}), [item.itemKey]: ((prev.specialItems ?? {})[item.itemKey] ?? 0) + item.qty } };
+      } else if (item.itemType === 'rodSkin') {
+        next = { ...next, ownedRodSkins: prev.ownedRodSkins?.includes(item.itemKey) ? prev.ownedRodSkins : [...(prev.ownedRodSkins ?? []), item.itemKey] };
+      } else if (item.itemType === 'furniture') {
+        next = { ...next, ownedSpecialFurniture: [...(prev.ownedSpecialFurniture ?? []).filter(d => d !== item.itemKey), item.itemKey] };
+      } else if (item.itemType === 'consumable' && item.itemKey === 'expPotion') {
+        const newAbilities = Object.fromEntries(Object.entries(prev.abilities ?? {}).map(([k, v]) => [k, { ...v, value: (v?.value ?? 0) + 5 }]));
+        next = { ...next, abilities: newAbilities };
+      } else if (item.itemType === 'spotDeco') {
+        next = { ...next, spotDecos: [...(prev.spotDecos ?? []).filter(d => d !== item.itemKey), item.itemKey] };
+      } else if (item.itemType === 'title') {
+        next = { ...next, ownedPointTitles: [...(prev.ownedPointTitles ?? []).filter(t => t !== item.itemKey), item.itemKey] };
+      }
+      return next;
+    });
+    addMsg(`✅ ${item.name} 교환 완료! (-${item.cost}pt)`, 'catch');
+  }, [addMsg]);
 
   // ── Shop actions ─────────────────────────────────────────────────────────
 
@@ -2340,6 +2678,7 @@ export default function App() {
     playSellSound(total);
     grantAbility('화술', Math.max(0.01, Math.floor(total / 100) * SELL_ABILITY_PER_100G));
     advanceQuest('sell', total);
+    advanceZoneChallenge(getActiveZone(), 'zoneSell', total);
     gainNpcAffinity('상인', Math.max(1, Math.floor(total / 150)));
   };
 
@@ -2354,6 +2693,7 @@ export default function App() {
     });
     grantAbility('화술', Math.max(0.01, Math.floor(fish.price / 100) * SELL_ABILITY_PER_100G));
     advanceQuest('sell', fish.price);
+    advanceZoneChallenge(getActiveZone(), 'zoneSell', fish.price);
     gainNpcAffinity('상인', Math.max(1, Math.floor(fish.price / 150)));
   };
 
@@ -2396,6 +2736,20 @@ export default function App() {
     // Show tutorial for new players
     if (!stateRef.current?.tutorialDone) {
       setTimeout(() => setTutorialStep(1), 800);
+    }
+    // Phase 12-2: Festival trigger on first season entry
+    const currentSeasonForFestival = getCurrentSeason();
+    if (currentSeasonForFestival) {
+      const alreadyFestivaled = (stateRef.current?.festivalSeasonSeen ?? []).includes(currentSeasonForFestival.id);
+      if (!alreadyFestivaled) {
+        const festEndDate = Date.now() + 72 * 60 * 60 * 1000;
+        setGs(prev => ({
+          ...prev,
+          festivalEndDate: festEndDate,
+          festivalSeasonSeen: [...(prev.festivalSeasonSeen ?? []), currentSeasonForFestival.id],
+        }));
+        setTimeout(() => addMsgRef.current(`🎉 ${currentSeasonForFestival.festival?.name ?? currentSeasonForFestival.name} 축제 시작! 72시간 특별 보너스!`, 'catch'), 2000);
+      }
     }
   };
 
@@ -2637,16 +2991,108 @@ export default function App() {
         }));
         gainNpcAffinity('심해탐험가', 10);
       }
+    // ── Phase 13: New zone NPC actions ──────────────────────────────────────
+    } else if (actionId === 'sell_market') {
+      // 어시장상인: sell all fish at +20% bonus
+      const s = stateRef.current;
+      const fishList = (s?.fishInventory ?? []);
+      if (fishList.length === 0) {
+        addMsg('🐟 어시장 상인: "생선을 가져오시면 시장 도매가로 사들이겠습니다!"', 'info');
+      } else {
+        const totalEarned = fishList.reduce((sum, f) => sum + Math.round(f.price * 1.2), 0);
+        addMsg(`🐟 어시장 상인: "신선한 생선 ${fishList.length}마리를 시장가로 구매했습니다! (+20% 보너스, +${totalEarned}G)"`, 'catch');
+        setGs(prev => {
+          const earned = (prev.fishInventory ?? []).reduce((sum, f) => sum + Math.round(f.price * 1.2), 0);
+          const prevStats = prev.achStats ?? {};
+          const newHarborTotal = (prev.harborFishSellTotal ?? 0) + earned;
+          return {
+            ...prev,
+            money: prev.money + earned,
+            fishInventory: [],
+            harborFishSellTotal: newHarborTotal,
+            achStats: { ...prevStats, totalGoldEarned: (prevStats.totalGoldEarned ?? 0) + earned },
+          };
+        });
+        gainNpcAffinity('어시장상인', 2);
+      }
+    } else if (actionId === 'captain_chat') {
+      const lines = [
+        '⚓ 선장: "이 항구는 30년 전 내가 처음 발견한 곳이라오. 폭풍 속에서 살아남은 기억이 지금도 생생하지."',
+        '⚓ 선장: "항구 마을의 생선은 최고지! 특히 항구왕새우는 전설이라오. 아직 본 사람이 드물어..."',
+        '⚓ 선장: "심해 저편에 더 큰 바다가 있다고 들었소. 언젠가 같이 탐험해보지 않겠소?"',
+      ];
+      addMsg(lines[Math.floor(Math.random() * lines.length)], 'info');
+      gainNpcAffinity('선장', 1);
+    } else if (actionId === 'appraise_artifact') {
+      const s = stateRef.current;
+      const ancientOre = s?.oreInventory?.고대광석 ?? 0;
+      if (ancientOre === 0) {
+        addMsg('🏺 유물학자: "고대 광석이 있다면 제가 감정해 드리겠습니다. 신전 내부 채굴 구역을 탐색해보세요!"', 'info');
+      } else {
+        const reward = ancientOre * 1200;
+        addMsg(`🏺 유물학자: "고대 광석 ${ancientOre}개! 이것들은 고대 문명의 흔적입니다. 연구비로 ${reward}G를 드리죠!"`, 'catch');
+        setGs(prev => ({
+          ...prev,
+          money: prev.money + reward,
+          oreInventory: { ...prev.oreInventory, 고대광석: 0 },
+        }));
+        gainNpcAffinity('유물학자', 5);
+      }
+    } else if (actionId === 'warm_drink') {
+      const today = new Date().toLocaleDateString('ko-KR');
+      if ((stateRef.current?.setiDrinkDate ?? '') === today) {
+        addMsg('❄️ 설인: "따뜻한 음료는 하루에 한 잔이면 충분해요. 내일 또 오세요!"', 'info');
+      } else {
+        addMsg('❄️ 설인: "이 차가운 산에 잘 오셨어요. 특제 따뜻한 음료를 드릴게요! 체력이 회복될 거예요."', 'catch');
+        grantAbility('체력', 2);
+        setGs(prev => ({ ...prev, setiDrinkDate: today }));
+        gainNpcAffinity('설인', 3);
+      }
     }
   }, [addMsg, grantAbility, advanceQuest, gainNpcAffinity, checkNpcQuest, checkAndGrantAchievements, stateRef]);
+
+  // Phase 14: claim zone challenge reward
+  const claimZoneChallenge = useCallback((zone) => {
+    const challenge = getZoneDailyChallenge(zone);
+    if (!challenge) return;
+    setGs(prev => {
+      const zcp = { ...(prev.zoneChallengeProgress ?? {}) };
+      const entry = zcp[zone];
+      if (!entry || entry.claimed || (entry.progress ?? 0) < challenge.goal) return prev;
+      zcp[zone] = { ...entry, claimed: true };
+      const reward = challenge.reward ?? {};
+      const newMastery = reward.masteryExp
+        ? { ...(prev.zoneMastery ?? {}), [zone]: (prev.zoneMastery?.[zone] ?? 0) + reward.masteryExp }
+        : (prev.zoneMastery ?? {});
+      setTimeout(() => addMsg(`🎁 [${zone}] 챌린지 보상: +${reward.money ?? 0}G, 숙련도 +${reward.masteryExp ?? 0}exp`, 'catch'), 0);
+      return {
+        ...prev,
+        money: prev.money + (reward.money ?? 0),
+        zoneMastery: newMastery,
+        zoneChallengeProgress: zcp,
+      };
+    });
+  }, [addMsg]);
 
   const handleNpcInteract = useCallback((npcName) => {
     playNpcInteract();
     // 대화창 열기 + 첫 접촉 친밀도 소량 부여
     const npcAffinityKey = npcName === '민준' ? '상인' : npcName === '수연' ? '요리사' : npcName === '미나' ? '여관주인' : npcName === '철수' ? '채굴사' : '은행원';
     gainNpcAffinity(npcAffinityKey, 0.3);
+    // Phase 12-2: festival NPC greeting (NPC별 고유 대사)
+    if (isFestivalActive(stateRef.current)) {
+      const festName = getCurrentSeason()?.festival?.name ?? '축제';
+      const festGreetings = {
+        민준: `🎉 [${festName}] 민준: "축제 기간엔 물고기 판매가도 오르고 희귀어 확률도 높아져요! 많이 잡아서 팔아드릴게요~"`,
+        수연: `🎉 [${festName}] 수연: "축제 음식은 더 맛있어야죠! 지금 요리하면 특별 보너스가 붙는다고요!"`,
+        미나: `🎉 [${festName}] 미나: "축제 때는 여관도 활기차네요! 오늘 하루도 즐겁게 보내세요 🌸"`,
+        철수: `🎉 [${festName}] 철수: "축제라고 광산이 쉬나요? 오히려 이럴 때 캐야죠! 채굴 속도 버프도 있답니다!"`,
+      };
+      const greeting = festGreetings[npcName] ?? `🎉 [${festName}] ${npcName}: "축제 기간입니다! 특별 보너스를 누려보세요!"`;
+      setTimeout(() => addMsgRef.current(greeting, 'catch'), 500);
+    }
     setNpcDialog(npcAffinityKey); // use role key so NPCS lookup works
-  }, [gainNpcAffinity]);
+  }, [gainNpcAffinity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleZoneNpcInteract = useCallback((npcId) => {
     playNpcInteract();
@@ -2733,26 +3179,46 @@ export default function App() {
       '🐋 광활한 바다가 펼쳐집니다. 이곳에서만 볼 수 있는 전설급 어종이 살고 있습니다.',
       '보너스: 생선 판매가 +25% · 희귀도 +8% / 용고기와 리바이어던이 출몰합니다!',
     ],
+    '항구마을': [
+      '⚓ 항구 마을에 도착했습니다!',
+      '🐟 분주한 어시장과 부두가 펼쳐집니다. 희귀한 해산물이 가득합니다.',
+      '보너스: 생선 판매가 +40% · 희귀도 +10% / 날치·심해문어·항구왕새우를 노려보세요!',
+    ],
+    '고대신전': [
+      '🏺 고대 신전에 도착했습니다!',
+      '🗿 수천 년 전 문명의 유적이 눈앞에 펼쳐집니다. 지하 수로에서 고대 어종이 서식합니다.',
+      '보너스: 광석 +50% · 희귀도 +15% · 생선 판매 +10% / 고대잉어·신전수호어를 낚아보세요!',
+    ],
+    '설산정상': [
+      '❄️ 설산 정상에 도착했습니다!',
+      '🌨 눈 덮인 고산. 얼음 호수에서만 잡히는 전설의 물고기가 있다고 합니다.',
+      '보너스: 광석 +60% · 희귀도 +12% / 얼음빙어와 설산용을 낚아보세요!',
+    ],
   };
 
   const handleZoneTransition = useCallback((newZone) => {
     if (gameRef.current) gameRef.current.worldZone = newZone;
-    setActiveZone(newZone);
-    setActiveTiles(ZONE_TILES[newZone]);
-    setGs(prev => {
-      const visited = prev.visitedZones ?? ['마을'];
-      const isFirst = !visited.includes(newZone);
-      if (isFirst && ZONE_INTRO[newZone]) {
-        ZONE_INTRO[newZone].forEach((line, i) => {
-          setTimeout(() => addMsgRef.current?.(line, i === 0 ? 'catch' : 'info'), i * 1200);
-        });
-      }
-      return {
-        ...prev,
-        worldZone: newZone,
-        visitedZones: isFirst ? [...visited, newZone] : visited,
-      };
-    });
+    setMapTransitioning(true);
+    setTimeout(() => {
+      setActiveZone(newZone);
+      setActiveTiles(ZONE_TILES[newZone]);
+      setGs(prev => {
+        const visited = prev.visitedZones ?? ['마을'];
+        const isFirst = !visited.includes(newZone);
+        if (isFirst && ZONE_INTRO[newZone]) {
+          ZONE_INTRO[newZone].forEach((line, i) => {
+            setTimeout(() => addMsgRef.current?.(line, i === 0 ? 'catch' : 'info'), i * 1200);
+          });
+        }
+        setTimeout(() => addMsgRef.current?.(`📍 ${ZONE_LABELS[newZone] ?? newZone}에 도착했습니다!`, 'info'), 350);
+        return {
+          ...prev,
+          worldZone: newZone,
+          visitedZones: isFirst ? [...visited, newZone] : visited,
+        };
+      });
+      setTimeout(() => setMapTransitioning(false), 300);
+    }, 150);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleZoneBlocked = useCallback((zoneName) => {
@@ -2813,6 +3279,11 @@ nickname={nickname}
           onZoneBlocked={handleZoneBlocked}
           onZoneNpcInteract={handleZoneNpcInteract}
         />
+        {/* Phase 13: Map transition wipe overlay */}
+        {mapTransitioning && (
+          <div className="map-wipe-overlay" />
+        )}
+
         {/* IndoorCanvas overlays when inside a room */}
         {indoorRoom && (
           <IndoorCanvas
@@ -2878,6 +3349,8 @@ nickname={nickname}
           setShowTournament={setShowTournament}
           setShowCottage={setShowCottage}
           setShowWorldMap={setShowWorldMap}
+          setShowTownHall={setShowTownHall}
+          setShowPointShop={setShowPointShop}
         />
       </div>
 
@@ -3122,6 +3595,8 @@ nickname={nickname}
         setGuildMembers={setGuildMembers}
         setGuildChat={setGuildChat}
         setGuildQuest={setGuildQuest}
+        handlePetEvolve={handlePetEvolve}
+        handleChooseJobClass={handleChooseJobClass}
         showSettings={showSettings}
         setShowSettings={setShowSettings}
         showCottage={showCottage}
@@ -3145,15 +3620,39 @@ nickname={nickname}
         <WorldMap
           currentZone={gs.worldZone ?? '마을'}
           zoneMastery={gs.zoneMastery ?? {}}
+          zoneChallengeProgress={gs.zoneChallengeProgress ?? {}}
+          onClaimZoneChallenge={claimZoneChallenge}
           lockedZones={Object.keys(ZONE_UNLOCK_REQ).filter(z => {
             const req = ZONE_UNLOCK_REQ[z];
             if (!req) return false;
             if (req.marineGear) return gs.marineGear !== req.marineGear;
             if (req.stat === 'oreMined') return (gs.achStats?.oreMined ?? 0) < req.min;
             if (req.stat === 'exploredZones') return (gs.exploredZones ?? []).length < req.min;
+            if (req.zone) return !(gs.visitedZones ?? []).includes(req.zone) || (gs.mineDepth ?? 1) < (req.mineDepth ?? 1);
+            if (req.seenChapter4) return !gs.seenChapter4 || (gs.exploredZones ?? []).length < (req.exploredZones ?? 0);
+            if (req.zoneMastery) { const e = gs.zoneMastery?.[req.zoneMastery] ?? 0; return e < (req.masteryMin ?? 0); }
             return false;
           })}
           onClose={() => setShowWorldMap(false)}
+        />
+      )}
+
+      {/* Phase 12-3: 마을 발전 */}
+      {showTownHall && (
+        <TownHall
+          gs={gs}
+          townLevels={townLevels}
+          onContribute={handleTownContribute}
+          onClose={() => setShowTownHall(false)}
+        />
+      )}
+
+      {/* Phase 12-5: 포인트 상점 */}
+      {showPointShop && (
+        <PointShop
+          gs={gs}
+          onExchange={handlePointExchange}
+          onClose={() => setShowPointShop(false)}
         />
       )}
 

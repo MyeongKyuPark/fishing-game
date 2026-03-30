@@ -8,7 +8,8 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
 import { DEFAULT_ABILITIES, ABILITY_DEFS, doGradeUp, gradeRareBonus,
   SELL_ABILITY_PER_100G, ENHANCE_ABILITY_GAIN } from '../abilityData';
 import { getTitle, TITLES } from '../titleData';
-import { PETS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from '../petData';
+import { PETS, EVOLVED_PETS, EVOLVE_REQUIREMENTS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from '../petData';
+import { JOB_CLASSES } from '../jobData';
 import { NPCS, getAffinityLevel, getShopDiscount } from '../npcData';
 import { EXPLORE_ZONES, checkZoneUnlock } from '../explorationData';
 import { ACHIEVEMENTS } from '../achievementData';
@@ -69,6 +70,7 @@ export default function Sidebar(props) {
     buyCookware, buyMarineGear,
     buyPickaxe, buyGatherTool,
     setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
+    handlePetEvolve, handleChooseJobClass,
   } = props;
 
   const myTitle = getTitle(gs);
@@ -81,6 +83,7 @@ export default function Sidebar(props) {
   const [settingsState, setSettingsState] = useState(() => getSettings());
   const [bgmVol, setBgmVolState] = useState(() => getBgmVolume());
   const [dexTab, setDexTab] = useState('어종');
+  const [evolvingPet, setEvolvingPet] = useState(null);
 
   const showBuyToast = (msg) => {
     setBuyToast(msg);
@@ -286,7 +289,7 @@ export default function Sidebar(props) {
 
             {/* Tabs */}
             <div className="stats-tabs">
-              {['장비', '어빌리티', '제련/제작', '업적', '펫', '관계도', '탐험', '농장', '박제실'].map(tab => (
+              {['장비', '어빌리티', '제련/제작', '전설 제작', '업적', '펫', '관계도', '탐험', '농장', '박제실'].map(tab => (
                 <button key={tab} tabIndex={-1}
                   className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''}`}
                   onClick={() => setStatsTab(tab)}>{tab}</button>
@@ -669,6 +672,74 @@ export default function Sidebar(props) {
                             </div>
                           );
                         })}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* ── 전문 직업 분기 (Phase 12-4) ── */}
+                <div className="section">
+                  <div className="section-title">⭐ 전문 직업
+                    {gs.jobClass && (
+                      <span style={{ marginLeft: 8, color: JOB_CLASSES[gs.jobClass]?.color ?? '#ffd700', fontWeight: 700, fontSize: 12 }}>
+                        — {JOB_CLASSES[gs.jobClass]?.icon} {JOB_CLASSES[gs.jobClass]?.name}
+                      </span>
+                    )}
+                  </div>
+                  {gs.jobClass ? (
+                    (() => {
+                      const cls = JOB_CLASSES[gs.jobClass];
+                      return (
+                        <div className="rod-card" style={{ borderColor: cls?.color ?? 'rgba(255,215,0,0.4)', background: 'rgba(255,215,0,0.05)' }}>
+                          <div style={{ fontSize: 18, marginBottom: 4 }}>{cls?.icon} {cls?.name}</div>
+                          <div style={{ fontSize: 11, color: '#ccc', marginBottom: 4 }}>{cls?.desc}</div>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                            {Object.entries(cls?.bonus ?? {}).map(([k, v]) => {
+                              if (k === 'fishSellBonus') return `물고기 판매 +${(v*100).toFixed(0)}%`;
+                              if (k === 'fishTimeBonus') return `낚시 속도 +${(v*100).toFixed(0)}%`;
+                              if (k === 'mineSellBonus') return `채굴 판매 +${(v*100).toFixed(0)}%`;
+                              if (k === 'mineTimeBonus') return `채굴 속도 +${(v*100).toFixed(0)}%`;
+                              if (k === 'oreExtraChance') return `추가 광석 확률 ${(v*100).toFixed(0)}%`;
+                              if (k === 'cookSellBonus') return `요리 판매 +${(v*100).toFixed(0)}%`;
+                              if (k === 'cookSpeedBonus') return `요리 속도 +${(v*100).toFixed(0)}%`;
+                              if (k === 'windfall') return `횡재 확률 +${(v*100).toFixed(0)}%`;
+                              return `${k}: +${v}`;
+                            }).join(' · ')}
+                          </div>
+                        </div>
+                      );
+                    })()
+                  ) : (() => {
+                    const totalAbil = Object.values(gs.abilities ?? {}).reduce((sum, a) => sum + (a?.value ?? 0), 0);
+                    const unlocked = totalAbil >= 200;
+                    if (!unlocked) {
+                      return (
+                        <div className="empty">
+                          어빌리티 합산 200 이상 시 선택 가능.<br/>
+                          현재: {Math.floor(totalAbil)} / 200
+                        </div>
+                      );
+                    }
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ fontSize: 11, color: '#ffcc44', marginBottom: 4 }}>⚠️ 한 번 선택하면 변경할 수 없습니다.</div>
+                        {Object.entries(JOB_CLASSES).map(([key, cls]) => (
+                          <div key={key} className="rod-card" style={{ borderColor: cls.color ?? 'rgba(255,255,255,0.2)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div>
+                                <div style={{ fontSize: 16, fontWeight: 700, color: cls.color }}>{cls.icon} {cls.name}</div>
+                                <div style={{ fontSize: 11, color: '#ccc', marginTop: 2 }}>{cls.desc}</div>
+                              </div>
+                              <button
+                                className="btn-buy"
+                                style={{ fontSize: 11, padding: '3px 10px', marginLeft: 8 }}
+                                onClick={() => handleChooseJobClass(key)}
+                              >
+                                선택
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     );
                   })()}
@@ -1057,6 +1128,116 @@ export default function Sidebar(props) {
               );
             })()}
 
+            {/* ── 전설 제작 tab ── */}
+            {statsTab === '전설 제작' && (() => {
+              const legendItems = [
+                { key: '전설낚시대', type: 'rod', data: RODS['전설낚시대'] },
+                { key: '전설곡괭이', type: 'pickaxe', data: PICKAXES['전설곡괭이'] },
+              ];
+              return (
+                <div className="section">
+                  <div className="section-title" style={{ marginBottom: 4 }}>✨ 전설 장비 제작</div>
+                  <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, marginBottom: 12, lineHeight: 1.5 }}>
+                    여러 존의 희귀 재료와 전설 어종이 필요합니다.
+                  </div>
+                  {legendItems.map(({ key, type, data }) => {
+                    if (!data) return null;
+                    const alreadyOwned = type === 'rod'
+                      ? (gs.ownedRods ?? []).includes(key)
+                      : (gs.ownedPickaxes ?? []).includes(key);
+                    // Check ore mats
+                    const oreMats = data.craftMats ?? {};
+                    const canAffordOre = Object.entries(oreMats).every(([ore, qty]) => (gs.oreInventory?.[ore] ?? 0) >= qty);
+                    // Check fish mats
+                    const fishMats = data.craftFish ?? [];
+                    const fishInv = gs.fishInventory ?? [];
+                    const canAffordFish = fishMats.every(f => fishInv.some(fi => fi.name === f));
+                    // Check rod/pickaxe prereq
+                    const reqEnhance = data.reqEnhance ?? 0;
+                    const prereqKey = type === 'rod' ? data.reqRod : data.reqPickaxe;
+                    const prereqEnhance = type === 'rod'
+                      ? (gs.rodEnhance?.[prereqKey] ?? 0)
+                      : (gs.pickaxeEnhance?.[prereqKey] ?? 0);
+                    const prereqOwned = type === 'rod'
+                      ? (gs.ownedRods ?? []).includes(prereqKey)
+                      : (gs.ownedPickaxes ?? []).includes(prereqKey);
+                    const prereqOk = prereqOwned && prereqEnhance >= reqEnhance;
+                    const canCraft = !alreadyOwned && canAffordOre && canAffordFish && prereqOk;
+                    return (
+                      <div key={key} style={{ background: 'rgba(255,255,255,0.04)', border: `1px solid ${alreadyOwned ? '#44ff8844' : '#ff44ff44'}`, borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                          <span style={{ color: '#ff44ff', fontWeight: 700, fontSize: 13 }}>✨ {data.name}</span>
+                          {alreadyOwned && <span style={{ color: '#44ff88', fontSize: 11 }}>보유 중</span>}
+                        </div>
+                        <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, marginBottom: 8 }}>{data.desc}</div>
+                        {/* Prerequisite */}
+                        <div style={{ fontSize: 11, marginBottom: 4 }}>
+                          <span style={{ color: prereqOk ? '#44ff88' : 'rgba(255,255,255,0.4)' }}>
+                            {prereqOk ? '✓' : '✗'} {prereqKey} 강화 {reqEnhance} 이상 ({prereqEnhance}/{reqEnhance})
+                          </span>
+                        </div>
+                        {/* Ore mats */}
+                        <div style={{ fontSize: 11, marginBottom: 4 }}>
+                          {Object.entries(oreMats).map(([ore, qty]) => {
+                            const have = gs.oreInventory?.[ore] ?? 0;
+                            const ok = have >= qty;
+                            return (
+                              <span key={ore} style={{ color: ok ? '#44ff88' : '#ff6666', marginRight: 8 }}>
+                                {ok ? '✓' : '✗'} {ore} ×{qty} ({have}/{qty})
+                              </span>
+                            );
+                          })}
+                        </div>
+                        {/* Fish mats */}
+                        {fishMats.length > 0 && (
+                          <div style={{ fontSize: 11, marginBottom: 8 }}>
+                            {fishMats.map(f => {
+                              const have = fishInv.some(fi => fi.name === f);
+                              return (
+                                <span key={f} style={{ color: have ? '#44ff88' : '#ff6666', marginRight: 8 }}>
+                                  {have ? '✓' : '✗'} {f} 1마리
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {!alreadyOwned && (
+                          <button
+                            disabled={!canCraft}
+                            onClick={() => {
+                              if (!canCraft) return;
+                              // Consume mats and add item
+                              setGs(prev => {
+                                const newOre = { ...prev.oreInventory };
+                                Object.entries(oreMats).forEach(([ore, qty]) => { newOre[ore] = (newOre[ore] ?? 0) - qty; });
+                                const usedFish = new Set();
+                                const newFishInv = prev.fishInventory.filter(fi => {
+                                  if (fishMats.includes(fi.name) && !usedFish.has(fi.name)) {
+                                    usedFish.add(fi.name);
+                                    return false;
+                                  }
+                                  return true;
+                                });
+                                if (type === 'rod') {
+                                  return { ...prev, oreInventory: newOre, fishInventory: newFishInv, ownedRods: [...(prev.ownedRods ?? []), key] };
+                                } else {
+                                  return { ...prev, oreInventory: newOre, fishInventory: newFishInv, ownedPickaxes: [...(prev.ownedPickaxes ?? []), key] };
+                                }
+                              });
+                              addMsg(`✨ ${data.name} 제작 완료! 장비 탭에서 장착하세요.`, 'catch');
+                            }}
+                            style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: canCraft ? '#ff44ff' : 'rgba(255,255,255,0.1)', color: canCraft ? '#fff' : 'rgba(255,255,255,0.35)', fontWeight: 700, fontSize: 12, cursor: canCraft ? 'pointer' : 'not-allowed' }}
+                          >
+                            {canCraft ? '제작하기' : '재료 부족'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
             {/* ── 업적 tab ── */}
             {statsTab === '업적' && (
               <div className="section">
@@ -1116,7 +1297,7 @@ export default function Sidebar(props) {
                         <div className="section-title">활성 펫</div>
                         <div className="rod-card" style={{ borderColor: 'rgba(255,170,0,0.4)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 24 }}>{pet?.icon}</span>
+                            <span className={evolvingPet === gs.activePet ? 'pet-evolving' : ''} style={{ fontSize: 24 }}>{pet?.icon}</span>
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 700, color: PET_RARITY_COLOR[pet?.rarity] ?? '#fff' }}>
                                 {pet?.name} <span style={{ color: '#ffcc44', fontSize: 12 }}>Lv.{level}</span>
@@ -1157,6 +1338,51 @@ export default function Sidebar(props) {
                               </div>
                             </div>
                           )}
+                          {/* ── 진화 패널 (MAX 레벨 달성 시) ── */}
+                          {level >= PET_MAX_LEVEL && (() => {
+                            const evolvedEntry = Object.entries(EVOLVE_REQUIREMENTS).find(([, r]) => r.basePet === gs.activePet);
+                            if (!evolvedEntry) return null;
+                            const [evolvedKey, req] = evolvedEntry;
+                            const alreadyEvolved = !!(gs.evolvedPets ?? {})[gs.activePet];
+                            if (alreadyEvolved) {
+                              const evoData = EVOLVED_PETS[evolvedKey];
+                              return (
+                                <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(255,68,255,0.12)', borderRadius: 6, border: '1px solid rgba(255,68,255,0.3)' }}>
+                                  <span className={evolvingPet === gs.activePet ? 'pet-evolved-icon' : ''} style={{ fontSize: 22, marginRight: 6 }}>{evoData?.icon}</span>
+                                  <span style={{ fontSize: 12, color: '#ff88ff', fontWeight: 700 }}>{evoData?.name} 진화 완료!</span>
+                                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 3 }}>{evoData?.desc}</div>
+                                </div>
+                              );
+                            }
+                            const gems = gs.specialItems?.evolutionGem ?? 0;
+                            const mythics = gs.specialItems?.mythicOre ?? 0;
+                            const canEvolve = gems >= req.evolutionGem && mythics >= req.mythicOre;
+                            const evoData = EVOLVED_PETS[evolvedKey];
+                            return (
+                              <div style={{ marginTop: 8, padding: '8px 10px', background: 'rgba(150,50,255,0.1)', borderRadius: 6, border: '1px solid rgba(150,50,255,0.3)' }}>
+                                <div style={{ fontWeight: 700, fontSize: 12, color: '#cc88ff', marginBottom: 4 }}>✨ 진화 가능: {evoData?.name}</div>
+                                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>{evoData?.desc}</div>
+                                <div style={{ fontSize: 11, marginBottom: 6 }}>
+                                  <span style={{ color: gems >= req.evolutionGem ? '#88ff88' : '#ff8888' }}>진화석 {gems}/{req.evolutionGem}</span>
+                                  {' · '}
+                                  <span style={{ color: mythics >= req.mythicOre ? '#88ff88' : '#ff8888' }}>신화광석 {mythics}/{req.mythicOre}</span>
+                                </div>
+                                <button
+                                  className={canEvolve ? 'btn-buy' : 'btn-dis'}
+                                  style={{ fontSize: 11, padding: '3px 10px', cursor: canEvolve ? 'pointer' : 'not-allowed' }}
+                                  disabled={!canEvolve}
+                                  onClick={() => {
+                                    if (!canEvolve) return;
+                                    setEvolvingPet(gs.activePet);
+                                    setTimeout(() => setEvolvingPet(null), 1400);
+                                    handlePetEvolve(evolvedKey);
+                                  }}
+                                >
+                                  진화하기
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -3065,6 +3291,9 @@ export default function Sidebar(props) {
                               const updatedStats = { ...prevStats, totalSold: (prevStats.totalSold ?? 0) + order.reward.money, maxMoney: Math.max(prevStats.maxMoney ?? 0, newState.money) };
                               setTimeout(() => checkAndGrantAchievements(updatedStats), 0);
                               newState.achStats = updatedStats;
+                              // Phase 12-5: delivery completion gives +10 activity points
+                              newState.activityPoints = (prev.activityPoints ?? 0) + 10;
+                              newState.totalPointsEarned = (prev.totalPointsEarned ?? 0) + 10;
                               return newState;
                             });
                             gainNpcAffinity(order.npc, order.reward.affinity);

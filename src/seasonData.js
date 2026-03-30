@@ -11,6 +11,7 @@ export const SEASONS = [
     fishPriceBonus: 0.20,
     gatherSpeedBonus: 0.15,
     color: '#ffaacc',
+    festival: { name: '벚꽃 낚시제', fishPriceBonus: 0.15, rareBonus: 0.05 },
     story: [
       '🌸 봄이 찾아왔습니다! 마을 전체에 벚꽃이 흩날리고 있어요.',
       '💬 민준: "봄이 오면 물고기들이 활발해져요! 지금이 낚시하기 딱 좋은 계절이죠."',
@@ -28,6 +29,7 @@ export const SEASONS = [
     oreBoostKey: '금광석',
     oreBoostMult: 1.5,
     color: '#ffcc44',
+    festival: { name: '여름 밤 낚시', fishSpeedBonus: 0.20 },
     story: [
       '☀️ 뜨거운 여름이 시작되었습니다! 바다 위 태양이 강렬하게 빛나고 있어요.',
       '💬 민준: "여름 낚시 대회 기간이에요! 희귀한 물고기들이 많이 나타날 거예요."',
@@ -44,6 +46,7 @@ export const SEASONS = [
     cropYieldBonus: 0.50,
     cropPriceBonus: 0.30,
     color: '#cc7733',
+    festival: { name: '풍년 수확제', cropPriceBonus: 0.30, herbYieldBonus: 0.20 },
     story: [
       '🍂 가을이 왔습니다! 단풍이 물들고 수확의 계절이 시작되었어요.',
       '💬 수연: "가을 작물로 만든 음식은 특별히 맛있죠. 올해 풍작을 기원해요!"',
@@ -60,6 +63,7 @@ export const SEASONS = [
     fishSpeedBonus: 0.10,
     staminaGainMult: 2.0,
     color: '#88ccff',
+    festival: { name: '얼음 낚시 대회', rareBonus: 0.25, mineSpeedBonus: 0.10 },
     story: [
       '❄️ 겨울이 찾아왔습니다! 마을에 눈이 소복이 쌓였어요.',
       '💬 미나: "추운 날씨에도 낚시를 즐기는 당신은 진정한 낚시꾼이에요! 여관에서 따뜻하게 쉬어가세요."',

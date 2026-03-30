@@ -1,7 +1,7 @@
 // ── WebSocket / Firebase Subscriptions + Game Sync Effects ──────────────────
 import { useEffect, useRef } from 'react';
 import { BOOTS, FISH } from '../gameData';
-import { PETS, PET_LEVEL_MULT, PET_MAX_LEVEL } from '../petData';
+import { PETS, PET_LEVEL_MULT, PET_MAX_LEVEL, EVOLVED_PETS } from '../petData';
 import { DEFAULT_ABILITIES } from '../abilityData';
 import { getWeather, msUntilNextWeather } from '../weatherData';
 import { getCurrentSeason } from '../seasonData';
@@ -348,6 +348,13 @@ export function useWebSocket(params) {
     if (!gameRef.current) return;
     const pet = gs.activePet ? PETS[gs.activePet] : null;
     if (!pet) { gameRef.current.petBonus = {}; return; }
+    // Check if this pet has evolved
+    const evolvedKey = (gs.evolvedPets ?? {})[gs.activePet];
+    if (evolvedKey && EVOLVED_PETS[evolvedKey]) {
+      // Evolved pets use fixed bonus (no level scaling)
+      gameRef.current.petBonus = { ...EVOLVED_PETS[evolvedKey].bonus };
+      return;
+    }
     const level = (gs.petLevels ?? {})[gs.activePet] ?? 1;
     const mult = PET_LEVEL_MULT[Math.min(level, PET_MAX_LEVEL) - 1] ?? 1.0;
     const scaledBonus = {};
@@ -359,7 +366,7 @@ export function useWebSocket(params) {
       }
     }
     gameRef.current.petBonus = scaledBonus;
-  }, [gs.activePet, gs.petLevels]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gs.activePet, gs.petLevels, gs.evolvedPets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!gameRef.current) return;
@@ -396,12 +403,19 @@ export function useWebSocket(params) {
     if (!gameRef.current) return;
     const oreMined = gs.achStats?.oreMined ?? 0;
     const exploredCount = (gs.exploredZones ?? []).length;
+    const visitedZones = gs.visitedZones ?? ['마을'];
+    const mineDepth = gs.mineDepth ?? 1;
+    const snowMasteryExp = gs.zoneMastery?.['북쪽고원'] ?? 0;
     const unlocked = ['마을', '서쪽초원'];
     if (oreMined >= 10) unlocked.push('동쪽절벽');
     if (exploredCount >= 2) unlocked.push('북쪽고원');
     if (gs.marineGear === '스쿠버다이빙세트') unlocked.push('남쪽심해');
+    // Phase 13: new zone unlock conditions
+    if (visitedZones.includes('남쪽심해') && mineDepth >= 3) unlocked.push('항구마을');
+    if (gs.seenChapter4 && exploredCount >= 3) unlocked.push('고대신전');
+    if (snowMasteryExp >= 60) unlocked.push('설산정상'); // Lv3 = 60 exp
     gameRef.current.unlockedZones = unlocked;
-  }, [gs.marineGear, gs.achStats, gs.exploredZones]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gs.marineGear, gs.achStats, gs.exploredZones, gs.visitedZones, gs.mineDepth, gs.seenChapter4, gs.zoneMastery]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Rain auto-waters crops ────────────────────────────────────────────────
   useEffect(() => {

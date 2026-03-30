@@ -229,6 +229,63 @@ export const TITLES = [
     bonus: { fishTimeMult: 0.85, sellBonus: 0.15 },
     condition: (gs) => (gs.prestigeCount ?? 0) >= 5,
   },
+  // Phase 12-4: 전문 직업 칭호
+  {
+    label: '전문 낚시사', color: '#44aaff',
+    unlockDesc: '전문 직업: 낚시사 선택',
+    effectDesc: '낚시 속도 +8% · 낚시 판매가 +10%',
+    bonus: {},
+    condition: (gs) => gs.jobClass === '낚시사',
+  },
+  {
+    label: '전문 광부', color: '#ffaa44',
+    unlockDesc: '전문 직업: 광부 선택',
+    effectDesc: '채굴 속도 +8% · 광석 대박 +8%',
+    bonus: {},
+    condition: (gs) => gs.jobClass === '광부',
+  },
+  {
+    label: '전문 요리사', color: '#ff8844',
+    unlockDesc: '전문 직업: 요리사 선택',
+    effectDesc: '요리 시간 -20% · 요리 판매가 +15%',
+    bonus: {},
+    condition: (gs) => gs.jobClass === '요리사',
+  },
+  // Phase 12-5: 포인트 상점 칭호
+  {
+    label: '포인트의 달인', color: '#ffdd44',
+    unlockDesc: '활동 포인트 상점에서 특별 칭호 구매',
+    effectDesc: '판매가 +5%',
+    bonus: { sellBonus: 0.05 },
+    condition: (gs) => (gs.ownedPointTitles ?? []).includes('포인트의달인'),
+  },
+  // Phase 13: New zone titles
+  {
+    label: '항구의 왕',    color: '#44ddaa',
+    unlockDesc: '항구 마을 물고기 판매 누적 100,000G',
+    effectDesc: '생선 판매가 +12%',
+    bonus: { fishSellBonus: 0.12 },
+    condition: (gs) => (gs.harborFishSellTotal ?? 0) >= 100000,
+  },
+  {
+    label: '유적의 수호자', color: '#cc9944',
+    unlockDesc: '고대 신전 방문 + 고대잉어 포획',
+    effectDesc: '채굴 속도 +10% · 판매가 +5%',
+    bonus: { mineTimeMult: 0.90, sellBonus: 0.05 },
+    condition: (gs) => (gs.visitedZones ?? []).includes('고대신전') && (gs.caughtSpecies ?? []).includes('고대잉어'),
+  },
+  {
+    label: '설산의 은둔자', color: '#aaddff',
+    unlockDesc: '설산 정상 숙련도 Lv3 달성',
+    effectDesc: '오프라인 수입 +20% · 채굴 속도 +8%',
+    bonus: { offlineBonus: 0.20, mineTimeMult: 0.92 },
+    condition: (gs) => {
+      const exp = gs.zoneMastery?.['설산정상'] ?? 0;
+      let lv = 0;
+      for (const t of [10, 30, 60, 100, 150]) if (exp >= t) lv++;
+      return lv >= 3;
+    },
+  },
 ];
 
 // Auto title: highest-priority qualifying title

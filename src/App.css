@@ -1556,3 +1556,45 @@ canvas { touch-action: none; }
   max-width: 420px;
   color: #e0e8f0;
 }
+
+/* ── Pet evolution animation ─────────────────────────────────────────────── */
+@keyframes petEvolveFlash {
+  0%   { filter: brightness(1)   drop-shadow(0 0 0px transparent); }
+  20%  { filter: brightness(3)   drop-shadow(0 0 12px #ffffaa); }
+  40%  { filter: brightness(1.2) drop-shadow(0 0 6px #cc88ff); }
+  60%  { filter: brightness(4)   drop-shadow(0 0 18px #ffffff); }
+  80%  { filter: brightness(1.5) drop-shadow(0 0 8px #88aaff); }
+  100% { filter: brightness(1)   drop-shadow(0 0 0px transparent); }
+}
+@keyframes petEvolveIconPop {
+  0%   { transform: scale(0.5) rotate(-15deg); opacity: 0; }
+  50%  { transform: scale(1.4) rotate(8deg);  opacity: 1; }
+  75%  { transform: scale(0.9) rotate(-3deg); }
+  100% { transform: scale(1)   rotate(0deg);  opacity: 1; }
+}
+.pet-evolving {
+  animation: petEvolveFlash 1.2s ease forwards;
+}
+.pet-evolved-icon {
+  display: inline-block;
+  animation: petEvolveIconPop 0.6s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+
+
+/* ── Phase 13: Map transition wipe ─────────────────────────────────────────── */
+@keyframes mapWipeIn {
+  0%   { transform: translateX(-100%); opacity: 1; }
+  100% { transform: translateX(0%);    opacity: 1; }
+}
+@keyframes mapWipeOut {
+  0%   { transform: translateX(0%);   opacity: 1; }
+  100% { transform: translateX(100%); opacity: 1; }
+}
+.map-wipe-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  pointer-events: none;
+  z-index: 500;
+  animation: mapWipeIn 0.15s ease-in forwards, mapWipeOut 0.15s ease-out 0.15s forwards;
+}

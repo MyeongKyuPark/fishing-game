@@ -5,9 +5,9 @@ import { getSettings } from './settingsManager';
 import {
   CHAIR_RANGE, PLAYER_START_X, PLAYER_START_Y, pickOre, pickHerb,
   COOKING_TX, COOKING_TY,
-  ZONE_CONNECTIONS, ZONE_TILES, ZONE_LABELS, ZONE_TRAVEL_NPCS,
+  ZONE_CONNECTIONS, ZONE_TILES, ZONE_LABELS,
   setActiveZone, getActiveZone, getActiveChairs, getActiveDoors,
-  getActiveForest, getActiveMineEntrance,
+  getActiveForest, getActiveMineEntrance, getActiveZoneNpcs,
 } from './mapData';
 
 import { PW, PH, MAX_SPEED, FRICTION, ACCEL } from './game/constants';
@@ -413,14 +413,14 @@ export default function GameCanvas({
 
       // ── Zone traveling NPC proximity ──
       {
-        const activeZone = getActiveZone();
-        const zoneNpc = ZONE_TRAVEL_NPCS[activeZone] ?? null;
+        const zoneNpcs = getActiveZoneNpcs();
         let nearNpc = null;
-        if (zoneNpc) {
-          const nx2 = zoneNpc.tx * TILE_SIZE + TILE_SIZE / 2;
-          const ny2 = zoneNpc.ty * TILE_SIZE + TILE_SIZE / 2;
+        for (const npc of zoneNpcs) {
+          const nx2 = npc.tx * TILE_SIZE + TILE_SIZE / 2;
+          const ny2 = npc.ty * TILE_SIZE + TILE_SIZE / 2;
           if (Math.hypot(player.x - nx2, player.y - ny2) <= TILE_SIZE * 2.5) {
-            nearNpc = zoneNpc;
+            nearNpc = npc;
+            break;
           }
         }
         nearZoneNpcRef.current = nearNpc;
@@ -612,20 +612,17 @@ export default function GameCanvas({
 
       // Zone traveling NPC rendering
       {
-        const activeZone = getActiveZone();
-        const zoneNpc = ZONE_TRAVEL_NPCS[activeZone];
-        if (zoneNpc) {
+        const zoneNpcs = getActiveZoneNpcs();
+        for (const zoneNpc of zoneNpcs) {
           const nx2 = zoneNpc.tx * TILE_SIZE + TILE_SIZE / 2 - camX;
           const ny2 = zoneNpc.ty * TILE_SIZE + TILE_SIZE / 2 - camY;
           if (nx2 > -40 && nx2 < W + 40 && ny2 > -60 && ny2 < H + 20) {
             const bob = Math.sin(performance.now() / 600) * 2;
-            // Shadow
             ctx.save();
             ctx.fillStyle = 'rgba(0,0,0,0.2)';
             ctx.beginPath();
             ctx.ellipse(nx2, ny2 + 14, 12, 5, 0, 0, Math.PI * 2);
             ctx.fill();
-            // Body circle
             ctx.fillStyle = zoneNpc.color + '33';
             ctx.strokeStyle = zoneNpc.color;
             ctx.lineWidth = 2;
@@ -633,13 +630,11 @@ export default function GameCanvas({
             ctx.arc(nx2, ny2 - 8 + bob, 14, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
-            // Emoji icon
             ctx.font = '20px serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(zoneNpc.icon, nx2, ny2 - 8 + bob);
             ctx.textBaseline = 'alphabetic';
-            // Name label
             ctx.font = 'bold 11px "Noto Sans KR", sans-serif';
             ctx.textAlign = 'center';
             const nameW = ctx.measureText(zoneNpc.name).width;
@@ -649,7 +644,6 @@ export default function GameCanvas({
             ctx.fill();
             ctx.fillStyle = zoneNpc.color;
             ctx.fillText(zoneNpc.name, nx2, ny2 - 22 + bob);
-            // Interact hint when near
             if (nearZoneNpcRef.current?.id === zoneNpc.id) {
               const hint = '[F] 대화하기';
               const hw = ctx.measureText(hint).width;

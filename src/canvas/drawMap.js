@@ -93,6 +93,14 @@ export function drawTile(ctx, tx, ty, sx, sy) {
       ctx.fillStyle = `rgba(50,100,30,0.50)`;
       ctx.beginPath(); ctx.arc(cx2 - 3, cy2 - 2, 5, 0, Math.PI * 2); ctx.fill();
     }
+  } else if (t === TILE.SNOW) {
+    const v = ((tx * 7 + ty * 11) % 8) / 8;
+    ctx.fillStyle = `rgb(${210 + Math.floor(v * 30)},${220 + Math.floor(v * 25)},${235 + Math.floor(v * 20)})`;
+    ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
+    if ((tx * 5 + ty * 9) % 7 === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillRect(sx + (tx * 9 % 22) + 2, sy + (ty * 7 % 18) + 4, 3, 3);
+    }
   } else {
     ctx.fillStyle = TILE_COLOR[t] ?? '#333';
     ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
