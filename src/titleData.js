@@ -304,6 +304,71 @@ export const TITLES = [
     bonus: { offlineBonus: 0.10 },
     condition: (gs) => (gs.cottageLevel ?? 1) >= 4,
   },
+  // Phase 16-4: 친구 칭호
+  {
+    label: '타이드헤이븐의 라이벌', color: '#ff88aa',
+    unlockDesc: '주간 목표 누적 20회 완료',
+    effectDesc: '경험치 획득 +5% · 판매가 +5%',
+    bonus: { abilExpBonus: 0.05, sellBonus: 0.05 },
+    condition: (gs) => (gs.achStats?.totalWeeklyGoalsCompleted ?? 0) >= 20,
+  },
+  // Phase 16-3: 날씨 이벤트 칭호
+  {
+    label: '날씨의 마법사',  color: '#aaffee',
+    unlockDesc: '모든 날씨 이벤트 종류 경험 + 황금조류·마법안개·풍요의비 경험',
+    effectDesc: '경험치 획득 +8% · 판매가 +5%',
+    bonus: { abilExpBonus: 0.08, sellBonus: 0.05 },
+    condition: (gs) => (gs.achStats?.weatherEventsExperienced ?? 0) >= 6,
+  },
+  // Phase 16-2: 장인 작업대 칭호
+  {
+    label: '타이드헤이븐의 장인', color: '#ffcc88',
+    unlockDesc: '장인 레시피 8가지 모두 1회 이상 제작',
+    effectDesc: '판매가 +6% · 채굴 속도 +6%',
+    bonus: { sellBonus: 0.06, mineTimeMult: 0.94 },
+    condition: (gs) => (gs.achStats?.artisanUniqueCount ?? 0) >= 8,
+  },
+  // Phase 16-1: 낚시 마스터리 칭호
+  {
+    label: '경지의 어부',    color: '#88ffcc',
+    unlockDesc: '낚시 마스터리 페르크 12개 모두 해금',
+    effectDesc: '낚시 속도 +5% · 생선 판매가 +5% · 심해 희귀도 +5%',
+    bonus: { fishTimeMult: 0.95, fishSellBonus: 0.05, deepRarityBonus: 0.05 },
+    condition: (gs) => Object.values(gs.masteryPerks ?? {}).filter(Boolean).length >= 12,
+  },
+  // Phase 15-1: 보스 칭호
+  {
+    label: '용사의 귀환',    color: '#ff6644',
+    unlockDesc: '서버 공동 보스 최고 기여 3회',
+    effectDesc: '판매가 +10% · 낚시 속도 +5%',
+    bonus: { sellBonus: 0.10, fishTimeMult: 0.95 },
+    condition: (gs) => (gs.achStats?.bossTopKills ?? 0) >= 3,
+  },
+  // Phase 16-5: 외곽 NPC S2 칭호
+  {
+    label: '타이드헤이븐의 수호자', color: '#88ddff',
+    unlockDesc: '외곽 NPC S2 의뢰 4종 완수 + NPC 친밀도 5명 50 이상',
+    effectDesc: '낚시 속도 +4% · NPC 친밀도 획득 +15%',
+    bonus: { fishTimeMult: 0.96, npcAffinityMult: 1.15 },
+    condition: (gs) => {
+      const outer = ['행상인','노련한광부','산신령','심해탐험가','어시장상인','선장','유물학자','설인'];
+      const s2Count = outer.filter(k => {
+        const step = gs.npcQuestStep?.[k] ?? 0;
+        return step >= 2;
+      }).length;
+      return s2Count >= 4 && (gs.achStats?.npcAt50 ?? 0) >= 5;
+    },
+  },
+  {
+    label: '전설의 어촌 영웅',   color: '#ffdd55',
+    unlockDesc: '외곽 NPC S2 의뢰 8종 모두 완수',
+    effectDesc: '판매가 +8% · 낚시 속도 +5% · NPC 친밀도 획득 +20%',
+    bonus: { sellBonus: 0.08, fishTimeMult: 0.95, npcAffinityMult: 1.20 },
+    condition: (gs) => {
+      const outer = ['행상인','노련한광부','산신령','심해탐험가','어시장상인','선장','유물학자','설인'];
+      return outer.every(k => (gs.npcQuestStep?.[k] ?? 0) >= 2);
+    },
+  },
 ];
 
 // Auto title: highest-priority qualifying title

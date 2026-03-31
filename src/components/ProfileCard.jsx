@@ -5,7 +5,7 @@ import { FISH } from '../gameData';
 
 const RARITY_COLORS = { 흔함: '#909090', 보통: '#44aaff', 희귀: '#aa44ff', 전설: '#ffaa00', 신화: '#ff44ff' };
 
-export default function ProfileCard({ gs, nickname, onClose }) {
+export default function ProfileCard({ gs, nickname, onClose, onShare }) {
   if (!gs || !nickname) return null;
 
   const title = getTitle(gs);
@@ -29,6 +29,7 @@ export default function ProfileCard({ gs, nickname, onClose }) {
       `💰 총 획득 골드: ${(totalGoldEarned ?? 0).toLocaleString()}G`,
     ];
     navigator.clipboard?.writeText(lines.join('\n')).catch(() => {});
+    if (onShare) onShare();
   };
 
   return (

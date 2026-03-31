@@ -844,15 +844,15 @@
 
 ### 15-1. 세계 보스 이벤트 시스템 (World Boss Event)
 
-- [ ] `ranking.js` — `damageServerBoss(amount, nickname)` 시그니처 확장: Firestore transaction 내 `contributors.${nickname} += amount` 업데이트
-- [ ] `ranking.js` — `distributeServerBossRewards(bossData)` 함수 신규 작성: 기여도 비례 보상 → `sendPlayerMail()` 발송
-- [ ] `App.jsx` — `damageServerBoss` 호출 3곳 모두 `nickname` 인자 전달
-- [ ] `App.jsx` — `serverBoss` onSnapshot에서 `hp <= 0 && !data.rewarded` 감지 시 `distributeServerBossRewards()` 호출
-- [ ] `App.jsx` — `DEFAULT_STATE` + `loadSave()` — `bossContribHistory: []` 추가
+- [x] `ranking.js` — `damageServerBoss(amount, nickname)` 시그니처 확장: Firestore transaction 내 `contributors.${nickname} += amount` 업데이트
+- [x] `ranking.js` — `distributeServerBossRewards(bossData)` 함수 신규 작성: 기여도 비례 보상 → `boss_rewards` 컬렉션 발송
+- [x] `App.jsx` — `damageServerBoss` 호출 5곳 모두 `nickname` 인자 전달
+- [x] `useWebSocket.js` — 보스 hp=0 감지 시 `distributeServerBossRewards()` 호출 + achStats 업데이트
+- [x] `App.jsx` — `DEFAULT_STATE` + `loadSave()` — `bossContribHistory: []` 추가
 - [ ] `AdminPanel.jsx` — 보스 스폰 UI: 보스 3종 드롭다운 + HP 슬라이더 + zoneName
-- [ ] `components/TopBar.jsx` — 보스 HP 바 색상 3단계 (녹→황→적) + 기여자 수 표시
-- [ ] 업적 2종: '보스 참전자', '보스 처치자'
-- [ ] 칭호 1종: '용사의 귀환' (보스 3회 상위 기여)
+- [x] `components/TopBar.jsx` — 보스 HP 바 색상 3단계 (녹→황→적) + 기여자 수 표시
+- [x] 업적 2종: '보스 참전자', '보스 처치자'
+- [x] 칭호 1종: '용사의 귀환' (보스 3회 상위 기여)
 
 ### 15-2. NPC 선물 시스템 (NPC Gift System)
 
@@ -866,13 +866,13 @@
 
 ### 15-3. 시즌 리그 & 플레이어 프로필 카드
 
-- [ ] `ranking.js` — `claimSeasonReward(nickname, rank)` 함수: 순위별 보상 우편함 발송
-- [ ] `Leaderboard.jsx` — '🎖 시즌 리그' 탭 추가
-- [ ] `DEFAULT_STATE` + `loadSave()` — `seasonRewardClaimed: {}` 추가
-- [ ] `components/ProfileCard.jsx` — 신규: 닉네임/칭호/아바타/통계/도감완성률/대표업적 카드
-- [ ] `App.jsx` — 로그인 시 이전 시즌 보상 자동 지급 (1회 보장)
-- [ ] `components/Sidebar.jsx` — 스탯 패널 "내 프로필 카드" 버튼 추가
-- [ ] 업적 1종: '기록의 증인' (공유하기 1회)
+- [x] `ranking.js` — `claimSeasonReward(nickname, season)` 함수: 이전 시즌 보상 1회 청구
+- [x] `Leaderboard.jsx` — '🎖 시즌 리그' 탭 추가
+- [x] `DEFAULT_STATE` + `loadSave()` — `seasonRewardClaimed: {}` 추가
+- [x] `components/ProfileCard.jsx` — 신규: 닉네임/칭호/아바타/통계/도감완성률/대표업적 카드
+- [x] `App.jsx` — 로그인 시 이전 시즌 보상 자동 지급 (1회 보장)
+- [x] `components/Sidebar.jsx` — 스탯 패널 "내 프로필 카드" 버튼 추가
+- [x] 업적 1종: '기록의 증인' (공유하기 1회)
 
 ### 15-4. 존별 낚시 미니게임 변형
 
@@ -898,3 +898,65 @@
 - [x] `npm run build` 최종 빌드 확인 ✅
 
 *마지막 업데이트: 2026-03-30*
+
+---
+
+## Phase 16 — 종합 성장 심화 & 라이브 서비스 완성
+
+> Phase 15까지 구현된 8존 월드, 오두막 업그레이드, NPC 선물, 미니게임 변형, 시즌 리그, 월드 보스를 기반으로 **엔드게임 빌드 다양성**, **장인 제작 심화**, **동적 날씨 이벤트**, **친구/라이벌 경쟁**, **외곽 NPC 퀘스트 완성**의 다섯 축으로 확장한다.
+
+### 16-1. 낚시 마스터리 특성 트리 (Fishing Mastery Perk Tree)
+
+- [x] `src/abilityData.js` — `MASTERY_PERKS` 상수 추가 (3경로 × 4단계 = 12종 페르크) + `getMasteryBonus()` 함수
+- [x] `src/hooks/useGameState.js` — `masteryPerks: {}`, `masteryPerkPoints: 0` 추가 + `loadSave()` 마이그레이션
+- [x] `src/components/Sidebar.jsx` — 그레이드�� 시 낚시 어빌리티면 `masteryPerkPoints += 1`; 어빌리티 탭 하단에 마스터리 트리 UI 추가
+- [x] `src/App.jsx` — 낚시 공식 2곳에 `masteryFishMult` 적용; 판매 공식에 `masteryFishSellBonus` 적용; 희귀도 공식에 `masteryDeepBonus` 적용
+- [x] 업적 2종: '특성 개척자' (페르크 1개), '경지의 어부' (페르크 12개 모두)
+- [x] 칭호 1종: '경지의 어부' (페르크 12개 모두)
+
+### 16-2. 장인 작업대 & 세트 장비 보너스 (Artisan Workbench)
+
+- [x] `src/gameData.js` — `ARTISAN_RECIPES` (8종), `EQUIPMENT_SETS` (3세트), `getActiveSetBonus()` 추가
+- [x] `src/hooks/useGameState.js` — `artisanLog: {}` 추가 + `loadSave()` 마이그레이션
+- [x] `src/App.jsx` — `handleArtisanCraft(recipeKey)` 콜백 추가
+- [x] `src/App.jsx` — `getActiveSetBonus` → 낚시 판매가·채굴 시간·희귀도 공식에 합산
+- [x] `src/components/Sidebar.jsx` — '장인 작업대' 탭 추가 (레시피 카드 + 세트 보너스 현황)
+- [x] 업적 2종: '장인 작업대 개통' (첫 제작), '세트의 완성' (4종 이상 제작)
+- [x] 칭호 1종: '타이드헤이븐의 장인' (8종 모두 제작)
+
+### 16-3. 동적 날씨 이벤트 시스템 (Dynamic Weather Events)
+
+- [x] `src/weatherData.js` — `WEATHER_EVENTS` 상수 추가 (6종); `getWeatherForecast(roomId, n)` 함수 추가
+- [x] `src/hooks/useGameState.js` — `weatherEventHistory: []` 추가 + `loadSave()` 마이그레이션
+- [x] `src/hooks/useWebSocket.js` — `server_events` 구독에서 `weatherEvent` 타입 처리 → achStats 업데이트 + HUD 반영
+- [x] `src/App.jsx` — `activeWeatherEvent` ref → 낚시 판매가·희귀도·능력치경험·채굴 시간 공식에 적용
+- [x] `src/components/TopBar.jsx` — 날씨 칩에 다음 예보 아이콘 표시 (title tooltip) + 활성 날씨 이벤트 HUD 칩
+- [ ] `src/AdminPanel.jsx` — 날씨 이벤트 수동 발동 드롭다운 추가
+- [x] 업적 1종: '날씨 관찰자' (모든 이벤트 날씨 6종 경험)
+- [x] 칭호 1종: '날씨의 마법사' (6종 이벤트 날씨 모두 경험)
+
+### 16-4. 친구 & 주간 목표 시스템 (Friends & Weekly Goals)
+
+- [ ] `src/ranking.js` — `addFriend`, `removeFriend`, `subscribeFriends`, `subscribeFriendScores` 함수 추가
+- [ ] `src/hooks/useGameState.js` — `friends: []`, `weeklyGoals: {}`, `weeklyGoalDate: ''` 추가 + `loadSave()` 마이그레이션
+- [ ] `src/hooks/useWebSocket.js` — `subscribeFriends` onSnapshot 등록
+- [ ] `src/App.jsx` — `handleAddFriend`, `handleRemoveFriend` 콜백; `weeklyGoals` 진행도 집계; 주간 리셋 감지
+- [ ] `src/components/Sidebar.jsx` — 랭킹 탭에 "친구 리그" 서브탭 + "주간 목표" 카드 (3종 목표 진행 바 + 수령 버튼)
+- [ ] `src/components/TopBar.jsx` — 온라인 친구 수 칩 추가
+- [ ] 업적 2종: '사교적인 어부' (친구 3명), '라이벌' (주간 목표 4주 연속 완료)
+- [ ] 칭호 1종: '타이드헤이븐의 라이벌' (주간 목표 누적 20주 완료)
+
+### 16-5. 외곽 NPC 시즌 II 이벤트 퀘스트
+
+- ✅ `src/npcQuestData.js` — 외곽 NPC 8종 각 2단계 S2 퀘스트 체인 추가
+- ✅ `src/hooks/useGameState.js` — `npcQuestS2Done: []` 추가 + `loadSave()` 마이그레이션
+- ✅ `src/App.jsx` — `checkNpcQuest` 콜백에 S2 체인 분기 + 최종 보상 지급 (골드 + 특수 아이템)
+- ✅ `src/components/NpcDialogue.jsx` — 외곽 NPC 8종 대화 패널에 S2 퀘스트 진행 UI 추가
+- ✅ `src/components/Sidebar.jsx` — 관계도 탭 외곽 NPC S2 진행도 표시 (기존 코드 자동 처리)
+- ✅ 업적 3종: '외곽 탐험가' (S2 퀘스트 4종), '진정한 타이드헤이버' (S2 전체), '전설의 낚시 마을' (S2 전체 + NPC 50 x10)
+- ✅ 칭호 2종: '타이드헤이븐의 수호자', '전설의 어촌 영웅'
+
+### Phase 16 공통
+
+- ✅ 신규 `DEFAULT_STATE` 필드 전체 `loadSave()` 마이그레이션 확인
+- ✅ `npm run build` 최종 빌드 확인

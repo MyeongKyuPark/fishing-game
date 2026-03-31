@@ -4,9 +4,10 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
   ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, TOPS, BOTTOMS, BELTS, ROD_SKINS, SPOT_DECOS, FURNITURE,
-  BAIT_RECIPES, DELIVERY_ORDER_POOL } from '../gameData';
+  BAIT_RECIPES, DELIVERY_ORDER_POOL,
+  ARTISAN_RECIPES, EQUIPMENT_SETS, getActiveSetBonus } from '../gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, doGradeUp, gradeRareBonus,
-  SELL_ABILITY_PER_100G, ENHANCE_ABILITY_GAIN } from '../abilityData';
+  SELL_ABILITY_PER_100G, ENHANCE_ABILITY_GAIN, MASTERY_PERKS, getMasteryBonus } from '../abilityData';
 import { getTitle, TITLES } from '../titleData';
 import { PETS, EVOLVED_PETS, EVOLVE_REQUIREMENTS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from '../petData';
 import { JOB_CLASSES } from '../jobData';
@@ -21,7 +22,7 @@ import { createGuild, joinGuild, leaveGuild, sendGuildChat,
   contributeGuildXP, fetchGuildWarehouse, addToGuildWarehouse, removeFromGuildWarehouse } from '../guildData';
 import { listItem, buyItem, cancelListing } from '../marketData';
 import Leaderboard from '../Leaderboard';
-import { rarityColor, SKIN_PRESETS } from '../hooks/useGameState';
+import { rarityColor, SKIN_PRESETS, getWeeklyGoals } from '../hooks/useGameState';
 import CottagePanel from './CottagePanel';
 import { sendPlayerMail, fetchMailbox, clearMailbox, subscribeSeasonRankings, getSeasonKey } from '../ranking';
 
@@ -73,6 +74,8 @@ export default function Sidebar(props) {
     handlePetEvolve, handleChooseJobClass,
     handleCottageUpgrade,
     setShowProfileCard,
+    onArtisanCraft,
+    handleAddFriend, handleRemoveFriend, claimWeeklyGoalReward,
   } = props;
 
   const myTitle = getTitle(gs);
@@ -299,7 +302,7 @@ export default function Sidebar(props) {
 
             {/* Tabs */}
             <div className="stats-tabs">
-              {['장비', '어빌리티', '제련/제작', '전설 제작', '업적', '펫', '관계도', '탐험', '농장', '박제실'].map(tab => (
+              {['장비', '어빌리티', '제련/제작', '전설 제작', '장인 작업대', '업적', '펫', '관계도', '탐험', '농장', '박제실'].map(tab => (
                 <button key={tab} tabIndex={-1}
                   className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''}`}
                   onClick={() => setStatsTab(tab)}>{tab}</button>
@@ -628,6 +631,7 @@ export default function Sidebar(props) {
                                 ...prev,
                                 abilities: { ...(prev.abilities ?? DEFAULT_ABILITIES),
                                   [name]: doGradeUp(prev.abilities?.[name] ?? { value: 100, grade: 0 }) },
+                                masteryPerkPoints: name === '낚시' ? (prev.masteryPerkPoints ?? 0) + 1 : (prev.masteryPerkPoints ?? 0),
                               }));
                               addMsg(`🌟 ${def.icon} ${name} 그레이드 ${ab.grade + 1} 달성! 희귀 보너스 +${((ab.grade + 1) * 10)}%`, 'catch');
                               playLevelUp();
@@ -900,6 +904,81 @@ export default function Sidebar(props) {
                     </div>
                   ) : null;
                 })()}
+                {/* ── 낚시 마스터리 특성 트리 ── */}
+                <div className="section">
+                  <div className="section-title">🌿 낚시 마스터리 특성
+                    <span style={{ float: 'right', fontSize: 11, color: '#ffcc44' }}>
+                      포인트: {gs.masteryPerkPoints ?? 0}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 8 }}>
+                    낚시 어빌리티 그레이드업 시 특성 포인트 1 획득. 경로 하나를 특화하세요.
+                  </div>
+                  {['빠른낚시', '황금어부', '심해개척'].map(path => {
+                    const pathColor = { 빠른낚시: '#44aaff', 황금어부: '#ffd700', 심해개척: '#aa44ff' }[path];
+                    const pathPerks = Object.entries(MASTERY_PERKS).filter(([, p]) => p.path === path);
+                    return (
+                      <div key={path} style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: pathColor, marginBottom: 4 }}>{path}</div>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {pathPerks.map(([id, perk]) => {
+                            const unlocked = !!(gs.masteryPerks?.[id]);
+                            const reqMet = !perk.req || !!(gs.masteryPerks?.[perk.req]);
+                            const canUnlock = !unlocked && reqMet && (gs.masteryPerkPoints ?? 0) >= perk.cost;
+                            const bonusDesc = Object.entries(perk.bonus).map(([k, v]) => {
+                              if (k === 'fishTimeMult') return `속도 +${Math.round((1 - v) * 100)}%`;
+                              if (k === 'fishSellBonus') return `판매 +${Math.round(v * 100)}%`;
+                              if (k === 'deepRarityBonus') return `희귀도 +${Math.round(v * 100)}%`;
+                              return '';
+                            }).join(' · ');
+                            return (
+                              <div key={id} style={{
+                                padding: '5px 9px', borderRadius: 6, fontSize: 11,
+                                background: unlocked ? `${pathColor}33` : 'rgba(255,255,255,0.05)',
+                                border: `1px solid ${unlocked ? pathColor : 'rgba(255,255,255,0.15)'}`,
+                                opacity: reqMet ? 1 : 0.4, minWidth: 90,
+                              }}>
+                                <div style={{ fontWeight: 700, color: unlocked ? pathColor : '#ccc' }}>{perk.label}</div>
+                                <div style={{ color: '#aaa', fontSize: 10, margin: '2px 0' }}>{bonusDesc}</div>
+                                {!unlocked && (
+                                  <button
+                                    className="btn-buy"
+                                    style={{ fontSize: 10, padding: '2px 7px', marginTop: 2,
+                                      background: canUnlock ? pathColor : 'rgba(255,255,255,0.1)',
+                                      color: canUnlock ? '#000' : '#666', cursor: canUnlock ? 'pointer' : 'not-allowed' }}
+                                    disabled={!canUnlock}
+                                    onClick={() => {
+                                      if (!canUnlock) return;
+                                      setGs(prev => ({
+                                        ...prev,
+                                        masteryPerks: { ...(prev.masteryPerks ?? {}), [id]: true },
+                                        masteryPerkPoints: (prev.masteryPerkPoints ?? 0) - perk.cost,
+                                        achStats: { ...(prev.achStats ?? {}),
+                                          masteryPerkCount: ((prev.achStats?.masteryPerkCount ?? 0) + 1) },
+                                      }));
+                                    }}
+                                  >
+                                    해금 ({perk.cost}pt)
+                                  </button>
+                                )}
+                                {unlocked && <div style={{ color: '#88ff88', fontSize: 10 }}>✓ 해금됨</div>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(() => {
+                    const mb = getMasteryBonus(gs.masteryPerks ?? {});
+                    const parts = [];
+                    if (mb.fishTimeMult < 1) parts.push(`낚시 속도 +${Math.round((1 - mb.fishTimeMult) * 100)}%`);
+                    if (mb.fishSellBonus > 0) parts.push(`생선 판매가 +${Math.round(mb.fishSellBonus * 100)}%`);
+                    if (mb.deepRarityBonus > 0) parts.push(`심해 희귀도 +${Math.round(mb.deepRarityBonus * 100)}%`);
+                    if (parts.length === 0) return null;
+                    return <div style={{ fontSize: 11, color: '#88ffcc', marginTop: 4 }}>현재 합산: {parts.join(' · ')}</div>;
+                  })()}
+                </div>
               </>
             )}
 
@@ -1248,9 +1327,151 @@ export default function Sidebar(props) {
               );
             })()}
 
-            {/* ── 업적 tab ── */}
-            {statsTab === '업적' && (
+            {/* ── 장인 작업대 tab ── */}
+            {statsTab === '장인 작업대' && (
               <div className="section">
+                <div className="section-title">🔨 장인 작업대</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 10 }}>
+                  고급 재료를 조합해 특수 보석·미끼·광석을 제작합니다.
+                </div>
+                {/* Set bonus display */}
+                {(() => {
+                  const sb = getActiveSetBonus(gs);
+                  const parts = [];
+                  if (sb.deepRarityBonus) parts.push(`심해 희귀도 +${Math.round(sb.deepRarityBonus*100)}%`);
+                  if (sb.fishSellBonus) parts.push(`생선 판매 +${Math.round(sb.fishSellBonus*100)}%`);
+                  if (sb.sellBonus) parts.push(`판매가 +${Math.round(sb.sellBonus*100)}%`);
+                  if (sb.mineTimeMult) parts.push(`채굴 속도 +${Math.round((1-sb.mineTimeMult)*100)}%`);
+                  if (sb.offlineBonus) parts.push(`오프라인 +${Math.round(sb.offlineBonus*100)}%`);
+                  if (sb.windfallBonus) parts.push(`대박 +${Math.round(sb.windfallBonus*100)}%`);
+                  if (parts.length === 0) return null;
+                  return <div style={{ fontSize: 11, color: '#88ffcc', background: 'rgba(100,255,180,0.08)', borderRadius: 6, padding: '4px 8px', marginBottom: 8 }}>
+                    ✨ 세트 보너스 활성: {parts.join(' · ')}
+                  </div>;
+                })()}
+                {/* Equipment sets guide */}
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: '#ffcc44', marginBottom: 4 }}>세트 장비 보너스</div>
+                  {Object.entries(EQUIPMENT_SETS).map(([key, setDef]) => {
+                    const equipped = [gs.outfit, gs.hat, gs.belt, gs.top, gs.bottom].filter(Boolean);
+                    const completedPieces = setDef.pieces.filter(p => equipped.includes(p)).length;
+                    const complete = completedPieces === setDef.pieces.length;
+                    return (
+                      <div key={key} style={{ marginBottom: 6, padding: '6px 8px', borderRadius: 6, border: `1px solid ${complete ? setDef.color : 'rgba(255,255,255,0.1)'}`, background: complete ? `${setDef.color}11` : 'transparent' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: setDef.color }}>
+                          {complete ? '✓ ' : ''}{setDef.label} ({completedPieces}/{setDef.pieces.length})
+                        </div>
+                        <div style={{ fontSize: 10, color: '#aaa', marginTop: 2 }}>{setDef.desc}</div>
+                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+                          {setDef.pieces.map(p => <span key={p} style={{ marginRight: 6, color: equipped.includes(p) ? '#88ffaa' : '#666' }}>{p}</span>)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Artisan recipes */}
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#ffcc44', marginBottom: 6 }}>제작 레시피</div>
+                {Object.entries(ARTISAN_RECIPES).map(([key, recipe]) => {
+                  const canAffordGold = (gs.money ?? 0) >= recipe.craftPrice;
+                  const oreOk = Object.entries(recipe.input.ore ?? {}).every(([ore, qty]) => (gs.oreInventory?.[ore] ?? 0) >= qty);
+                  const fishOk = (recipe.input.fish ?? []).every(fn => (gs.fishInventory ?? []).some(f => f.name === fn));
+                  const herbOk = Object.entries(recipe.input.herb ?? {}).every(([h, qty]) => (gs.herbInventory?.[h] ?? 0) >= qty);
+                  const canCraft = canAffordGold && oreOk && fishOk && herbOk;
+                  const craftCount = gs.artisanLog?.[key] ?? 0;
+                  return (
+                    <div key={key} style={{ marginBottom: 8, padding: '8px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <span style={{ fontSize: 14 }}>{recipe.icon}</span>
+                          <span style={{ fontWeight: 700, marginLeft: 6 }}>{recipe.name}</span>
+                          {craftCount > 0 && <span style={{ fontSize: 10, color: '#88ff88', marginLeft: 6 }}>×{craftCount}</span>}
+                        </div>
+                        <button
+                          className="btn-buy"
+                          style={{ fontSize: 11, padding: '3px 10px', background: canCraft ? '#336633' : 'rgba(255,255,255,0.08)', color: canCraft ? '#88ff88' : '#666', cursor: canCraft ? 'pointer' : 'not-allowed' }}
+                          disabled={!canCraft}
+                          onClick={() => props.onArtisanCraft?.(key)}
+                        >
+                          제작
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#aaa', margin: '3px 0' }}>{recipe.desc}</div>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }}>
+                        {Object.entries(recipe.input.ore ?? {}).map(([ore, qty]) => (
+                          <span key={ore} style={{ marginRight: 8, color: (gs.oreInventory?.[ore] ?? 0) >= qty ? '#88ff88' : '#ff6666' }}>
+                            {ore}×{qty} ({gs.oreInventory?.[ore] ?? 0})
+                          </span>
+                        ))}
+                        {(recipe.input.fish ?? []).map(fn => {
+                          const has = (gs.fishInventory ?? []).some(f => f.name === fn);
+                          return <span key={fn} style={{ marginRight: 8, color: has ? '#88ff88' : '#ff6666' }}>{fn}</span>;
+                        })}
+                        {Object.entries(recipe.input.herb ?? {}).map(([h, qty]) => (
+                          <span key={h} style={{ marginRight: 8, color: (gs.herbInventory?.[h] ?? 0) >= qty ? '#88ff88' : '#ff6666' }}>
+                            {h}×{qty}
+                          </span>
+                        ))}
+                        <span style={{ color: canAffordGold ? '#88ff88' : '#ff6666' }}>💰{recipe.craftPrice.toLocaleString()}G</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── 업적 tab ── */}
+            {statsTab === '업적' && (() => {
+              const { goals: wGoals, weekKey } = getWeeklyGoals();
+              return (<>
+                {/* Weekly Goals */}
+                <div className="section">
+                  <div className="section-title">🎯 주간 목표
+                    <span style={{ float: 'right', fontSize: 10, color: '#aaa' }}>{weekKey}</span>
+                  </div>
+                  {wGoals.map(goal => {
+                    const prog = gs.weeklyGoals?.[goal.id] ?? 0;
+                    const claimed = !!(gs.weeklyGoals?.[goal.id + '_claimed']);
+                    const done = prog >= goal.goal;
+                    const pct = Math.min(100, Math.round((prog / goal.goal) * 100));
+                    return (
+                      <div key={goal.id} className="rod-card" style={{ opacity: claimed ? 0.5 : 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontWeight: 700, fontSize: 12 }}>{goal.label}</div>
+                          {done && !claimed && (
+                            <button className="btn-buy" style={{ fontSize: 10, padding: '2px 8px' }}
+                              onClick={() => claimWeeklyGoalReward?.(goal.id)}>
+                              수령
+                            </button>
+                          )}
+                          {claimed && <span style={{ fontSize: 10, color: '#88ff88' }}>✓</span>}
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 4, height: 5, overflow: 'hidden', margin: '4px 0' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: done ? '#44cc44' : '#4488ff', borderRadius: 4 }} />
+                        </div>
+                        <div style={{ fontSize: 10, color: '#aaa' }}>
+                          {typeof prog === 'number' && prog > 999 ? prog.toLocaleString() : prog} / {goal.goal > 999 ? goal.goal.toLocaleString() : goal.goal}
+                          &nbsp;·&nbsp;보상 {goal.reward.money.toLocaleString()}G
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Friends */}
+                <div className="section">
+                  <div className="section-title">👥 친구 ({(gs.friends ?? []).length}명)</div>
+                  {(gs.friends ?? []).length === 0 && (
+                    <div className="empty">친구가 없습니다. 채팅창에서 /친구추가 닉네임으로 추가하세요.</div>
+                  )}
+                  {(gs.friends ?? []).map(fn => (
+                    <div key={fn} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                      <span style={{ fontSize: 12 }}>👤 {fn}</span>
+                      <button className="btn-buy" style={{ fontSize: 10, padding: '2px 7px', background: 'rgba(255,60,60,0.15)', color: '#ff8888' }}
+                        onClick={() => handleRemoveFriend?.(fn)}>삭제</button>
+                    </div>
+                  ))}
+                </div>
+                {/* Achievements */}
+                <div className="section">
                 <div className="section-title">업적 ({(gs.achievements ?? []).length} / {ACHIEVEMENTS.length})</div>
                 {ACHIEVEMENTS.map(ach => {
                   const val = gs.achStats?.[ach.type] ?? 0;
@@ -1272,7 +1493,8 @@ export default function Sidebar(props) {
                   );
                 })}
               </div>
-            )}
+              </>);
+            })()}
 
             {/* ── 펫 tab ── */}
             {statsTab === '펫' && (() => {
@@ -4589,6 +4811,8 @@ export default function Sidebar(props) {
         };
         return <SeasonPanel key="season" />;
       })()}
+
+      {/* ── 주간 목표 & 친구 패널 (inline in stats panel) ── */}
 
       {/* ── 오두막 패널 ── */}
       {showCottage && (

@@ -768,6 +768,100 @@ export const COTTAGE_LEVEL_BONUSES = {
   4: { maxFurniture: 48, offlineBonus: 0.20, guestbookMax: 100 },
 };
 
+// ── Phase 16-2: 장인 작업대 (Artisan Workbench) ───────────────────────────────
+// output.type: 'jewelry' | 'bait' | 'ore'
+export const ARTISAN_RECIPES = {
+  심해반지: {
+    name: '심해의 반지',  icon: '💍',
+    input: { ore: { 고대광석: 3 }, fish: ['달빛가오리'] },
+    output: { type: 'jewelry', key: '심해반지', bonus: { deepRarityBonus: 0.08, sellBonus: 0.04 } },
+    desc: '심해 희귀도 +8% · 판매가 +4%',
+    craftPrice: 5000,
+  },
+  설산목걸이: {
+    name: '설산의 목걸이', icon: '📿',
+    input: { ore: { 빙정광석: 3 }, fish: ['얼음빙어'] },
+    output: { type: 'jewelry', key: '설산목걸이', bonus: { fishTimeMult: 0.92, mineTimeMult: 0.95 } },
+    desc: '낚시 속도 +8% · 채굴 속도 +5%',
+    craftPrice: 4000,
+  },
+  황금낚시반지: {
+    name: '황금 낚시 반지', icon: '💍',
+    input: { ore: { 금광석: 5 }, fish: ['황금붕어'] },
+    output: { type: 'jewelry', key: '황금낚시반지', bonus: { fishSellBonus: 0.10, rareBonus: 0.05 } },
+    desc: '생선 판매가 +10% · 희귀도 +5%',
+    craftPrice: 6000,
+  },
+  고대부적: {
+    name: '고대 부적', icon: '🔮',
+    input: { ore: { 고대광석: 5, 수정: 3 } },
+    output: { type: 'jewelry', key: '고대부적', bonus: { abilExpBonus: 0.15, offlineBonus: 0.10 } },
+    desc: '경험치 +15% · 오프라인 수입 +10%',
+    craftPrice: 8000,
+  },
+  용아귀미끼: {
+    name: '용아귀 미끼', icon: '🪱',
+    input: { ore: { 고대광석: 1 }, herb: { 희귀허브: 2 } },
+    output: { type: 'bait', key: '용아귀미끼', qty: 3 },
+    desc: '전설+ 확률 대폭 향상 (×3 생성)',
+    craftPrice: 3000,
+  },
+  빙정미끼: {
+    name: '빙정 미끼', icon: '❄️',
+    input: { ore: { 빙정광석: 2 }, fish: ['얼음빙어'] },
+    output: { type: 'bait', key: '빙정미끼', qty: 2 },
+    desc: '설산 특화: 설산 어종 출현 +50% (×2 생성)',
+    craftPrice: 2500,
+  },
+  정제금광석: {
+    name: '정제 금광석', icon: '⭐',
+    input: { ore: { 금광석: 8, 수정: 3 } },
+    output: { type: 'ore', key: '정제금광석', qty: 5, price: 1200 },
+    desc: '금광석 8 + 수정 3 → 정제 금광석 5개 (가치 ↑)',
+    craftPrice: 1000,
+  },
+  장인의돌: {
+    name: '장인의 돌', icon: '💎',
+    input: { ore: { 고대광석: 2, 빙정광석: 2, 금광석: 3 } },
+    output: { type: 'ore', key: '장인의돌', qty: 1, price: 5000 },
+    desc: '희귀 광석 조합 → 장인의 돌 (고가 판매용)',
+    craftPrice: 2000,
+  },
+};
+
+export const EQUIPMENT_SETS = {
+  심해탐험가: {
+    label: '심해 탐험가 세트',
+    pieces: ['스쿠버다이빙세트', '어부상의', '탐험가바지'],
+    setBonus: { deepRarityBonus: 0.15, fishSellBonus: 0.10 },
+    desc: '세트 완성: 심해 희귀도 +15% · 생선 판매가 +10%',
+    color: '#4488ff',
+  },
+  황금상인: {
+    label: '황금 상인 세트',
+    pieces: ['황금낚시복', '왕관', '황금벨트'],
+    setBonus: { sellBonus: 0.18, offlineBonus: 0.12 },
+    desc: '세트 완성: 판매가 +18% · 오프라인 수입 +12%',
+    color: '#ffd700',
+  },
+  광부왕: {
+    label: '광부왕 세트',
+    pieces: ['광부헬멧', '광부의작업복', '광부바지'],
+    setBonus: { mineTimeMult: 0.82, windfallBonus: 0.08 },
+    desc: '세트 완성: 채굴 속도 +18% · 대박 확률 +8%',
+    color: '#ffaa44',
+  },
+};
+
+/** Returns active equipment set bonus or {} */
+export function getActiveSetBonus(gs) {
+  for (const [, setDef] of Object.entries(EQUIPMENT_SETS)) {
+    const equipped = [gs.outfit, gs.hat, gs.belt, gs.top, gs.bottom].filter(Boolean);
+    if (setDef.pieces.every(p => equipped.includes(p))) return setDef.setBonus;
+  }
+  return {};
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 export function weightedPick(table) {
   const total = table.reduce((s, e) => s + e.w, 0);

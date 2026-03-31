@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { BOOTS, FISH } from '../gameData';
 import { PETS, PET_LEVEL_MULT, PET_MAX_LEVEL, EVOLVED_PETS } from '../petData';
 import { DEFAULT_ABILITIES } from '../abilityData';
-import { getWeather, msUntilNextWeather } from '../weatherData';
+import { getWeather, msUntilNextWeather, WEATHER_EVENTS } from '../weatherData';
 import { getCurrentSeason } from '../seasonData';
 import { getTitle, TITLES } from '../titleData';
 import { subscribeOtherPlayers, updatePlayerPresence, removePlayerPresence,
@@ -13,7 +13,8 @@ import { subscribeGuildList, subscribeGuildCompetition, subscribeGuild, subscrib
 import { subscribeMarket, subscribeMyListings } from '../marketData';
 import { subscribeAnnouncements, subscribeActiveServerEvent,
   subscribeTournament, subscribeServerQuest, subscribeServerBoss,
-  savePlayerTitle, broadcastAnnouncement, subscribeSeasonRankings } from '../ranking';
+  savePlayerTitle, broadcastAnnouncement, subscribeSeasonRankings,
+  distributeServerBossRewards } from '../ranking';
 import { STORY_CHAPTERS } from './useGameState';
 
 export function useWebSocket(params) {
@@ -27,7 +28,7 @@ export function useWebSocket(params) {
     setGuildList, setGuildCompetition, setGuildInfo, setGuildMembers, setGuildChat, setGuildQuest,
     setMarketListings, setMyListings, setServerAnnouncements, setServerEvent, setServerQuest,
     setServerBoss, setTournamentRanking, setSeasonRanking, setFishSurgeEvent, setPartyMessages,
-    setPendingInvite, setGs, setWeather, setIsOnline, setShowAnnounce,
+    setPendingInvite, setGs, setWeather, setIsOnline, setShowAnnounce, setActiveWeatherEvent,
     // callbacks
     addMsg,
     // gs values needed for sync effects
@@ -220,7 +221,23 @@ export function useWebSocket(params) {
       setServerEvent(evt);
       serverEventRef.current = evt;
       // Admin-triggered legendary spawn: sync to fishSurgeRef
-      if (evt?.type === 'legendarySpawn' && evt.targetFish) {
+      if (evt?.type === 'weatherEvent' && evt.eventKey) {
+        const we = WEATHER_EVENTS[evt.eventKey];
+        if (we) {
+          const expiresAt = evt.endsAt?.toMillis?.() ?? (Date.now() + (we.duration ?? 20 * 60 * 1000));
+          setActiveWeatherEvent?.({ key: evt.eventKey, ...we, expiresAt });
+          addMsgRef.current(`${we.icon} [날씨 이벤트] ${we.label} 시작! ${we.desc}`, 'catch');
+          setGs(prev => {
+            const history = prev.weatherEventHistory ?? [];
+            const alreadySeen = history.includes(evt.eventKey);
+            const newHistory = alreadySeen ? history : [...history, evt.eventKey];
+            const weatherEventsExperienced = newHistory.length;
+            return { ...prev, weatherEventHistory: newHistory, achStats: { ...prev.achStats, weatherEventsExperienced } };
+          });
+        }
+      } else if (evt?.type === 'clearWeatherEvent' || (evt?.type !== 'weatherEvent' && serverEventRef.current?.type === 'weatherEvent')) {
+        setActiveWeatherEvent?.(null);
+      } else if (evt?.type === 'legendarySpawn' && evt.targetFish) {
         const until = evt.endsAt?.toMillis?.() ?? (Date.now() + 30 * 60 * 1000);
         fishSurgeRef.current = { fish: evt.targetFish, until };
         setFishSurgeEvent({ fish: evt.targetFish, until });
@@ -307,6 +324,21 @@ export function useWebSocket(params) {
       if (data && !data.defeated && data.hp === 0) {
         addMsgRef.current(`🎉 서버 공동 보스 "${data.name}" 처치 완료! 전 서버 낚시꾼들의 승리!`, 'catch');
         broadcastAnnouncement(`🏆 서버 공동 보스 "${data.name}"이(가) 처치되었습니다! 모두의 승리!`);
+        distributeServerBossRewards(data);
+        // Track boss kill achievement for this player if they contributed
+        const myNick = nicknameRef.current;
+        if (myNick && (data.contributors ?? {})[myNick]) {
+          setGs(prev => {
+            const contribs = data.contributors ?? {};
+            const myDmg = contribs[myNick] ?? 0;
+            const topDmg = Math.max(...Object.values(contribs));
+            const isTopContrib = myDmg >= topDmg;
+            const bossKills = (prev.achStats?.bossKills ?? 0) + 1;
+            const bossTopKills = (prev.achStats?.bossTopKills ?? 0) + (isTopContrib ? 1 : 0);
+            const bossParticip = (prev.achStats?.bossParticipations ?? 0) + 1;
+            return { ...prev, achStats: { ...prev.achStats, bossKills, bossTopKills, bossParticipations: bossParticip } };
+          });
+        }
       } else if (data && data.hp > 0 && prev === null) {
         addMsgRef.current(`⚔️ 서버 공동 보스 "${data.name}" 출현! HP: ${data.hp}/${data.maxHp} — 낚시/채굴로 보스를 공격하세요!`, 'catch');
       }

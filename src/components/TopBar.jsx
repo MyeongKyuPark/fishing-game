@@ -4,13 +4,14 @@ import Joystick from '../Joystick';
 import { RODS, FISH } from '../gameData';
 import { MINE_DEPTH_REQ, MINE_DEPTH_TIME } from '../hooks/useGameState';
 import { ZONE_LABELS } from '../mapData';
+import { getWeatherForecast } from '../weatherData';
 
 // Phase 12-2: Festival active check
 const isFestivalActive = (gs) => !!(gs?.festivalEndDate && Date.now() < gs.festivalEndDate);
 
 export default function TopBar({
   gs, setGs, nickname, myTitle, roomTitle, weather, currentSeason, activity, isOnline,
-  serverQuest, serverBoss, fishSurgeEvent, serverEvent,
+  serverQuest, serverBoss, fishSurgeEvent, serverEvent, activeWeatherEvent, roomId,
   indoorRoom, nearDoor, nearActionZone, nearIndoorNpc, partyId, partyMembersRef, otherPlayersRef,
   pendingInvite, showAnnounce, serverAnnouncements,
   achPopup, gradeUpCelebration,
@@ -41,8 +42,23 @@ export default function TopBar({
         {currentSeason && (
           <div className="hud-chip" style={{ fontSize: 11, color: currentSeason.color }}>{currentSeason.icon} {currentSeason.name}</div>
         )}
-        {weather && (
-          <div className="hud-chip" style={{ fontSize: 11 }}>{weather.icon} {weather.label}</div>
+        {weather && (() => {
+          const [showForecast, setShowForecast] = [false, () => {}]; // local toggle via React state not available here; use title tooltip
+          const forecast = getWeatherForecast(roomId, 3);
+          return (
+            <div className="hud-chip" style={{ fontSize: 11, cursor: 'help', position: 'relative' }}
+              title={`예보: ${forecast.map(w => `${w.icon}${w.label}`).join(' → ')}`}>
+              {weather.icon} {weather.label}
+              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)', marginLeft: 4 }}>
+                → {forecast[0]?.icon}
+              </span>
+            </div>
+          );
+        })()}
+        {activeWeatherEvent && (!activeWeatherEvent.expiresAt || Date.now() < activeWeatherEvent.expiresAt) && (
+          <div className="hud-chip" style={{ fontSize: 10, color: activeWeatherEvent.color ?? '#ffff88', animation: 'blink 1.4s ease-in-out infinite' }}>
+            {activeWeatherEvent.icon} {activeWeatherEvent.label}!
+          </div>
         )}
         {gs.worldZone && gs.worldZone !== '마을' && (() => {
           const THRESHOLDS = [10, 30, 60, 100, 150];
@@ -88,11 +104,21 @@ export default function TopBar({
             </div>
           );
         })()}
-        {serverBoss && serverBoss.hp > 0 && (
-          <div className="hud-chip" style={{ fontSize: 10, color: '#ff6666', display: 'flex', alignItems: 'center', gap: 4 }}>
-            ⚔️ 공동보스 {serverBoss.name} HP {serverBoss.hp}/{serverBoss.maxHp}
-          </div>
-        )}
+        {serverBoss && serverBoss.hp > 0 && (() => {
+          const pct = serverBoss.maxHp > 0 ? serverBoss.hp / serverBoss.maxHp : 0;
+          const barColor = pct > 0.5 ? '#44dd44' : pct > 0.25 ? '#ffcc00' : '#ff4444';
+          const contribCount = Object.keys(serverBoss.contributors ?? {}).length;
+          return (
+            <div className="hud-chip" style={{ fontSize: 10, color: '#ffaaaa', display: 'flex', alignItems: 'center', gap: 4 }}>
+              ⚔️ {serverBoss.name}
+              <div style={{ width: 60, height: 6, background: 'rgba(0,0,0,0.4)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ width: `${pct * 100}%`, height: '100%', background: barColor, transition: 'width 0.3s' }} />
+              </div>
+              <span style={{ color: barColor }}>{serverBoss.hp}/{serverBoss.maxHp}</span>
+              {contribCount > 0 && <span style={{ color: '#aaa' }}>({contribCount}명)</span>}
+            </div>
+          );
+        })()}
         {fishSurgeEvent && Date.now() < fishSurgeEvent.until && (
           <div className="hud-chip" style={{ color: '#ffaa22', fontSize: 11, animation: 'blink 1.4s ease-in-out infinite' }}>
             📣 {FISH[fishSurgeEvent.fish]?.rarity === '신화' ? '🌟' : '⭐'} {fishSurgeEvent.fish} 출몰중!

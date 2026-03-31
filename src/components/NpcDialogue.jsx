@@ -1,6 +1,7 @@
 // NPC 대화 인터페이스 — 친밀도 기반 대사 + 행동 선택
 import { useState, useCallback } from 'react';
 import { NPCS, getAffinityLevel } from '../npcData';
+import { NPC_QUESTS } from '../npcQuestData';
 
 // ── 대사 데이터 ─────────────────────────────────────────────────────────────
 const DIALOGUE = {
@@ -452,6 +453,26 @@ export default function NpcDialogue({ npcKey, affinity, onAction, onGift, gs, on
               <span>{opt.label}</span>
             </button>
           ))}
+            {/* Phase 16-5: 외곽 NPC S2 의뢰 버튼 */}
+          {NPC_QUESTS[npcKey] && (() => {
+            const s2Total = NPC_QUESTS[npcKey].length;
+            const s2Step = gs?.npcQuestStep?.[npcKey] ?? 0;
+            const s2Done = s2Step >= s2Total;
+            return (
+              <button onClick={() => handleOption('npc_s2_quest')} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', borderRadius: 10,
+                background: s2Done ? 'rgba(136,255,136,0.08)' : 'rgba(255,200,50,0.12)',
+                border: s2Done ? '1px solid rgba(136,255,136,0.3)' : '1px solid rgba(255,200,50,0.4)',
+                color: s2Done ? '#88ff88' : '#ffdd66',
+                fontSize: 14, fontWeight: 600,
+                cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s',
+              }}>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>📜</span>
+                <span>{s2Done ? `의뢰 완수 ✓ (${s2Total}/${s2Total})` : `의뢰 확인 (${s2Step}/${s2Total})`}</span>
+              </button>
+            );
+          })()}
           {/* Phase 15-2: 선물하기 버튼 */}
           {prefs && onGift && (
             <button onClick={() => handleOption('gift')} style={{

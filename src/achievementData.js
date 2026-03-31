@@ -86,6 +86,26 @@ export const ACHIEVEMENTS = [
   // Phase 15-5: 오두막 업그레이드
   { id: 'cottage_lv2',     label: '내 집 마련',     desc: '오두막 레벨 2 달성',                    icon: '🏠', type: 'cottageLevel',    goal: 2,   reward: { money: 5000 } },
   { id: 'cottage_lv4',     label: '꿈의 집',        desc: '오두막 레벨 4 달성',                    icon: '🏡', type: 'cottageLevel',    goal: 4,   reward: { money: 50000 } },
+  // Phase 15-1: 월드 보스
+  { id: 'boss_join_1',     label: '보스 참전자',    desc: '서버 공동 보스 처치 1회 참여',           icon: '⚔️', type: 'bossKills',       goal: 1,   reward: { money: 10000 } },
+  { id: 'boss_top_3',      label: '보스 처치자',    desc: '서버 공동 보스 최고 기여 3회',           icon: '🏆', type: 'bossTopKills',    goal: 3,   reward: { money: 30000 } },
+  // Phase 15-3: 프로필 공유
+  { id: 'profile_share',   label: '기록의 증인',    desc: '프로필 카드 공유 1회',                   icon: '📋', type: 'profileShares',   goal: 1,   reward: { money: 3000 } },
+  // Phase 16-1: 낚시 마스터리 특성 트리
+  { id: 'mastery_perk_1',  label: '특성 개척자',    desc: '낚시 마스터리 페르크 1개 해금',          icon: '🌿', type: 'masteryPerkCount',  goal: 1,  reward: { money: 5000 } },
+  { id: 'mastery_perk_12', label: '경지의 어부',    desc: '낚시 마스터리 페르크 12개 모두 해금',    icon: '⭐', type: 'masteryPerkCount',  goal: 12, reward: { money: 50000 } },
+  // Phase 16-2: 장인 작업대
+  { id: 'artisan_first',   label: '장인 작업대 개통', desc: '장인 레시피 첫 제작',                  icon: '🔨', type: 'artisanCraftCount',      goal: 1,  reward: { money: 5000 } },
+  { id: 'artisan_set',     label: '세트의 완성',    desc: '장인 레시피 4가지 이상 제작',            icon: '💎', type: 'artisanUniqueCount',     goal: 4,  reward: { money: 30000 } },
+  // Phase 16-3: 동적 날씨 이벤트
+  { id: 'weather_all',     label: '날씨 관찰자',    desc: '모든 날씨 이벤트 종류 1회 경험',          icon: '🌈', type: 'weatherEventsExperienced', goal: 6,  reward: { money: 15000 } },
+  // Phase 16-4: 친구 & 주간 목표
+  { id: 'friend_3',        label: '사교적인 어부',  desc: '친구 3명 추가',                           icon: '👥', type: 'friendCount',              goal: 3,  reward: { money: 5000 } },
+  { id: 'weekly_20',       label: '라이벌',         desc: '주간 목표 누적 20회 완료',                icon: '🎯', type: 'totalWeeklyGoalsCompleted', goal: 20, reward: { money: 20000 } },
+  // Phase 16-5: 외곽 NPC S2 의뢰
+  { id: 's2_quest_4',      label: '외곽 탐험가',       desc: '외곽 NPC S2 의뢰 4종 완수',                       icon: '🗺', type: 'npcQuestS2Count', goal: 4, reward: { money: 15000 } },
+  { id: 's2_quest_8',      label: '진정한 타이드헤이버', desc: '외곽 NPC S2 의뢰 8종 모두 완수',                  icon: '🏆', type: 'npcQuestS2Count', goal: 8, reward: { money: 50000 } },
+  { id: 's2_quest_full',   label: '전설의 낚시 마을',   desc: '모든 외곽 S2 의뢰 완수 + NPC 친밀도 10명 50 이상', icon: '🌟', type: 'npcQuestS2Full',  goal: 1, reward: { money: 80000 } },
 ];
 
 /** Check which new achievements were just unlocked.

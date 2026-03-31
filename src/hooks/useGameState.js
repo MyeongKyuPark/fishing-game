@@ -58,6 +58,36 @@ export function getDailyQuests(extraCount = 0) {
   return picked;
 }
 
+const WEEKLY_GOAL_POOL = [
+  { id: 'wg_fish100',  label: '주간 물고기 100마리', type: 'fish',  goal: 100,   reward: { money: 5000 } },
+  { id: 'wg_sell50k',  label: '주간 50,000G 판매',   type: 'sell',  goal: 50000, reward: { money: 8000 } },
+  { id: 'wg_ore200',   label: '주간 광석 200개',      type: 'ore',   goal: 200,   reward: { money: 4000 } },
+  { id: 'wg_rare20',   label: '주간 전설+ 20마리',    type: 'rare',  goal: 20,    reward: { money: 12000 } },
+  { id: 'wg_herb80',   label: '주간 허브 80개',       type: 'herb',  goal: 80,    reward: { money: 3500 } },
+  { id: 'wg_cook30',   label: '주간 요리 30회',       type: 'cook',  goal: 30,    reward: { money: 4500 } },
+  { id: 'wg_party10',  label: '파티 낚시 10회',       type: 'party', goal: 10,    reward: { money: 6000 } },
+  { id: 'wg_boss2',    label: '월드 보스 2회 참전',   type: 'boss',  goal: 2,     reward: { money: 15000 } },
+];
+
+export function getWeeklyGoals() {
+  const d = new Date();
+  // Week key: year + ISO week number
+  const dayOfWeek = d.getDay() === 0 ? 7 : d.getDay();
+  const weekStart = new Date(d);
+  weekStart.setDate(d.getDate() - dayOfWeek + 1);
+  const weekStr = `${weekStart.getFullYear()}-W${String(Math.ceil(weekStart.getDate() / 7)).padStart(2, '0')}`;
+  let hash = 0;
+  for (let i = 0; i < weekStr.length; i++) hash = (hash * 31 + weekStr.charCodeAt(i)) >>> 0;
+  const picked = [];
+  const pool = [...WEEKLY_GOAL_POOL];
+  for (let i = 0; i < 3 && pool.length > 0; i++) {
+    const idx = hash % pool.length;
+    picked.push(pool.splice(idx, 1)[0]);
+    hash = (hash * 1664525 + 1013904223) >>> 0;
+  }
+  return { goals: picked, weekKey: weekStr };
+}
+
 export const DEFAULT_STATE = {
   money: 100,
   rod: '초급낚시대',
@@ -221,6 +251,19 @@ export const DEFAULT_STATE = {
   seasonRewardClaimed: {},
   // Phase 15-1: 보스 기여 이력
   bossContribHistory: [],
+  // Phase 16-1: 낚시 마스터리 특성 트리
+  masteryPerks: {},
+  masteryPerkPoints: 0,
+  // Phase 16-2: 장인 작업대
+  artisanLog: {},
+  // Phase 16-3: 동적 날씨 이벤트
+  weatherEventHistory: [],
+  // Phase 16-4: 친구 & 주간 목표
+  friends: [],
+  weeklyGoals: {},
+  weeklyGoalDate: '',
+  // Phase 16-5: 외곽 NPC S2 퀘스트
+  npcQuestS2Done: [],
 };
 
 export const SAVE_VERSION = 2;
@@ -408,6 +451,14 @@ export function loadSave(nickname) {
       cottageLevel: s.cottageLevel ?? 1,
       seasonRewardClaimed: s.seasonRewardClaimed ?? {},
       bossContribHistory: s.bossContribHistory ?? [],
+      masteryPerks: s.masteryPerks ?? {},
+      masteryPerkPoints: s.masteryPerkPoints ?? 0,
+      artisanLog: s.artisanLog ?? {},
+      weatherEventHistory: s.weatherEventHistory ?? [],
+      friends: s.friends ?? [],
+      weeklyGoals: s.weeklyGoals ?? {},
+      weeklyGoalDate: s.weeklyGoalDate ?? '',
+      npcQuestS2Done: s.npcQuestS2Done ?? [],
     };
   } catch { return DEFAULT_STATE; }
 }

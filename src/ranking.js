@@ -1,6 +1,6 @@
 import {
   doc, collection, query, orderBy, limit, setDoc, where,
-  onSnapshot, serverTimestamp, runTransaction, addDoc, getDoc,
+  onSnapshot, serverTimestamp, runTransaction, addDoc, getDoc, deleteDoc,
 } from 'firebase/firestore';
 import { db } from './firebase';
 
@@ -282,6 +282,19 @@ export function subscribeSeasonRankings(callback) {
   }, () => callback([]));
 }
 
+/** Claim previous season reward (top 20 get gold bonus) */
+export async function claimSeasonReward(nickname, season) {
+  const docId = `${season}_${encodeURIComponent(nickname)}`;
+  try {
+    const snap = await getDoc(doc(db, 'season_rankings', docId));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    if (data.rewardClaimed) return null;
+    await setDoc(doc(db, 'season_rankings', docId), { rewardClaimed: true }, { merge: true });
+    return data.fishCaught ?? 0;
+  } catch (e) { console.warn('season reward claim failed', e); return null; }
+}
+
 // ── Server Quest (공동 퀘스트) ────────────────────────────────────────────────
 
 /** Increment shared server quest progress */
@@ -313,7 +326,7 @@ export function subscribeServerBoss(callback) {
 }
 
 /** Deal damage to the server boss (1 damage per call) */
-export async function damageServerBoss(amount = 1) {
+export async function damageServerBoss(amount = 1, nickname = '') {
   const ref = doc(db, 'server_boss', 'current');
   try {
     await runTransaction(db, async (tx) => {
@@ -322,9 +335,34 @@ export async function damageServerBoss(amount = 1) {
       const data = snap.data();
       if (data.hp <= 0) return; // already defeated
       const newHp = Math.max(0, data.hp - amount);
-      tx.set(ref, { ...data, hp: newHp }, { merge: false });
+      const contributors = data.contributors ?? {};
+      if (nickname) contributors[nickname] = (contributors[nickname] ?? 0) + amount;
+      tx.set(ref, { ...data, hp: newHp, contributors }, { merge: false });
     });
   } catch (e) { console.warn('boss damage failed', e); }
+}
+
+/** Distribute rewards to top contributors when boss is defeated */
+export async function distributeServerBossRewards(bossData) {
+  if (!bossData?.contributors) return;
+  const entries = Object.entries(bossData.contributors).sort((a, b) => b[1] - a[1]);
+  const totalDmg = entries.reduce((s, [, v]) => s + v, 0);
+  const rewardRef = doc(db, 'server_boss_rewards', bossData.name + '_' + Date.now());
+  try {
+    await setDoc(rewardRef, {
+      bossName: bossData.name,
+      resolvedAt: serverTimestamp(),
+      topContributors: entries.slice(0, 10).map(([nick, dmg]) => ({ nick, dmg })),
+      totalDamage: totalDmg,
+    });
+    // Write per-player reward docs so clients can claim
+    for (let i = 0; i < Math.min(entries.length, 20); i++) {
+      const [nick, dmg] = entries[i];
+      const gold = i === 0 ? 5000 : i < 3 ? 3000 : i < 10 ? 1500 : 500;
+      const pRef = doc(db, 'boss_rewards', `${encodeURIComponent(nick)}_${Date.now()}`);
+      await setDoc(pRef, { nickname: nick, gold, dmg, rank: i + 1, bossName: bossData.name, claimedAt: serverTimestamp() });
+    }
+  } catch (e) { console.warn('boss reward distribute failed', e); }
 }
 
 /** Spawn a new server boss */
@@ -334,6 +372,34 @@ export async function spawnServerBoss(name, hp) {
       name, hp, maxHp: hp, spawnedAt: serverTimestamp(), defeated: false,
     });
   } catch (e) { console.warn('boss spawn failed', e); }
+}
+
+// ── Friends System ────────────────────────────────────────────────────────────
+export async function addFriend(myNick, friendNick) {
+  if (!myNick || !friendNick || myNick === friendNick) return;
+  try {
+    await setDoc(doc(db, 'friends', encodeURIComponent(myNick), 'list', encodeURIComponent(friendNick)), {
+      addedAt: serverTimestamp(), status: 'accepted',
+    });
+  } catch (e) { console.warn('addFriend failed', e); }
+}
+
+export async function removeFriend(myNick, friendNick) {
+  if (!myNick || !friendNick) return;
+  try {
+    await deleteDoc(doc(db, 'friends', encodeURIComponent(myNick), 'list', encodeURIComponent(friendNick)));
+  } catch (e) { console.warn('removeFriend failed', e); }
+}
+
+export function subscribeFriendScores(friends, season, callback) {
+  if (!friends?.length) { callback([]); return () => {}; }
+  const q = query(
+    collection(db, 'season_rankings'),
+    where('season', '==', season),
+    where('nickname', 'in', friends.slice(0, 10)),
+    orderBy('fishCaught', 'desc'),
+  );
+  return onSnapshot(q, snap => callback(snap.docs.map(d => d.data())), () => callback([]));
 }
 
 // ── Cottage sharing ───────────────────────────────────────────────────────────

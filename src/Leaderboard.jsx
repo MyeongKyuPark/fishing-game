@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { subscribeOverallFishRankings, subscribeGoldRankings, subscribeAbilityRankings, subscribeAchievementRankings, subscribeTournament, getWeekKey, subscribePrestigeRankings } from './ranking';
+import { subscribeOverallFishRankings, subscribeGoldRankings, subscribeAbilityRankings, subscribeAchievementRankings, subscribeTournament, getWeekKey, subscribePrestigeRankings, subscribeSeasonRankings } from './ranking';
 import { FISH } from './gameData';
 
 const MEDALS = ['🥇', '🥈', '🥉'];
@@ -26,6 +26,7 @@ const TABS = [
   { key: 'achievement', label: '🏆 업적' },
   { key: 'tournament', label: '🎣 주간 대회' },
   { key: 'prestige', label: '🌟 프레스티지' },
+  { key: 'season', label: '🎖 시즌 리그' },
 ];
 
 export default function Leaderboard({ onClose, myNickname }) {
@@ -36,6 +37,7 @@ export default function Leaderboard({ onClose, myNickname }) {
   const [achRows, setAchRows] = useState([]);
   const [tournRows, setTournRows] = useState([]);
   const [prestigeRows, setPrestigeRows] = useState([]);
+  const [seasonRows, setSeasonRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,6 +53,8 @@ export default function Leaderboard({ onClose, myNickname }) {
       unsub = subscribeTournament(data => { setTournRows(data); setLoading(false); });
     } else if (tab === 'prestige') {
       unsub = subscribePrestigeRankings(data => { setPrestigeRows(data); setLoading(false); });
+    } else if (tab === 'season') {
+      unsub = subscribeSeasonRankings(data => { setSeasonRows(data); setLoading(false); });
     } else {
       unsub = subscribeAchievementRankings(data => { setAchRows(data); setLoading(false); });
     }
@@ -151,6 +155,18 @@ export default function Leaderboard({ onClose, myNickname }) {
               <span className="rank-nick">{r.nickname}</span>
               <span className="rank-size" style={{ color: '#ffd700', fontWeight: 700 }}>
                 🌟 {(r.prestigeCount ?? 0)}회
+              </span>
+            </div>
+          ))}
+          {!loading && tab === 'season' && seasonRows.length === 0 && (
+            <div className="empty">이번 시즌 참가자가 없습니다.</div>
+          )}
+          {!loading && tab === 'season' && seasonRows.map((r, i) => (
+            <div key={r.nickname} className={`rank-row ${r.nickname === myNickname ? 'rank-me' : ''}`}>
+              <span className="rank-pos">{i < 3 ? MEDALS[i] : i + 1}</span>
+              <span className="rank-nick">{r.nickname}</span>
+              <span className="rank-size" style={{ color: '#aaddff', fontWeight: 700 }}>
+                🎖 {(r.fishCaught ?? 0).toLocaleString()}마리
               </span>
             </div>
           ))}
