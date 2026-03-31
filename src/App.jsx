@@ -4007,7 +4007,6 @@ nickname={nickname}
         tournamentRanking={tournamentRanking}
         serverQuest={serverQuest}
         serverBoss={serverBoss}
-        serverStats={serverStats}
         serverAnnouncements={serverAnnouncements}
         showGuild={showGuild}
         setShowGuild={setShowGuild}
