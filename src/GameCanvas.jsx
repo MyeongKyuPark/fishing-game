@@ -35,6 +35,7 @@ export default function GameCanvas({
   otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, onNearActionChange,
   hairColor, bodyColor, skinColor, gender,
   spotDecos, onZoneTransition, onCancelReturn, onZoneBlocked, onZoneNpcInteract,
+  onNpcQuickMenu,
 }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange });
@@ -50,6 +51,7 @@ export default function GameCanvas({
   const onCancelReturnRef = useRef(onCancelReturn);
   const onZoneBlockedRef = useRef(onZoneBlocked);
   const onZoneNpcInteractRef = useRef(onZoneNpcInteract);
+  const onNpcQuickMenuRef = useRef(onNpcQuickMenu);
   const nearZoneNpcRef = useRef(null);
   const nearDoorRef = useRef(null);
   const nearActionZoneRef = useRef(null);
@@ -71,6 +73,7 @@ export default function GameCanvas({
   useEffect(() => { onCancelReturnRef.current = onCancelReturn; });
   useEffect(() => { onZoneBlockedRef.current = onZoneBlocked; });
   useEffect(() => { onZoneNpcInteractRef.current = onZoneNpcInteract; });
+  useEffect(() => { onNpcQuickMenuRef.current = onNpcQuickMenu; });
   useEffect(() => { hairColorRef.current = hairColor ?? '#5a3010'; }, [hairColor]);
   useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
   useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
@@ -126,6 +129,24 @@ export default function GameCanvas({
 
     const onDblClick = (e) => {
       const { cx, cy } = getCanvasPos(e);
+      // Check NPC double-click first
+      const g2 = gameRef.current;
+      if (g2?.player) {
+        const canvas2 = canvasRef.current;
+        const W2 = canvas2.width, H2 = canvas2.height;
+        const camX2 = Math.round(Math.max(0, Math.min(g2.player.x - W2 / 2, Math.max(0, MAP_W * TILE_SIZE - W2))));
+        const camY2 = Math.round(Math.max(0, Math.min(g2.player.y - H2 / 2, Math.max(0, MAP_H * TILE_SIZE - H2))));
+        const zoneNpcs = getActiveZoneNpcs();
+        for (const npc of zoneNpcs) {
+          const nx2 = npc.tx * TILE_SIZE + TILE_SIZE / 2 - camX2;
+          const ny2 = npc.ty * TILE_SIZE + TILE_SIZE / 2 - camY2;
+          if (Math.hypot(cx - nx2, cy - ny2) < 40) {
+            onNpcQuickMenuRef.current?.(npc.id, e.clientX, e.clientY);
+            return;
+          }
+        }
+      }
+      // Fall back to player inspect
       let best = null, bestDist = 32;
       for (const { op, sx, sy } of otherPlayerScreenPosRef.current) {
         const d = Math.hypot(cx - sx, cy - sy);

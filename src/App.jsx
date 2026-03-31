@@ -325,6 +325,7 @@ export default function App() {
   const [returnCast, setReturnCast] = useState(null); // { expiresAt: number } | null
   const returnCastRef = useRef(null);
   const [npcDialog, setNpcDialog] = useState(null); // npcKey string | null
+  const [npcQuickMenu, setNpcQuickMenu] = useState(null); // { npcId, x, y, tab } | null
   const [tutorialStep, setTutorialStep] = useState(0); // 0=hidden, 1-4=steps
   const [catchPopup, setCatchPopup] = useState(null); // { name, size, price, rarity }
   const [windfallPopup, setWindfallPopup] = useState(null); // { oreName, count }
@@ -583,6 +584,24 @@ export default function App() {
       setGs(prev => ({ ...prev, seenChapter5: true }));
     }, 9500);
   }, [serverEvent]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // NPC quick menu: dismiss when player moves
+  useEffect(() => {
+    if (!npcQuickMenu) return;
+    const px = gameRef.current?.player?.x;
+    const py = gameRef.current?.player?.y;
+    let raf;
+    const check = () => {
+      const p = gameRef.current?.player;
+      if (p && (Math.abs(p.x - px) > 4 || Math.abs(p.y - py) > 4)) {
+        setNpcQuickMenu(null);
+        return;
+      }
+      raf = requestAnimationFrame(check);
+    };
+    raf = requestAnimationFrame(check);
+    return () => cancelAnimationFrame(raf);
+  }, [npcQuickMenu]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Season pass monthly reset check
   useEffect(() => {
@@ -3722,6 +3741,7 @@ nickname={nickname}
           onCancelReturn={handleCancelReturn}
           onZoneBlocked={handleZoneBlocked}
           onZoneNpcInteract={handleZoneNpcInteract}
+          onNpcQuickMenu={(npcId, x, y) => setNpcQuickMenu({ npcId, x, y, tab: '퀘스트' })}
         />
         {/* Phase 13: Map transition wipe overlay */}
         {mapTransitioning && (
@@ -4119,6 +4139,138 @@ nickname={nickname}
           onClose={() => setNpcDialog(null)}
         />
       )}
+
+      {/* NPC 퀵 메뉴 (더블클릭) */}
+      {npcQuickMenu && (() => {
+        const { npcId, x, y, tab } = npcQuickMenu;
+        const npc = NPCS[npcId];
+        if (!npc) return null;
+        // Per-NPC quick action mapping
+        const NPC_QUICK = {
+          행상인:    { buy: { action: 'traveling_shop',   label: '물건 구경하기' },  sell: null },
+          노련한광부: { buy: { action: 'pickaxe_repair',   label: '곡괭이 수리 (-200G)' }, sell: { action: 'ore_appraise', label: '광석 감정받기' } },
+          산신령:    { buy: { action: 'mountain_buff',    label: '산기운 받기 (1일 1회)' }, sell: null },
+          심해탐험가: { buy: null, sell: { action: 'deep_quest',        label: '신화급 물고기 납품' } },
+          어시장상인: { buy: null, sell: { action: 'sell_market',       label: '생선 판매 (+20%)' } },
+          선장:      { buy: null, sell: null },
+          유물학자:  { buy: null, sell: { action: 'appraise_artifact',  label: '고대광석 감정받기' } },
+          설인:      { buy: { action: 'warm_drink',       label: '따뜻한 음료 받기 (1일 1회)' }, sell: null },
+        };
+        const q = NPC_QUICK[npcId] ?? { buy: null, sell: null };
+        const s2Quests = NPC_QUESTS[npcId];
+        const s2Step = gs.npcQuestStep?.[npcId] ?? 0;
+        const s2Total = s2Quests?.length ?? 0;
+        const s2Done = s2Step >= s2Total;
+        const currentQuest = s2Quests?.[s2Step];
+        const tabs = ['사기', '팔기', '퀘스트'];
+        const POPUP_W = 230;
+        const POPUP_H = 190;
+        const sx = Math.min(Math.max(x - POPUP_W / 2, 8), window.innerWidth - POPUP_W - 8);
+        const sy = Math.max(y - POPUP_H - 20, 60);
+        return (
+          <div
+            style={{
+              position: 'fixed', left: sx, top: sy,
+              width: POPUP_W, zIndex: 9500,
+              background: 'linear-gradient(160deg,#0d1e30,#0a1520)',
+              border: `1px solid ${npc.color}55`,
+              borderRadius: 14,
+              boxShadow: `0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px ${npc.color}22`,
+              overflow: 'hidden',
+              fontFamily: '"Noto Sans KR", sans-serif',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px 8px', borderBottom: `1px solid ${npc.color}33` }}>
+              <span style={{ fontSize: 22 }}>{npc.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: npc.color, fontWeight: 700, fontSize: 13 }}>{npc.name}</div>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 10 }}>친밀도 {Math.floor(gs.npcAffinity?.[npcId] ?? 0)}/100</div>
+              </div>
+              <button onClick={() => setNpcQuickMenu(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+            {/* Tabs */}
+            <div style={{ display: 'flex', borderBottom: `1px solid rgba(255,255,255,0.08)` }}>
+              {tabs.map(t => (
+                <button key={t} onClick={() => setNpcQuickMenu(prev => ({ ...prev, tab: t }))} style={{
+                  flex: 1, padding: '7px 0', fontSize: 12, fontWeight: tab === t ? 700 : 400,
+                  background: tab === t ? `${npc.color}22` : 'none',
+                  border: 'none', borderBottom: tab === t ? `2px solid ${npc.color}` : '2px solid transparent',
+                  color: tab === t ? npc.color : 'rgba(255,255,255,0.45)',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}>{t}</button>
+              ))}
+            </div>
+            {/* Content */}
+            <div style={{ padding: '10px 12px', minHeight: 90 }}>
+              {tab === '사기' && (
+                q.buy ? (
+                  <button onClick={() => { handleNpcDialogAction(npcId, q.buy.action); setNpcQuickMenu(null); }} style={{
+                    width: '100%', padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                    background: `${npc.color}22`, border: `1px solid ${npc.color}55`,
+                    color: '#e8edf5', fontSize: 13, fontWeight: 600, textAlign: 'left',
+                  }}>
+                    🛒 {q.buy.label}
+                  </button>
+                ) : (
+                  <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 16 }}>이 NPC는 판매 서비스가 없습니다</div>
+                )
+              )}
+              {tab === '팔기' && (
+                q.sell ? (
+                  <button onClick={() => { handleNpcDialogAction(npcId, q.sell.action); setNpcQuickMenu(null); }} style={{
+                    width: '100%', padding: '10px 12px', borderRadius: 8, cursor: 'pointer',
+                    background: `${npc.color}22`, border: `1px solid ${npc.color}55`,
+                    color: '#e8edf5', fontSize: 13, fontWeight: 600, textAlign: 'left',
+                  }}>
+                    💰 {q.sell.label}
+                  </button>
+                ) : (
+                  <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 16 }}>이 NPC는 구매 서비스가 없습니다</div>
+                )
+              )}
+              {tab === '퀘스트' && (
+                s2Quests ? (
+                  <div>
+                    {s2Done ? (
+                      <div style={{ color: '#88ff88', fontSize: 12, textAlign: 'center', paddingTop: 8 }}>✅ 모든 의뢰 완수! ({s2Total}/{s2Total})</div>
+                    ) : (
+                      <div style={{ marginBottom: 8 }}>
+                        <div style={{ color: '#ffcc44', fontSize: 11, fontWeight: 700, marginBottom: 3 }}>
+                          📜 의뢰 {s2Step + 1}/{s2Total}: {currentQuest?.title}
+                        </div>
+                        <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, marginBottom: 8 }}>
+                          {currentQuest?.hint(gs)}
+                        </div>
+                        <button onClick={() => { handleNpcDialogAction(npcId, 'npc_s2_quest'); setNpcQuickMenu(null); }} style={{
+                          width: '100%', padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+                          background: 'rgba(255,200,50,0.15)', border: '1px solid rgba(255,200,50,0.4)',
+                          color: '#ffdd66', fontSize: 12, fontWeight: 600,
+                        }}>
+                          의뢰 확인하기
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 12, textAlign: 'center', paddingTop: 16 }}>진행 중인 의뢰가 없습니다</div>
+                )
+              )}
+            </div>
+            {/* Full dialogue link */}
+            <div style={{ borderTop: `1px solid rgba(255,255,255,0.07)`, padding: '6px 12px' }}>
+              <button onClick={() => { setNpcQuickMenu(null); setNpcDialog(npcId); }} style={{
+                width: '100%', padding: '6px', borderRadius: 6, cursor: 'pointer',
+                background: 'none', border: '1px solid rgba(255,255,255,0.12)',
+                color: 'rgba(255,255,255,0.45)', fontSize: 11,
+              }}>
+                💬 전체 대화 열기
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Phase 15-4: Zone minigames */}
       {tidalGame && (
