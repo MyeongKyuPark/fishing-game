@@ -193,7 +193,7 @@ export const FARM_TY = 15;
 export const FARM_RANGE = 5 * TILE_SIZE;
 
 export const PLAYER_START_X = 15 * TILE_SIZE + TILE_SIZE / 2;
-export const PLAYER_START_Y = 14 * TILE_SIZE + TILE_SIZE / 2;
+export const PLAYER_START_Y = 13 * TILE_SIZE + TILE_SIZE / 2;
 
 // Door triggers: walk near these to get an entry prompt
 export const DOOR_TRIGGERS = [
