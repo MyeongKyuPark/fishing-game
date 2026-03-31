@@ -54,10 +54,11 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
     const cottageOffBonus = COTTAGE_LEVEL_BONUSES[cottageLevel]?.offlineBonus ?? 0;
     const offlineMult = innOffMult * bankOffMult * furnitureOffMult * (1 + titleOffBonus) * (1 + cottageOffBonus);
     const offlineReward = Math.floor(effectiveMins * 10 * offlineMult);
-    // Restore zone module state from save (prevents blank map on reload)
-    const savedZone = base.worldZone ?? '마을';
-    setActiveZone(savedZone);
-    setActiveTiles(ZONE_TILES[savedZone] ?? ZONE_TILES['마을']);
+    // Always spawn in town on reload — PLAYER_START is on a town path tile;
+    // restoring a non-town zone (e.g. 남쪽심해) can put the spawn on WATER.
+    setActiveZone('마을');
+    setActiveTiles(ZONE_TILES['마을']);
+    base = { ...base, worldZone: '마을' };
     // Clear expired mountainBuff
     if (base.mountainBuff && Date.now() >= base.mountainBuff.expiresAt) {
       base = { ...base, mountainBuff: null };
