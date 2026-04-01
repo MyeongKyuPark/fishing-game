@@ -63,7 +63,7 @@ export default function TopBar({
   achPopup, gradeUpCelebration,
   gameRef, handleCommand, handleExitRoom, handleNpcInteract,
   addMsg,
-  setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex,
+  setShowInv, setShowShop, setShowStats, setShowRank, setShowQuest, setShowDex, setShowAch,
   setShowGuild, setShowMarket, setShowMobileMenu, showMobileMenu,
   setAppearanceDraft, setShowAppearance,
   setShowSettings, setShowTournament, setShowCottage, setShowWorldMap,
@@ -288,6 +288,7 @@ export default function TopBar({
         <button tabIndex={-1} data-tooltip="랭킹 (R)" onClick={() => setShowRank(v => !v)}>🏆 랭킹</button>
         <button tabIndex={-1} data-tooltip="일일 퀘스트 (Q)" onClick={() => setShowQuest(v => !v)} style={questBtnStyle}>📋 퀘스트{questHasClaim ? ' 🔔' : ''}</button>
         <button tabIndex={-1} data-tooltip="물고기 도감 (D)" onClick={() => setShowDex(v => !v)}>📖 도감</button>
+        <button tabIndex={-1} data-tooltip="업적" onClick={() => setShowAch?.(v => !v)}>🏅 업적</button>
         <button tabIndex={-1} data-tooltip="세계 지도 (M)" onClick={() => setShowWorldMap?.(v => !v)}>🗺 지도</button>
         <button tabIndex={-1} data-tooltip="주간 낚시 토너먼트" onClick={() => { setShowTournament(v => !v); setGs(prev => ({ ...prev, seenFeatures: [...new Set([...(prev.seenFeatures ?? []), 'tournament'])] })); }}>
           🏆 토너먼트{!(gs.seenFeatures ?? []).includes('tournament') ? <span style={{ fontSize: 9, background: '#ff4444', color: '#fff', borderRadius: 4, padding: '1px 4px', marginLeft: 3, verticalAlign: 'middle' }}>NEW</span> : ''}

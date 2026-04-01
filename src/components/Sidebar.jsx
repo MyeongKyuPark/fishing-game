@@ -44,6 +44,7 @@ export default function Sidebar(props) {
     showRank, setShowRank,
     showQuest, setShowQuest,
     showDex, setShowDex,
+    showAch, setShowAch,
     showBank, setShowBank, bankInput, setBankInput,
     showAppearance, setShowAppearance, appearanceDraft, setAppearanceDraft,
     inspectPlayer, setInspectPlayer,
@@ -89,6 +90,7 @@ export default function Sidebar(props) {
   const [settingsState, setSettingsState] = useState(() => getSettings());
   const [bgmVol, setBgmVolState] = useState(() => getBgmVolume());
   const [dexTab, setDexTab] = useState('어종');
+  const [achTab, setAchTab] = useState('전체');
   const [evolvingPet, setEvolvingPet] = useState(null);
 
   const showBuyToast = (msg) => {
@@ -2544,6 +2546,112 @@ export default function Sidebar(props) {
                     })}
                   </>
                 )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Achievements modal */}
+      {showAch && (() => {
+        const ACH_CATS = [
+          { key: '전체' },
+          { key: '낚시',  types: ['fishCaught','legendaryCount','mythicCount'] },
+          { key: '채굴',  types: ['oreMined'] },
+          { key: '채집',  types: ['herbGathered','cropsHarvested'] },
+          { key: '도감',  types: ['speciesCount'] },
+          { key: '제작',  types: ['enhanceCount','smeltCount','cookCount','dishCooked','artisanCraftCount','artisanUniqueCount'] },
+          { key: '재산',  types: ['maxMoney','totalSold','totalDeposited'] },
+          { key: '접속',  types: ['loginStreak'] },
+          { key: 'NPC',   types: ['npcAffinity','npcQuestS2Count','npcQuestS2Full'] },
+          { key: '기타' },
+        ];
+        const getCat = (ach) => {
+          for (const c of ACH_CATS) {
+            if (!c.types) continue;
+            if (c.types.some(t => (ach.type ?? '').startsWith(t))) return c.key;
+          }
+          return '기타';
+        };
+        const doneSet = new Set(gs.achievements ?? []);
+        const stats = gs.achStats ?? {};
+        const totalAch = ACHIEVEMENTS.length;
+        const doneAch = ACHIEVEMENTS.filter(a => doneSet.has(a.id)).length;
+        const filtered = achTab === '전체' ? ACHIEVEMENTS : ACHIEVEMENTS.filter(a => getCat(a) === achTab);
+        return (
+          <div className="overlay" onClick={() => setShowAch(false)}>
+            <div className="panel" style={{ maxWidth: 540, display: 'flex', flexDirection: 'column', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+              <div className="panel-head">
+                <span>🏅 업적 <span style={{ fontSize: 12, color: '#ffdd44' }}>{doneAch}/{totalAch}</span></span>
+                <button tabIndex={-1} onClick={() => setShowAch(false)}>✕</button>
+              </div>
+              {/* Overall progress bar */}
+              <div style={{ padding: '6px 12px 4px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#aaa', marginBottom: 4 }}>
+                  <span>전체 달성률</span>
+                  <span style={{ color: '#ffdd44' }}>{Math.round(doneAch / totalAch * 100)}%</span>
+                </div>
+                <div style={{ height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${doneAch / totalAch * 100}%`, background: 'linear-gradient(90deg,#ffaa22,#ffdd44)', borderRadius: 3, transition: 'width 0.4s' }} />
+                </div>
+              </div>
+              {/* Category tabs */}
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                {ACH_CATS.map(c => {
+                  const catTotal = c.key === '전체' ? ACHIEVEMENTS.length : ACHIEVEMENTS.filter(a => getCat(a) === c.key).length;
+                  const catDone  = c.key === '전체' ? doneAch : ACHIEVEMENTS.filter(a => getCat(a) === c.key && doneSet.has(a.id)).length;
+                  const active = achTab === c.key;
+                  return (
+                    <button key={c.key} tabIndex={-1} onClick={() => setAchTab(c.key)} style={{
+                      background: active ? 'rgba(255,200,50,0.22)' : 'rgba(255,255,255,0.06)',
+                      border: `1px solid ${active ? 'rgba(255,200,50,0.5)' : 'rgba(255,255,255,0.12)'}`,
+                      color: active ? '#ffdd44' : '#aaa',
+                      borderRadius: 6, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                    }}>
+                      {c.key} <span style={{ color: active ? '#ffdd44' : '#666', fontSize: 10 }}>{catDone}/{catTotal}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Achievement list */}
+              <div style={{ overflowY: 'auto', flex: 1, padding: 8, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {filtered.map(ach => {
+                  const done = doneSet.has(ach.id);
+                  const val = Math.min(stats[ach.type] ?? 0, ach.goal);
+                  const pct = val / ach.goal;
+                  const rewardParts = [];
+                  if (ach.reward?.money) rewardParts.push(`${ach.reward.money.toLocaleString()}G`);
+                  if (ach.reward?.baitInventory)   Object.entries(ach.reward.baitInventory).forEach(([k,v])   => rewardParts.push(`${k}×${v}`));
+                  if (ach.reward?.potionInventory)  Object.entries(ach.reward.potionInventory).forEach(([k,v])  => rewardParts.push(`${k}×${v}`));
+                  return (
+                    <div key={ach.id} style={{
+                      background: done ? 'rgba(255,200,50,0.1)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${done ? 'rgba(255,200,50,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                      borderRadius: 8, padding: '7px 10px',
+                      display: 'flex', alignItems: 'center', gap: 10, opacity: done ? 1 : 0.78,
+                    }}>
+                      <div style={{ fontSize: 20, minWidth: 26, textAlign: 'center', filter: done ? 'none' : 'grayscale(0.7)' }}>{ach.icon}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                          <span style={{ fontWeight: 700, fontSize: 13, color: done ? '#ffdd44' : '#ccc' }}>{ach.label}</span>
+                          {done && <span style={{ fontSize: 9, background: 'rgba(255,200,50,0.3)', color: '#ffdd44', borderRadius: 4, padding: '1px 5px' }}>✓ 달성</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#888', marginTop: 1 }}>{ach.desc}</div>
+                        {!done && (
+                          <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ flex: 1, height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${pct * 100}%`, background: '#ffaa44', borderRadius: 2 }} />
+                            </div>
+                            <span style={{ fontSize: 10, color: '#666', whiteSpace: 'nowrap' }}>{val.toLocaleString()} / {ach.goal.toLocaleString()}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: '#ffaa44', textAlign: 'right', whiteSpace: 'nowrap', minWidth: 60 }}>
+                        🎁 {rewardParts.join(' ')}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
