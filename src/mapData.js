@@ -145,10 +145,10 @@ function buildMap() {
 export const MAP_TILES = buildMap();
 
 export const FISHING_CHAIRS = [
-  // Freshwater pond chairs (row 14, north edge of pond at cols 16-22)
-  { tx: 16, ty: 14, zone: '민물' },
-  { tx: 19, ty: 14, zone: '민물' },
-  { tx: 22, ty: 14, zone: '민물' },
+  // Freshwater pond chairs (row 13, main path north of pond — row 14 is building tiles)
+  { tx: 16, ty: 13, zone: '민물' },
+  { tx: 19, ty: 13, zone: '민물' },
+  { tx: 22, ty: 13, zone: '민물' },
   // Main dock chairs (row 22) — river zone
   { tx: 5,  ty: 22, zone: '강' },
   { tx: 9,  ty: 22, zone: '강' },
