@@ -162,8 +162,125 @@ const ROOMS = {
   },
 };
 
+// ── Mine floors (multi-floor walkable dungeon) ────────────────────────────────
+// Tile chars: N = staircase down, U = staircase up
+const MINE_FLOORS = [
+  { // Floor 1: Entry level (sandstone)
+    label: '⛏ 광산 1층',
+    w: 12, h: 10,
+    floor: '#5a4a38', wall: '#3a2e28', ore: '#cc9944',
+    tiles: [
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+      ['W','O','O','F','F','F','F','F','O','O','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','O','F','F','F','F','F','F','F','F','O','W'],
+      ['W','F','F','F','O','F','F','F','O','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','O','F','F','F','F','F','F','F','F','O','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','N','F','W'],
+      ['W','W','W','W','W','D','W','W','W','W','W','W'],
+    ],
+    npcs: [
+      { tx: 7, ty: 3, name: '철수', bodyColor: '#8899bb', hairColor: '#222222',
+        dialog: '이 광산엔 귀한 광석이\n많답니다! 조심하세요', facing: 'right' },
+    ],
+    exitTx: 5, exitTy: 9,
+    entryTx: 5, entryTy: 7,
+    stairsDownTx: 9, stairsDownTy: 8,
+    entryFromBelowTx: 9, entryFromBelowTy: 7,
+  },
+  { // Floor 2: Coal layer (dark granite)
+    label: '⛏ 광산 2층',
+    w: 12, h: 10,
+    floor: '#484858', wall: '#2a2a3a', ore: '#aa8844',
+    tiles: [
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+      ['W','U','F','O','F','F','F','O','F','F','F','W'],
+      ['W','F','F','F','O','F','O','F','F','O','F','W'],
+      ['W','O','F','F','F','F','F','F','O','F','O','W'],
+      ['W','F','O','F','F','O','F','F','F','F','F','W'],
+      ['W','F','F','F','O','F','F','O','F','F','F','W'],
+      ['W','O','F','F','F','F','F','F','F','O','O','W'],
+      ['W','F','F','O','F','F','O','F','F','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','N','F','W'],
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+    ],
+    npcs: [],
+    stairsUpTx: 1, stairsUpTy: 1,
+    stairsDownTx: 9, stairsDownTy: 8,
+    entryFromAboveTx: 1, entryFromAboveTy: 2,
+    entryFromBelowTx: 9, entryFromBelowTy: 7,
+  },
+  { // Floor 3: Azure stone (blue-tinged rock)
+    label: '⛏ 광산 3층',
+    w: 12, h: 10,
+    floor: '#3a3a55', wall: '#222235', ore: '#4466cc',
+    tiles: [
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+      ['W','U','F','O','O','F','F','O','F','F','F','W'],
+      ['W','F','F','F','O','F','O','F','O','O','F','W'],
+      ['W','O','O','F','F','O','F','F','F','F','O','W'],
+      ['W','F','O','F','F','F','F','O','F','F','F','W'],
+      ['W','F','F','O','O','F','F','F','O','F','F','W'],
+      ['W','O','F','F','F','F','O','F','F','O','O','W'],
+      ['W','F','O','F','F','O','F','F','O','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','N','F','W'],
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+    ],
+    npcs: [],
+    stairsUpTx: 1, stairsUpTy: 1,
+    stairsDownTx: 9, stairsDownTy: 8,
+    entryFromAboveTx: 1, entryFromAboveTy: 2,
+    entryFromBelowTx: 9, entryFromBelowTy: 7,
+  },
+  { // Floor 4: Crystal cavern (purple)
+    label: '⛏ 광산 4층',
+    w: 12, h: 10,
+    floor: '#2d2040', wall: '#1a1228', ore: '#aa44cc',
+    tiles: [
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+      ['W','U','O','O','F','F','O','O','F','F','O','W'],
+      ['W','F','F','F','O','O','F','F','O','O','F','W'],
+      ['W','O','O','F','F','F','O','F','F','F','O','W'],
+      ['W','F','O','F','O','F','F','O','F','O','F','W'],
+      ['W','F','F','O','F','F','O','F','O','F','F','W'],
+      ['W','O','F','F','F','O','F','F','F','F','O','W'],
+      ['W','F','O','O','F','F','F','O','O','F','F','W'],
+      ['W','F','F','F','F','F','F','F','F','N','F','W'],
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+    ],
+    npcs: [],
+    stairsUpTx: 1, stairsUpTy: 1,
+    stairsDownTx: 9, stairsDownTy: 8,
+    entryFromAboveTx: 1, entryFromAboveTy: 2,
+    entryFromBelowTx: 9, entryFromBelowTy: 7,
+  },
+  { // Floor 5: Abyss — ancient obsidian (deepest)
+    label: '⛏ 광산 5층 (최심부)',
+    w: 12, h: 10,
+    floor: '#1a1a2a', wall: '#0f0f18', ore: '#cc3355',
+    tiles: [
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+      ['W','U','O','O','O','F','O','O','O','F','O','W'],
+      ['W','F','F','O','F','O','F','O','F','O','F','W'],
+      ['W','O','O','F','O','F','O','F','O','F','O','W'],
+      ['W','F','O','F','F','O','F','O','F','F','O','W'],
+      ['W','O','F','O','F','F','F','F','O','F','F','W'],
+      ['W','F','O','F','O','F','O','F','F','O','O','W'],
+      ['W','O','F','O','F','O','F','O','F','F','O','W'],
+      ['W','F','F','F','F','F','F','F','F','F','F','W'],
+      ['W','W','W','W','W','W','W','W','W','W','W','W'],
+    ],
+    npcs: [],
+    stairsUpTx: 1, stairsUpTy: 1,
+    entryFromAboveTx: 1, entryFromAboveTy: 2,
+    // No stairsDown — deepest floor
+  },
+];
+
 function isWalkable(tile) {
-  return ['F', 'R', 'D'].includes(tile);
+  return ['F', 'R', 'D', 'N', 'U'].includes(tile);
 }
 
 // ── Tile drawing ──────────────────────────────────────────────────────────────
@@ -298,6 +415,55 @@ function drawRoomTile(ctx, tile, x, y, room, now) {
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText('↓', x + TS / 2, y + TS * 0.52);
+      break;
+    }
+    case 'N': { // Staircase going down
+      ctx.fillStyle = room.floor ?? '#5a5a6a';
+      ctx.fillRect(x, y, TS, TS);
+      // Dark pit opening
+      ctx.fillStyle = 'rgba(0,0,0,0.88)';
+      ctx.beginPath(); ctx.ellipse(x + TS / 2, y + TS * 0.64, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(180,160,120,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(x + TS / 2, y + TS * 0.64, 9, 7, 0, 0, Math.PI * 2); ctx.stroke();
+      // Stone steps above pit
+      ctx.fillStyle = 'rgba(110,95,75,0.9)';
+      ctx.fillRect(x + 5, y + 5, TS - 10, 3);
+      ctx.fillRect(x + 8, y + 9, TS - 16, 3);
+      ctx.fillRect(x + 11, y + 13, TS - 22, 3);
+      // Arrow
+      ctx.fillStyle = 'rgba(255,210,80,0.95)';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('↓', x + TS / 2, y + TS * 0.62);
+      ctx.textBaseline = 'alphabetic';
+      break;
+    }
+    case 'U': { // Staircase going up
+      ctx.fillStyle = room.floor ?? '#5a5a6a';
+      ctx.fillRect(x, y, TS, TS);
+      // Stone steps
+      const sc = room.wall ?? '#444';
+      ctx.fillStyle = sc;
+      ctx.fillRect(x + 4, y + TS - 8, TS - 8, 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.13)'; ctx.fillRect(x + 4, y + TS - 8, TS - 8, 1);
+      ctx.fillStyle = sc;
+      ctx.fillRect(x + 7, y + TS - 14, TS - 14, 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.13)'; ctx.fillRect(x + 7, y + TS - 14, TS - 14, 1);
+      ctx.fillStyle = sc;
+      ctx.fillRect(x + 10, y + TS - 20, TS - 20, 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.13)'; ctx.fillRect(x + 10, y + TS - 20, TS - 20, 1);
+      ctx.fillStyle = sc;
+      ctx.fillRect(x + 13, y + TS - 26, TS - 26, 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.13)'; ctx.fillRect(x + 13, y + TS - 26, TS - 26, 1);
+      // Arrow
+      ctx.fillStyle = 'rgba(255,210,80,0.95)';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('↑', x + TS / 2, y + TS * 0.28);
+      ctx.textBaseline = 'alphabetic';
       break;
     }
     default:
@@ -585,7 +751,7 @@ function drawCottageFurniture(ctx, offX, offY, furniture, FURN) {
   });
 }
 
-export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcInteract, onNearNpcChange, hairColor, bodyColor, skinColor, gender, cottageData, FURNITURE }) {
+export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcInteract, onNearNpcChange, hairColor, bodyColor, skinColor, gender, cottageData, FURNITURE, onMineDepthChange, maxMineFloor }) {
   const canvasRef = useRef(null);
   const playerRef = useRef(null);
   const onExitRef = useRef(onExit);
@@ -607,6 +773,12 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
   const FURNITURERef = useRef(FURNITURE);
   useEffect(() => { FURNITURERef.current = FURNITURE; }, [FURNITURE]);
   const nearNpcRef = useRef(null);
+  const mineFloorRef = useRef(0);
+  const onMineDepthChangeRef = useRef(onMineDepthChange);
+  const maxMineFloorRef = useRef(maxMineFloor ?? 4);
+  const stairMsgRef = useRef({ msg: '', at: 0 });
+  useEffect(() => { onMineDepthChangeRef.current = onMineDepthChange; }, [onMineDepthChange]);
+  useEffect(() => { maxMineFloorRef.current = maxMineFloor ?? 4; }, [maxMineFloor]);
 
   const room = ROOMS[roomId];
 
@@ -626,9 +798,11 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
   // Init player at entry
   useEffect(() => {
     if (!room) return;
+    mineFloorRef.current = 0;
+    const initRoom = roomId === 'mine' ? MINE_FLOORS[0] : room;
     playerRef.current = {
-      x: (room.entryTx + 0.5) * TS,
-      y: (room.entryTy + 0.5) * TS,
+      x: (initRoom.entryTx + 0.5) * TS,
+      y: (initRoom.entryTy + 0.5) * TS,
       vx: 0, vy: 0,
       facing: 'up',
     };
@@ -642,15 +816,16 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
     const FRIC = 0.80;
     let enterWasDown = false;
     let prevNearNpcName = null;
+    let stairLastAt = 0;
 
-    function canWalkHere(px, py) {
+    function canWalkHere(px, py, rm = room) {
       // Check 4 corners of a small bounding box
       const r = 7;
       for (const [cx2, cy2] of [[px - r, py], [px + r, py], [px, py - r], [px, py + r]]) {
         const tx2 = Math.floor(cx2 / TS);
         const ty2 = Math.floor(cy2 / TS);
-        if (tx2 < 0 || ty2 < 0 || tx2 >= room.w || ty2 >= room.h) return false;
-        if (!isWalkable(room.tiles[ty2][tx2])) return false;
+        if (tx2 < 0 || ty2 < 0 || tx2 >= rm.w || ty2 >= rm.h) return false;
+        if (!isWalkable(rm.tiles[ty2][tx2])) return false;
       }
       return true;
     }
@@ -670,6 +845,7 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
       const ctx = canvas.getContext('2d');
       const now = performance.now();
       const keys = gameRef.current?.keys ?? {};
+      const currentRoom = roomId === 'mine' ? MINE_FLOORS[mineFloorRef.current] : room;
 
       // Movement
       let dx = 0, dy = 0;
@@ -689,23 +865,64 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
       if (Math.abs(player.vy) < 0.05) player.vy = 0;
 
       const nx = player.x + player.vx;
-      if (canWalkHere(nx, player.y)) player.x = nx; else player.vx = 0;
+      if (canWalkHere(nx, player.y, currentRoom)) player.x = nx; else player.vx = 0;
       const ny = player.y + player.vy;
-      if (canWalkHere(player.x, ny)) player.y = ny; else player.vy = 0;
+      if (canWalkHere(player.x, ny, currentRoom)) player.y = ny; else player.vy = 0;
 
-      // Exit check
+      // Exit / staircase check
       const ptx = Math.floor(player.x / TS);
       const pty = Math.floor(player.y / TS);
-      if (ptx === room.exitTx && pty === room.exitTy) {
-        onExitRef.current?.();
-        rafId = requestAnimationFrame(loop);
-        return;
+      if (roomId === 'mine') {
+        const mf = mineFloorRef.current;
+        const mineRoom = MINE_FLOORS[mf];
+        // Exit door (floor 1 only)
+        if (mineRoom.exitTx != null && ptx === mineRoom.exitTx && pty === mineRoom.exitTy) {
+          onExitRef.current?.();
+          rafId = requestAnimationFrame(loop); return;
+        }
+        // Staircase down (N tile)
+        if (mineRoom.stairsDownTx != null && ptx === mineRoom.stairsDownTx && pty === mineRoom.stairsDownTy
+            && now - stairLastAt > 900) {
+          stairLastAt = now;
+          const nextFloor = mf + 1;
+          if (nextFloor > maxMineFloorRef.current) {
+            stairMsgRef.current = { msg: '🔒 더 깊이 내려가려면 채굴 능력이 필요합니다', at: now };
+          } else {
+            mineFloorRef.current = nextFloor;
+            const nextRoom = MINE_FLOORS[nextFloor];
+            player.x = (nextRoom.entryFromAboveTx + 0.5) * TS;
+            player.y = (nextRoom.entryFromAboveTy + 0.5) * TS;
+            player.vx = 0; player.vy = 0;
+            onMineDepthChangeRef.current?.(nextFloor + 1);
+            stairMsgRef.current = { msg: `⛏ ${nextFloor + 1}층으로 내려갑니다…`, at: now };
+          }
+        }
+        // Staircase up (U tile)
+        if (mineRoom.stairsUpTx != null && ptx === mineRoom.stairsUpTx && pty === mineRoom.stairsUpTy
+            && now - stairLastAt > 900) {
+          stairLastAt = now;
+          const prevFloor = mf - 1;
+          if (prevFloor >= 0) {
+            mineFloorRef.current = prevFloor;
+            const prevRoom = MINE_FLOORS[prevFloor];
+            player.x = (prevRoom.entryFromBelowTx + 0.5) * TS;
+            player.y = (prevRoom.entryFromBelowTy + 0.5) * TS;
+            player.vx = 0; player.vy = 0;
+            onMineDepthChangeRef.current?.(prevFloor + 1);
+            stairMsgRef.current = { msg: `⛏ ${prevFloor + 1}층으로 올라갑니다…`, at: now };
+          }
+        }
+      } else {
+        if (ptx === room.exitTx && pty === room.exitTy) {
+          onExitRef.current?.();
+          rafId = requestAnimationFrame(loop); return;
+        }
       }
 
       // NPC proximity
       let nearNpc = null;
       let nearNpcDist = Infinity;
-      for (const npc of room.npcs) {
+      for (const npc of currentRoom.npcs) {
         const d = Math.hypot(player.x - (npc.tx + 0.5) * TS, player.y - (npc.ty + 0.5) * TS);
         if (d < 2.5 * TS && d < nearNpcDist) { nearNpc = npc; nearNpcDist = d; }
       }
@@ -717,13 +934,14 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
       onNearNpcChangeRef.current?.(nearNpc ?? null);
 
       // ── Render ──
-      // Dark background
-      const bgColor = roomId === 'mine' ? '#141420' : roomId === 'inn' ? '#1a100a' : '#2a1a0a';
+      // Dark background (mine gets darker per floor)
+      const mineBgColors = ['#141420', '#101020', '#0e0e1e', '#0a0a18', '#050510'];
+      const bgColor = roomId === 'mine' ? (mineBgColors[mineFloorRef.current] ?? '#141420') : roomId === 'inn' ? '#1a100a' : '#2a1a0a';
       ctx.fillStyle = bgColor;
       ctx.fillRect(0, 0, W, H);
 
-      const roomW = room.w * TS;
-      const roomH = room.h * TS;
+      const roomW = currentRoom.w * TS;
+      const roomH = currentRoom.h * TS;
       const offX = Math.round((W - roomW) / 2);
       const offY = Math.round((H - roomH) / 2);
 
@@ -731,14 +949,14 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
       if (roomId === 'mine') drawMineLanterns(ctx, offX, offY, now);
 
       // Tiles
-      for (let ty2 = 0; ty2 < room.h; ty2++) {
-        for (let tx2 = 0; tx2 < room.w; tx2++) {
-          drawRoomTile(ctx, room.tiles[ty2][tx2], offX + tx2 * TS, offY + ty2 * TS, room, now);
+      for (let ty2 = 0; ty2 < currentRoom.h; ty2++) {
+        for (let tx2 = 0; tx2 < currentRoom.w; tx2++) {
+          drawRoomTile(ctx, currentRoom.tiles[ty2][tx2], offX + tx2 * TS, offY + ty2 * TS, currentRoom, now);
         }
       }
 
       // NPCs
-      for (const npc of room.npcs) {
+      for (const npc of currentRoom.npcs) {
         const nsx = offX + (npc.tx + 0.5) * TS;
         const nsy = offY + (npc.ty + 0.5) * TS;
         const dist = Math.hypot(player.x - (npc.tx + 0.5) * TS, player.y - (npc.ty + 0.5) * TS);
@@ -759,13 +977,26 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
       ctx.font = 'bold 14px "Noto Sans KR", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(room.label, W / 2, 24);
+      ctx.fillText(currentRoom.label, W / 2, 24);
 
       // Exit hint at bottom
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = '11px "Noto Sans KR", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('↓ 출구 문으로 이동하면 나갑니다', W / 2, H - 8);
+      const exitHint = roomId === 'mine'
+        ? (mineFloorRef.current === 0 ? '↓ 문으로 나가거나 ↓N 계단으로 더 깊이 내려가세요' : '↑U 계단으로 올라가거나 ↓N 계단으로 내려가세요')
+        : '↓ 출구 문으로 이동하면 나갑니다';
+      ctx.fillText(exitHint, W / 2, H - 8);
+
+      // Stair transition message
+      const sm = stairMsgRef.current;
+      if (now - sm.at < 2200) {
+        const alpha = Math.min(1, (2200 - (now - sm.at)) / 500);
+        ctx.fillStyle = `rgba(255,220,80,${alpha.toFixed(2)})`;
+        ctx.font = 'bold 13px "Noto Sans KR", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(sm.msg, W / 2, H / 2 - 28);
+      }
 
       // NPC interaction hint
       if (nearNpc) {

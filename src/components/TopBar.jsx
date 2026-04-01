@@ -2,7 +2,6 @@ import RankSidebar from '../RankSidebar';
 import MiniMap from '../MiniMap';
 import Joystick from '../Joystick';
 import { RODS, FISH } from '../gameData';
-import { MINE_DEPTH_REQ, MINE_DEPTH_TIME } from '../hooks/useGameState';
 import { ZONE_LABELS } from '../mapData';
 import { getWeatherForecast } from '../weatherData';
 import { useEffect, useState } from 'react';
@@ -200,36 +199,6 @@ export default function TopBar({
           </div>
         )}
       </div>}
-
-{indoorRoom === 'mine' && (
-        <div style={{ position: 'absolute', top: 44, left: '50%', transform: 'translateX(-50%)', zIndex: 10, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(10,10,20,0.88)', borderRadius: 10, padding: '5px 12px', border: '1px solid rgba(120,80,255,0.45)', whiteSpace: 'nowrap' }}>
-          <span style={{ color: '#aabbcc', fontSize: 12 }}>⛏ 채굴 깊이</span>
-          {[1, 2, 3, 4, 5].map(d => {
-            const req = MINE_DEPTH_REQ[d] ?? 0;
-            const mineAbil = gs.abilities?.채굴?.value ?? 0;
-            const cheolsuUnlock = (gs.npcAffinity?.채굴사 ?? 0) >= 80;
-            const canUse = cheolsuUnlock || mineAbil >= req;
-            const active = (gs.mineDepth ?? 1) === d;
-            const lockLabel = cheolsuUnlock ? '철수 해금' : `채굴 ${req} 필요`;
-            return (
-              <button key={d} tabIndex={-1} style={{
-                background: active ? 'rgba(120,60,255,0.85)' : canUse ? 'rgba(50,50,80,0.85)' : 'rgba(25,25,40,0.85)',
-                border: `1px solid ${active ? '#aa66ff' : canUse ? '#5566aa' : '#333355'}`,
-                color: active ? '#fff' : canUse ? '#99bbdd' : '#445566',
-                borderRadius: 6, padding: '3px 9px', fontSize: 11,
-                cursor: canUse ? 'pointer' : 'not-allowed',
-              }}
-                title={req > 0 ? lockLabel : '기본'}
-                onClick={() => {
-                  if (!canUse) { addMsg(`⛏ ${d}층은 채굴 ${req} 이상 필요합니다!`, 'error'); return; }
-                  setGs(prev => ({ ...prev, mineDepth: d }));
-                  addMsg(`⛏ ${d}층으로 이동합니다.${d > 1 ? ` (시간 ×${MINE_DEPTH_TIME[d-1].toFixed(2)}, 희귀 광석 확률 ↑)` : ''}`, 'system');
-                }}
-              >{d}층{active ? ' ✓' : req > 0 && !canUse ? ` 🔒` : ''}</button>
-            );
-          })}
-        </div>
-      )}
 
       {!indoorRoom && weather?.canFish === false && (
         <div className="weather-warning" style={{ position: 'absolute', top: 48, left: '50%', transform: 'translateX(-50%)', background: 'rgba(30,20,0,0.85)', color: '#ffcc44', border: '1px solid #ffaa00', borderRadius: 8, padding: '6px 16px', fontSize: 13, fontWeight: 700, zIndex: 50, pointerEvents: 'none', whiteSpace: 'nowrap' }}>

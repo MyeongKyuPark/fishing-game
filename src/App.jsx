@@ -3775,6 +3775,17 @@ nickname={nickname}
             gender={gs.gender}
             cottageData={gs.cottage}
             FURNITURE={FURNITURE}
+            onMineDepthChange={(d) => setGs(prev => ({ ...prev, mineDepth: d }))}
+            maxMineFloor={(() => {
+              const mineAbil = gs.abilities?.채굴?.value ?? 0;
+              const cheolsuUnlock = (gs.npcAffinity?.채굴사 ?? 0) >= 80;
+              let max = 0;
+              for (let d = 1; d <= 5; d++) {
+                const req = MINE_DEPTH_REQ[d] ?? 0;
+                if (cheolsuUnlock || mineAbil >= req) max = d - 1;
+              }
+              return max;
+            })()}
           />
         )}
 
