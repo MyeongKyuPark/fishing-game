@@ -1,7 +1,9 @@
 // NPC 대화 인터페이스 — 친밀도 기반 대사 + 행동 선택
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { NPCS, getAffinityLevel } from '../npcData';
 import { NPC_QUESTS } from '../npcQuestData';
+
+const CHAT_COOLDOWN_MS = 3 * 60 * 1000; // 3분
 
 // ── 대사 데이터 ─────────────────────────────────────────────────────────────
 const DIALOGUE = {
@@ -63,7 +65,7 @@ const DIALOGUE = {
       "퀘스트 다 마치셨어요? 정말 대단해요~",
     ],
     options: [
-      { id: 'rest',       icon: '🛏',  label: '휴식하기' },
+      { id: 'rest',       icon: '🛏',  label: '휴식하기 (무료 · 1시간 쿨)' },
       { id: 'appearance', icon: '💄',  label: '외모 변경' },
       { id: 'chat',       icon: '💬',  label: '잡담하기' },
       { id: 'close',      icon: '👋',  label: '안녕히' },
@@ -285,6 +287,7 @@ export default function NpcDialogue({ npcKey, affinity, onAction, onGift, gs, on
   const [currentLine, setCurrentLine] = useState(() => getGreeting(npcKey, affinity));
   const [isChatting, setIsChatting] = useState(false);
   const [showGift, setShowGift] = useState(false);
+  const [, setTick] = useState(0);
 
   const affinityLevel = getAffinityLevel(affinity, npcKey);
   const affinityPct = Math.min(100, affinity);
@@ -292,11 +295,24 @@ export default function NpcDialogue({ npcKey, affinity, onAction, onGift, gs, on
   // 다음 친밀도 임계값
   const nextThreshold = npc?.thresholds?.find(t => t.at > affinity);
 
+  // Cooldown: recompute remaining every second while cooling down
+  const lastChatAt = gs?.npcChatAt?.[npcKey] ?? 0;
+  const chatCooldownRemaining = Math.max(0, CHAT_COOLDOWN_MS - (Date.now() - lastChatAt));
+  const chatOnCooldown = chatCooldownRemaining > 0;
+
+  useEffect(() => {
+    if (!chatOnCooldown) return;
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [chatOnCooldown]);
+
   const handleOption = useCallback((optId) => {
     if (optId === 'chat') {
+      const last = gs?.npcChatAt?.[npcKey] ?? 0;
+      if (Date.now() - last < CHAT_COOLDOWN_MS) return; // still on cooldown
       setCurrentLine(getRandChat(npcKey));
       setIsChatting(true);
-      onAction('chat_affinity'); // +0.5 affinity
+      onAction('chat_affinity'); // +0.5 affinity, records timestamp
       return;
     }
     if (optId === 'close') {
@@ -308,7 +324,7 @@ export default function NpcDialogue({ npcKey, affinity, onAction, onGift, gs, on
       return;
     }
     onAction(optId);
-  }, [npcKey, onAction, onClose]);
+  }, [npcKey, onAction, onClose, gs]);
 
   // Build gift item list from gs inventory
   const prefs = npc?.giftPrefs;
@@ -434,25 +450,35 @@ export default function NpcDialogue({ npcKey, affinity, onAction, onGift, gs, on
 
         {/* 선택지 버튼 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          {data.options.map(opt => (
-            <button key={opt.id} onClick={() => handleOption(opt.id)} style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '10px 14px', borderRadius: 10,
-              background: opt.id === 'close'
-                ? 'rgba(255,255,255,0.04)'
-                : `${npc.color}18`,
-              border: opt.id === 'close'
-                ? '1px solid rgba(255,255,255,0.1)'
-                : `1px solid ${npc.color}44`,
-              color: opt.id === 'close' ? 'rgba(255,255,255,0.5)' : '#e8edf5',
-              fontSize: 14, fontWeight: opt.id === 'close' ? 400 : 600,
-              cursor: 'pointer', textAlign: 'left',
-              transition: 'background 0.15s',
-            }}>
-              <span style={{ fontSize: 18, lineHeight: 1 }}>{opt.icon}</span>
-              <span>{opt.label}</span>
-            </button>
-          ))}
+          {data.options.map(opt => {
+            const isChat = opt.id === 'chat';
+            const disabled = isChat && chatOnCooldown;
+            const coolSecs = Math.ceil(chatCooldownRemaining / 1000);
+            return (
+              <button key={opt.id} onClick={() => handleOption(opt.id)} disabled={disabled} style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 14px', borderRadius: 10,
+                background: opt.id === 'close'
+                  ? 'rgba(255,255,255,0.04)'
+                  : disabled ? 'rgba(255,255,255,0.03)' : `${npc.color}18`,
+                border: opt.id === 'close'
+                  ? '1px solid rgba(255,255,255,0.1)'
+                  : disabled ? '1px solid rgba(255,255,255,0.08)' : `1px solid ${npc.color}44`,
+                color: opt.id === 'close' ? 'rgba(255,255,255,0.5)' : disabled ? 'rgba(255,255,255,0.3)' : '#e8edf5',
+                fontSize: 14, fontWeight: opt.id === 'close' ? 400 : 600,
+                cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left',
+                transition: 'background 0.15s',
+              }}>
+                <span style={{ fontSize: 18, lineHeight: 1 }}>{opt.icon}</span>
+                <span style={{ flex: 1 }}>{opt.label}</span>
+                {isChat && chatOnCooldown && (
+                  <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', fontWeight: 400 }}>
+                    {coolSecs >= 60 ? `${Math.ceil(coolSecs / 60)}분 후` : `${coolSecs}초 후`}
+                  </span>
+                )}
+              </button>
+            );
+          })}
             {/* Phase 16-5: 외곽 NPC S2 의뢰 버튼 */}
           {NPC_QUESTS[npcKey] && (() => {
             const s2Total = NPC_QUESTS[npcKey].length;

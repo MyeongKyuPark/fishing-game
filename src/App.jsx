@@ -324,6 +324,7 @@ export default function App() {
   const [townLevels, setTownLevels] = useState({});
   const [returnCast, setReturnCast] = useState(null); // { expiresAt: number } | null
   const returnCastRef = useRef(null);
+  const [returnTick, setReturnTick] = useState(0); // forces re-render during casting
   const [npcDialog, setNpcDialog] = useState(null); // npcKey string | null
   const [npcQuickMenu, setNpcQuickMenu] = useState(null); // { npcId, x, y, tab } | null
   const [tutorialStep, setTutorialStep] = useState(0); // 0=hidden, 1-4=steps
@@ -561,6 +562,13 @@ export default function App() {
     }, remaining);
     return () => clearTimeout(t);
   }, [gs.innBuff, addMsg]);
+
+  // Tick for returnCast progress bar animation
+  useEffect(() => {
+    if (!returnCast) return;
+    const interval = setInterval(() => setReturnTick(t => t + 1), 100);
+    return () => clearInterval(interval);
+  }, [returnCast]);
 
   // Phase 9-6: Chapter 5 server event handler
   useEffect(() => {
@@ -3109,6 +3117,10 @@ export default function App() {
     if (actionId === 'chat_affinity') {
       const affinityKey = INDOOR_NPC_KEY[npcKey] ?? npcKey;
       gainNpcAffinity(affinityKey, 0.5);
+      setGs(prev => ({
+        ...prev,
+        npcChatAt: { ...(prev.npcChatAt ?? {}), [npcKey]: Date.now() },
+      }));
       return; // stay in dialogue
     }
     setNpcDialog(null);
@@ -3822,6 +3834,7 @@ nickname={nickname}
 
       {/* 귀환 캐스팅 HUD */}
       {returnCast && !indoorRoom && (() => {
+        void returnTick; // consumed to ensure re-render on each tick
         const pct = Math.max(0, Math.min(1, 1 - (returnCast.expiresAt - Date.now()) / 5000));
         return (
           <div style={{
@@ -3831,8 +3844,8 @@ nickname={nickname}
             boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
           }}>
             <div style={{ color: '#aaddff', fontSize: 13, fontWeight: 700, marginBottom: 5 }}>🏠 마을로 귀환 중...</div>
-            <div style={{ height: 5, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ width: `${pct * 100}%`, height: '100%', background: '#4488ff', borderRadius: 3, transition: 'width 0.1s linear' }} />
+            <div style={{ height: 8, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ width: `${pct * 100}%`, height: '100%', background: 'linear-gradient(90deg,#2266cc,#66aaff)', borderRadius: 4 }} />
             </div>
             <button onClick={handleCancelReturn} style={{
               marginTop: 6, background: 'none', border: 'none', color: 'rgba(255,100,100,0.7)',

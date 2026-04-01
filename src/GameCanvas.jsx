@@ -283,10 +283,11 @@ export default function GameCanvas({
         player.vy = Math.max(-maxSpd, Math.min(maxSpd, player.vy));
 
         const hasMarine = !!(gameRef.current?.marineGear);
-        const nx = player.x + player.vx;
-        const ny = player.y + player.vy;
+        let nx = player.x + player.vx;
+        let ny = player.y + player.vy;
 
         // ── Zone edge transition ───────────────────────────────────────────
+        let didTransition = false;
         if (!zoneCooldownRef.current && player.state === 'idle') {
           const currentZone = gameRef.current?.worldZone ?? '마을';
           const conn = ZONE_CONNECTIONS[currentZone] ?? {};
@@ -315,6 +316,9 @@ export default function GameCanvas({
               else if (transDir === 'north') player.y = (MAP_H - 3) * TILE_SIZE;
               else if (transDir === 'south') player.y = 3 * TILE_SIZE;
               player.vx = 0; player.vy = 0;
+              // Recalculate nx/ny so movement code doesn't overwrite the new spawn position
+              nx = player.x; ny = player.y;
+              didTransition = true;
               g.clickTarget = null;
               zoneCooldownRef.current = true;
               setTimeout(() => { zoneCooldownRef.current = false; }, 2000);
@@ -324,8 +328,10 @@ export default function GameCanvas({
           }
         }
 
-        if (canWalk(nx, player.y, hasMarine)) player.x = Math.max(PW / 2, Math.min((MAP_W - 1) * TILE_SIZE - PW / 2, nx)); else player.vx = 0;
-        if (canWalk(player.x, ny, hasMarine)) player.y = Math.max(PH / 2, Math.min((MAP_H - 1) * TILE_SIZE - PH / 2, ny)); else player.vy = 0;
+        if (!didTransition) {
+          if (canWalk(nx, player.y, hasMarine)) player.x = Math.max(PW / 2, Math.min((MAP_W - 1) * TILE_SIZE - PW / 2, nx)); else player.vx = 0;
+          if (canWalk(player.x, ny, hasMarine)) player.y = Math.max(PH / 2, Math.min((MAP_H - 1) * TILE_SIZE - PH / 2, ny)); else player.vy = 0;
+        }
 
         player.vx *= FRICTION;
         player.vy *= FRICTION;

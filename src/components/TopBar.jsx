@@ -5,9 +5,56 @@ import { RODS, FISH } from '../gameData';
 import { MINE_DEPTH_REQ, MINE_DEPTH_TIME } from '../hooks/useGameState';
 import { ZONE_LABELS } from '../mapData';
 import { getWeatherForecast } from '../weatherData';
+import { useEffect, useState } from 'react';
 
 // Phase 12-2: Festival active check
 const isFestivalActive = (gs) => !!(gs?.festivalEndDate && Date.now() < gs.festivalEndDate);
+
+// Counter-clockwise buff arc timer
+function BuffArc({ expiresAt, totalMs, icon, color, label }) {
+  const R = 13;
+  const CX = 18; const CY = 18;
+  const circumference = 2 * Math.PI * R;
+  const now = Date.now();
+  const remaining = Math.max(0, expiresAt - now);
+  const pct = totalMs > 0 ? remaining / totalMs : 0;
+  // dashoffset controls how much of the arc is visible
+  const dashoffset = circumference * (1 - pct);
+  const mins = Math.ceil(remaining / 60000);
+  const secs = Math.ceil(remaining / 1000);
+  const timeLabel = remaining > 60000 ? `${mins}분` : `${secs}초`;
+
+  return (
+    <div className="buff-arc-wrap" title={label}>
+      <div style={{ position: 'relative', width: 36, height: 36 }}>
+        <svg
+          className="buff-arc-svg"
+          width={36} height={36}
+          style={{ transform: 'rotate(-90deg) scaleX(-1)', display: 'block' }}
+        >
+          {/* Track */}
+          <circle cx={CX} cy={CY} r={R} fill="none"
+            stroke="rgba(255,255,255,0.12)" strokeWidth={3} />
+          {/* Remaining arc */}
+          <circle cx={CX} cy={CY} r={R} fill="none"
+            stroke={color} strokeWidth={3}
+            strokeDasharray={circumference}
+            strokeDashoffset={dashoffset}
+            strokeLinecap="round" />
+        </svg>
+        {/* Icon centered */}
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)', fontSize: 13, lineHeight: 1,
+          pointerEvents: 'none',
+        }}>
+          {icon}
+        </div>
+      </div>
+      <div className="buff-arc-label" style={{ color }}>{timeLabel}</div>
+    </div>
+  );
+}
 
 export default function TopBar({
   gs, setGs, nickname, myTitle, roomTitle, weather, currentSeason, activity, isOnline,
@@ -23,6 +70,16 @@ export default function TopBar({
   setShowSettings, setShowTournament, setShowCottage, setShowWorldMap,
   setShowTownHall, setShowPointShop,
 }) {
+  // Tick to animate buff arc timers
+  const [, setBuffTick] = useState(0);
+  useEffect(() => {
+    const hasBuff = (gs.innBuff && Date.now() < gs.innBuff.expiresAt) ||
+                    (gs.activePotion && Date.now() < gs.activePotion.expiresAt);
+    if (!hasBuff) return;
+    const id = setInterval(() => setBuffTick(t => t + 1), 500);
+    return () => clearInterval(id);
+  }, [gs.innBuff, gs.activePotion]);
+
   const questHasClaim = (gs.dailyQuests ?? []).some(
     q => (gs.questProgress?.[q.id] ?? 0) >= q.goal && !gs.questClaimed?.[q.id]
   );
@@ -76,9 +133,22 @@ export default function TopBar({
           <div className="hud-chip" style={{ fontSize: 11, color: '#ff8888', background: 'rgba(80,0,0,0.5)' }}>📵 오프라인</div>
         )}
         {gs.innBuff && Date.now() < gs.innBuff.expiresAt && (
-          <div className="hud-chip" style={{ color: '#88ccff', fontSize: 11 }}>
-            💤 휴식 {Math.ceil((gs.innBuff.expiresAt - Date.now()) / 60000)}분
-          </div>
+          <BuffArc
+            expiresAt={gs.innBuff.expiresAt}
+            totalMs={10 * 60 * 1000}
+            icon="💤"
+            color="#88ccff"
+            label="여관 휴식 버프 — 낚시 속도 +20%"
+          />
+        )}
+        {gs.activePotion && Date.now() < gs.activePotion.expiresAt && (
+          <BuffArc
+            expiresAt={gs.activePotion.expiresAt}
+            totalMs={gs.activePotion.effect?.duration ?? 300000}
+            icon="🧪"
+            color="#cc88ff"
+            label={`포션 효과 활성 중`}
+          />
         )}
         {isFestivalActive(gs) && (() => {
           const remaining = Math.ceil((gs.festivalEndDate - Date.now()) / 3600000);
