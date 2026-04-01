@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import LZString from 'lz-string';
+import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from './firebase';
 import './App.css';
 import GameCanvas from './GameCanvas';
 import { playFishCatch, playFishingStart, playOreMined, playCookComplete, playSellSound, playEnterRoom, playNpcInteract, playLevelUp } from './soundManager';
@@ -84,100 +88,294 @@ function getZoneMasteryLevel(zoneMastery, zone) {
   return lv;
 }
 
-function LoginScreen({ onLogin }) {
+function getFirebaseError(code) {
+  const map = {
+    'auth/user-not-found': '등록되지 않은 이메일입니다.',
+    'auth/wrong-password': '비밀번호가 올바르지 않습니다.',
+    'auth/invalid-credential': '이메일 또는 비밀번호가 올바르지 않습니다.',
+    'auth/email-already-in-use': '이미 사용 중인 이메일입니다.',
+    'auth/weak-password': '비밀번호는 6자 이상이어야 합니다.',
+    'auth/invalid-email': '올바른 이메일 형식이 아닙니다.',
+    'auth/too-many-requests': '요청이 너무 많습니다. 잠시 후 다시 시도하세요.',
+    'auth/network-request-failed': '네트워크 오류가 발생했습니다.',
+  };
+  return map[code] ?? '오류가 발생했습니다. 다시 시도해주세요.';
+}
+
+function AppearancePicker({ gender, setGender, hairColor, setHairColor, bodyColor, setBodyColor, skinColor, setSkinColor }) {
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 10 }}>
+        {['male', 'female'].map(g => (
+          <button key={g} type="button" onClick={() => setGender(g)} style={{
+            padding: '6px 20px', borderRadius: 8, border: `2px solid ${gender === g ? '#88ccff' : 'rgba(255,255,255,0.2)'}`,
+            background: gender === g ? 'rgba(100,180,255,0.2)' : 'rgba(255,255,255,0.06)',
+            color: gender === g ? '#88ccff' : 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13,
+          }}>
+            {g === 'male' ? '♂ 남성' : '♀ 여성'}
+          </button>
+        ))}
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 5, textAlign: 'center' }}>피부색</div>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          {SKIN_PRESETS.map(c => (
+            <button key={c} type="button" onClick={() => setSkinColor(c)} style={{
+              width: 26, height: 26, borderRadius: '50%', background: c, cursor: 'pointer',
+              border: `3px solid ${skinColor === c ? '#fff' : 'transparent'}`, outline: 'none', padding: 0,
+            }} />
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 16, marginTop: 10, justifyContent: 'center' }}>
+        <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          머리색<input type="color" value={hairColor} onChange={e => setHairColor(e.target.value)} style={{ width: 36, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer' }} />
+        </label>
+        <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+          옷 색<input type="color" value={bodyColor} onChange={e => setBodyColor(e.target.value)} style={{ width: 36, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer' }} />
+        </label>
+      </div>
+    </>
+  );
+}
+
+function AuthScreen({ onLogin }) {
+  // mode: 'main' | 'email-login' | 'email-register' | 'guest' | 'nickname-google' | 'reset' | 'reset-sent'
+  const [mode, setMode] = useState('main');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
   const [name, setName] = useState('');
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
   const [gender, setGender] = useState('male');
   const [hairColor, setHairColor] = useState('#5a3010');
   const [bodyColor, setBodyColor] = useState('#5a7aaa');
   const [skinColor, setSkinColor] = useState('#f6cc88');
+  const pendingGoogleUidRef = useRef(null);
 
-  // D-4: Autocomplete from saved nicknames
-  const savedNicknames = (() => {
+  const go = (m) => { setErr(''); setMode(m); };
+
+  const handleEmailLogin = async (e) => {
+    e.preventDefault(); setErr(''); setLoading(true);
     try {
-      return Object.keys(localStorage)
-        .filter(k => k.startsWith('fishingGame_v1_'))
-        .map(k => k.replace('fishingGame_v1_', ''))
-        .filter(n => n.length >= 2 && n.length <= 12);
-    } catch { return []; }
-  })();
-
-  const submit = (e) => {
-    e.preventDefault();
-    const trimmed = name.trim();
-    if (!trimmed) { setErr('닉네임을 입력해주세요.'); return; }
-    if (trimmed.length < 2) { setErr('2글자 이상 입력해주세요.'); return; }
-    if (trimmed.length > 12) { setErr('12글자 이하로 입력해주세요.'); return; }
-    onLogin(trimmed, { hairColor, bodyColor, skinColor, gender });
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const snap = await getDoc(doc(db, 'saves', cred.user.uid));
+      if (!snap.exists()) { setErr('저장 데이터를 찾을 수 없습니다.'); setLoading(false); return; }
+      const { nickname: savedName, data } = snap.data();
+      if (data) localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+      onLogin(savedName, null, cred.user.uid, false);
+    } catch (e2) { setErr(getFirebaseError(e2.code)); setLoading(false); }
   };
 
+  const handleEmailRegister = async (e) => {
+    e.preventDefault(); setErr('');
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || trimmed.length > 12) { setErr('닉네임은 2~12글자'); return; }
+    if (!email.trim()) { setErr('이메일을 입력해주세요'); return; }
+    if (password.length < 6) { setErr('비밀번호는 6자 이상'); return; }
+    if (password !== confirmPw) { setErr('비밀번호가 일치하지 않습니다'); return; }
+    setLoading(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+      await setDoc(doc(db, 'saves', cred.user.uid), { nickname: trimmed, data: '', updatedAt: serverTimestamp() });
+      onLogin(trimmed, { hairColor, bodyColor, skinColor, gender }, cred.user.uid, false);
+    } catch (e2) { setErr(getFirebaseError(e2.code)); setLoading(false); }
+  };
+
+  const handleGoogle = async () => {
+    setErr(''); setLoading(true);
+    try {
+      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
+      const snap = await getDoc(doc(db, 'saves', cred.user.uid));
+      if (snap.exists()) {
+        const { nickname: savedName, data } = snap.data();
+        if (data) localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+        onLogin(savedName, null, cred.user.uid, false);
+      } else {
+        pendingGoogleUidRef.current = cred.user.uid;
+        setLoading(false);
+        go('nickname-google');
+      }
+    } catch (e2) {
+      if (e2.code !== 'auth/popup-closed-by-user') setErr(getFirebaseError(e2.code));
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleNickname = async (e) => {
+    e.preventDefault(); setErr('');
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || trimmed.length > 12) { setErr('닉네임은 2~12글자'); return; }
+    setLoading(true);
+    try {
+      const uid = pendingGoogleUidRef.current;
+      await setDoc(doc(db, 'saves', uid), { nickname: trimmed, data: '', updatedAt: serverTimestamp() });
+      onLogin(trimmed, { hairColor, bodyColor, skinColor, gender }, uid, false);
+    } catch (e2) { setErr(getFirebaseError(e2.code)); setLoading(false); }
+  };
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault(); setErr('');
+    if (!email.trim()) { setErr('이메일을 입력해주세요'); return; }
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      go('reset-sent');
+    } catch (e2) { setErr(getFirebaseError(e2.code)); }
+    setLoading(false);
+  };
+
+  const handleGuest = (e) => {
+    e.preventDefault(); setErr('');
+    const trimmed = name.trim();
+    if (trimmed.length < 2 || trimmed.length > 12) { setErr('닉네임은 2~12글자'); return; }
+    onLogin(trimmed, { hairColor, bodyColor, skinColor, gender }, null, true);
+  };
+
+  const Logo = () => (
+    <>
+      <div className="login-icon">🎣</div>
+      <h1 className="login-title">Tidehaven</h1>
+      <p className="login-sub">낚시와 채굴의 조용한 마을</p>
+    </>
+  );
+
+  if (mode === 'main') return (
+    <div className="login-bg">
+      <div className="login-box">
+        <Logo />
+        <div className="auth-btn-group">
+          <button className="login-btn" onClick={() => go('email-login')} disabled={loading}>
+            ✉️ 이메일로 시작하기
+          </button>
+          <button className="auth-btn-google" onClick={handleGoogle} disabled={loading}>
+            <svg width="18" height="18" viewBox="0 0 48 48" style={{ verticalAlign: 'middle', marginRight: 8 }}>
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.35-8.16 2.35-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            Google로 계속하기
+          </button>
+          <button className="auth-btn-ghost" onClick={() => go('guest')}>
+            비회원으로 하기
+          </button>
+        </div>
+        <p className="login-hint">방향키로 이동 · !낚시 · !광질 · !도움말</p>
+      </div>
+    </div>
+  );
+
+  if (mode === 'email-login') return (
+    <div className="login-bg">
+      <div className="login-box">
+        <Logo />
+        <div className="auth-tabs">
+          <button className="auth-tab auth-tab-active">로그인</button>
+          <button className="auth-tab" onClick={() => go('email-register')}>회원가입</button>
+        </div>
+        <form className="login-form" onSubmit={handleEmailLogin}>
+          <label className="login-label">이메일</label>
+          <input className="login-input" type="email" placeholder="example@email.com" value={email} onChange={e => { setEmail(e.target.value); setErr(''); }} autoFocus />
+          <label className="login-label">비밀번호</label>
+          <input className="login-input" type="password" placeholder="비밀번호" value={password} onChange={e => { setPassword(e.target.value); setErr(''); }} />
+          {err && <div className="login-err">{err}</div>}
+          <button className="login-btn" type="submit" disabled={loading}>{loading ? '로그인 중...' : '로그인'}</button>
+          <button type="button" className="auth-link" onClick={() => go('reset')}>비밀번호를 잊으셨나요?</button>
+        </form>
+        <button type="button" className="auth-back" onClick={() => go('main')}>← 뒤로</button>
+      </div>
+    </div>
+  );
+
+  if (mode === 'email-register') return (
+    <div className="login-bg">
+      <div className="login-box">
+        <Logo />
+        <div className="auth-tabs">
+          <button className="auth-tab" onClick={() => go('email-login')}>로그인</button>
+          <button className="auth-tab auth-tab-active">회원가입</button>
+        </div>
+        <form className="login-form" onSubmit={handleEmailRegister}>
+          <label className="login-label">닉네임</label>
+          <input className="login-input" type="text" placeholder="2~12글자" value={name} onChange={e => { setName(e.target.value); setErr(''); }} autoFocus maxLength={12} />
+          <label className="login-label">이메일</label>
+          <input className="login-input" type="email" placeholder="example@email.com" value={email} onChange={e => { setEmail(e.target.value); setErr(''); }} />
+          <label className="login-label">비밀번호</label>
+          <input className="login-input" type="password" placeholder="6자 이상" value={password} onChange={e => { setPassword(e.target.value); setErr(''); }} />
+          <label className="login-label">비밀번호 확인</label>
+          <input className="login-input" type="password" placeholder="비밀번호 재입력" value={confirmPw} onChange={e => { setConfirmPw(e.target.value); setErr(''); }} />
+          <AppearancePicker gender={gender} setGender={setGender} hairColor={hairColor} setHairColor={setHairColor} bodyColor={bodyColor} setBodyColor={setBodyColor} skinColor={skinColor} setSkinColor={setSkinColor} />
+          {err && <div className="login-err">{err}</div>}
+          <button className="login-btn" type="submit" disabled={loading}>{loading ? '가입 중...' : '회원가입'}</button>
+        </form>
+        <button type="button" className="auth-back" onClick={() => go('main')}>← 뒤로</button>
+      </div>
+    </div>
+  );
+
+  if (mode === 'nickname-google') return (
+    <div className="login-bg">
+      <div className="login-box">
+        <Logo />
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 18 }}>Google 계정으로 처음 오셨군요!<br />게임에서 사용할 닉네임을 입력해주세요.</p>
+        <form className="login-form" onSubmit={handleGoogleNickname}>
+          <label className="login-label">닉네임</label>
+          <input className="login-input" type="text" placeholder="2~12글자" value={name} onChange={e => { setName(e.target.value); setErr(''); }} autoFocus maxLength={12} />
+          <AppearancePicker gender={gender} setGender={setGender} hairColor={hairColor} setHairColor={setHairColor} bodyColor={bodyColor} setBodyColor={setBodyColor} skinColor={skinColor} setSkinColor={setSkinColor} />
+          {err && <div className="login-err">{err}</div>}
+          <button className="login-btn" type="submit" disabled={loading}>{loading ? '저장 중...' : '시작하기'}</button>
+        </form>
+      </div>
+    </div>
+  );
+
+  if (mode === 'reset') return (
+    <div className="login-bg">
+      <div className="login-box">
+        <Logo />
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginBottom: 18 }}>가입한 이메일로 비밀번호 재설정 링크를 보내드립니다.</p>
+        <form className="login-form" onSubmit={handlePasswordReset}>
+          <label className="login-label">이메일</label>
+          <input className="login-input" type="email" placeholder="example@email.com" value={email} onChange={e => { setEmail(e.target.value); setErr(''); }} autoFocus />
+          {err && <div className="login-err">{err}</div>}
+          <button className="login-btn" type="submit" disabled={loading}>{loading ? '발송 중...' : '재설정 이메일 발송'}</button>
+        </form>
+        <button type="button" className="auth-back" onClick={() => go('email-login')}>← 뒤로</button>
+      </div>
+    </div>
+  );
+
+  if (mode === 'reset-sent') return (
+    <div className="login-bg">
+      <div className="login-box">
+        <Logo />
+        <div style={{ fontSize: 40, margin: '12px 0' }}>📧</div>
+        <p style={{ fontSize: 14, color: '#88e888', marginBottom: 8 }}>이메일을 발송했습니다!</p>
+        <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 24 }}>{email} 을 확인해주세요.</p>
+        <button className="login-btn" onClick={() => go('email-login')}>로그인으로 돌아가기</button>
+      </div>
+    </div>
+  );
+
+  // mode === 'guest'
   return (
     <div className="login-bg">
       <div className="login-box">
-        <div className="login-icon">🎣</div>
-        <h1 className="login-title">Tidehaven</h1>
-        <p className="login-sub">낚시와 채굴의 조용한 마을</p>
-        <form className="login-form" onSubmit={submit}>
+        <Logo />
+        <div className="auth-guest-warn">
+          ⚠️ 비회원 모드
+          <span>데이터가 이 브라우저에만 저장됩니다.<br />브라우저 캐시 삭제 시 진행상황이 사라집니다.</span>
+        </div>
+        <form className="login-form" onSubmit={handleGuest}>
           <label className="login-label">닉네임</label>
-          <input
-            className="login-input"
-            type="text"
-            placeholder="2~12글자"
-            value={name}
-            onChange={e => { setName(e.target.value); setErr(''); }}
-            autoFocus
-            maxLength={12}
-            list="saved-nicknames"
-          />
-          {savedNicknames.length > 0 && (
-            <datalist id="saved-nicknames">
-              {savedNicknames.map(n => <option key={n} value={n} />)}
-            </datalist>
-          )}
-
-          {/* Gender */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'center' }}>
-            {['male', 'female'].map(g => (
-              <button key={g} type="button" onClick={() => setGender(g)} style={{
-                padding: '6px 20px', borderRadius: 8, border: `2px solid ${gender === g ? '#88ccff' : 'rgba(255,255,255,0.2)'}`,
-                background: gender === g ? 'rgba(100,180,255,0.2)' : 'rgba(255,255,255,0.06)',
-                color: gender === g ? '#88ccff' : 'rgba(255,255,255,0.6)', cursor: 'pointer', fontSize: 13,
-              }}>
-                {g === 'male' ? '♂ 남성' : '♀ 여성'}
-              </button>
-            ))}
-          </div>
-
-          {/* Skin color presets */}
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 6, textAlign: 'center' }}>피부색</div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
-              {SKIN_PRESETS.map(c => (
-                <button key={c} type="button" onClick={() => setSkinColor(c)} style={{
-                  width: 28, height: 28, borderRadius: '50%', background: c, cursor: 'pointer',
-                  border: `3px solid ${skinColor === c ? '#fff' : 'transparent'}`,
-                  outline: 'none', padding: 0,
-                }} />
-              ))}
-            </div>
-          </div>
-
-          {/* Hair & Body colors */}
-          <div style={{ display: 'flex', gap: 16, marginTop: 12, justifyContent: 'center' }}>
-            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              머리색
-              <input type="color" value={hairColor} onChange={e => setHairColor(e.target.value)} style={{ width: 36, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer' }} />
-            </label>
-            <label style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-              옷 색
-              <input type="color" value={bodyColor} onChange={e => setBodyColor(e.target.value)} style={{ width: 36, height: 28, border: 'none', borderRadius: 4, cursor: 'pointer' }} />
-            </label>
-          </div>
-
+          <input className="login-input" type="text" placeholder="2~12글자" value={name} onChange={e => { setName(e.target.value); setErr(''); }} autoFocus maxLength={12} />
+          <AppearancePicker gender={gender} setGender={setGender} hairColor={hairColor} setHairColor={setHairColor} bodyColor={bodyColor} setBodyColor={setBodyColor} skinColor={skinColor} setSkinColor={setSkinColor} />
           {err && <div className="login-err">{err}</div>}
-          <button className="login-btn" type="submit">입장하기</button>
+          <button className="login-btn" type="submit">비회원으로 입장</button>
         </form>
-        <p className="login-hint">방향키로 이동 · !낚시 · !광질 · !도움말</p>
+        <button type="button" className="auth-back" onClick={() => go('main')}>← 뒤로</button>
       </div>
     </div>
   );
@@ -213,9 +411,34 @@ export default function App() {
   const [partyMessages, setPartyMessages] = useState([]);
 
   const [nickname, setNickname] = useState('');
+  const [isGuest, setIsGuest] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const firestoreSaveTimerRef = useRef(null);
   const [roomId, setRoomId] = useState(null);
   const [roomTitle, setRoomTitle] = useState('');
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
+
+  // Firebase Auth: auto-login for returning users
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const snap = await getDoc(doc(db, 'saves', user.uid));
+          if (snap.exists()) {
+            const { nickname: savedName, data } = snap.data();
+            if (data) localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+            setUserId(user.uid);
+            setIsGuest(false);
+            setNickname(savedName);
+            channelRef.current?.postMessage({ type: 'gameStart', tabId: tabId.current });
+          }
+        } catch { /* ignore, will show login screen */ }
+      }
+      setAuthLoading(false);
+    });
+    return () => unsub();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Weekly goals reset check
   useEffect(() => {
     const { weekKey } = getWeeklyGoals();
@@ -499,12 +722,19 @@ export default function App() {
     }
   }, [gs.abilities, gs.jobClass, nickname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Save to localStorage keyed by nickname
+  // Save to localStorage (always) + Firestore (authenticated users, debounced 5s)
   useEffect(() => {
     if (!nickname) return;
     const json = JSON.stringify({ ...gs, lastSaveTime: Date.now(), saveVersion: SAVE_VERSION });
     localStorage.setItem(saveKey(nickname), LZString.compressToUTF16(json));
-  }, [gs, nickname]);
+    if (userId && !isGuest) {
+      clearTimeout(firestoreSaveTimerRef.current);
+      firestoreSaveTimerRef.current = setTimeout(() => {
+        setDoc(doc(db, 'saves', userId), { nickname, data: json, updatedAt: serverTimestamp() }, { merge: true })
+          .catch(() => { /* silently ignore network errors */ });
+      }, 5000);
+    }
+  }, [gs, nickname, userId, isGuest]);
 
 
   const addMsg = useCallback((text, type = 'system') => {
@@ -2953,9 +3183,11 @@ export default function App() {
     gainNpcAffinity('상인', Math.max(1, Math.floor(fish.price / 150)));
   };
 
-  const handleLogin = (name, appearance) => {
+  const handleLogin = (name, appearance, uid, guest) => {
     channelRef.current?.postMessage({ type: 'gameStart', tabId: tabId.current });
     setBlocked(false);
+    setUserId(uid ?? null);
+    setIsGuest(guest ?? false);
     setNickname(name);
     if (appearance) {
       setGs(prev => ({ ...prev,
@@ -3684,7 +3916,12 @@ export default function App() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  if (!nickname) return <LoginScreen onLogin={handleLogin} />;
+  if (authLoading) return (
+    <div className="login-bg">
+      <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>로딩 중...</div>
+    </div>
+  );
+  if (!nickname) return <AuthScreen onLogin={handleLogin} />;
   if (!roomId) return <ChannelLobby nickname={nickname} onJoin={handleJoinRoom} />;
 
   if (blocked) return (
@@ -3843,6 +4080,11 @@ nickname={nickname}
           setShowTownHall={setShowTownHall}
           setShowPointShop={setShowPointShop}
         />
+        {isGuest && (
+          <div className="guest-warn-badge">
+            ⚠️ 비회원 — 데이터 미저장
+          </div>
+        )}
       </div>
 
       {/* 귀환 캐스팅 HUD */}
