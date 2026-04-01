@@ -268,12 +268,20 @@ export default function TopBar({
       {!indoorRoom && <MiniMap gameRef={gameRef} otherPlayersRef={otherPlayersRef} partyMembersRef={partyMembersRef} />}
 
       {/* Shortcut buttons (desktop only) */}
+      {/* Context-sensitive actions — separate row above shortcut bar so fixed icons never shift */}
+      {(nearIndoorNpc && indoorRoom) || indoorRoom || (indoorRoom === 'mine') ? (
+        <div className="shortcut-context">
+          {nearIndoorNpc && indoorRoom && (
+            <button tabIndex={-1} style={{ color: '#ffffaa', borderColor: 'rgba(255,255,100,0.5)', background: 'rgba(80,80,20,0.7)', animation: 'blink 1.2s ease-in-out infinite' }} onClick={() => handleNpcInteract(nearIndoorNpc.name)}>
+              💬 {nearIndoorNpc.name} 대화
+            </button>
+          )}
+          {indoorRoom && <button tabIndex={-1} style={{ color: '#ffaaaa', borderColor: 'rgba(255,100,100,0.4)' }} onClick={handleExitRoom}>🚪 나가기</button>}
+          {indoorRoom === 'mine' && <button tabIndex={-1} style={{ color: '#aaffcc', borderColor: 'rgba(100,255,150,0.4)' }} onClick={() => handleCommand('!광질')}>⛏ 광질</button>}
+        </div>
+      ) : null}
+
       <div className="shortcut-bar">
-        {nearIndoorNpc && indoorRoom && (
-          <button tabIndex={-1} style={{ color: '#ffffaa', borderColor: 'rgba(255,255,100,0.5)', background: 'rgba(80,80,20,0.7)', animation: 'blink 1.2s ease-in-out infinite' }} onClick={() => handleNpcInteract(nearIndoorNpc.name)}>
-            💬 {nearIndoorNpc.name} 대화
-          </button>
-        )}
         <button tabIndex={-1} data-tooltip="인벤토리 (I)" onClick={() => setShowInv(v => !v)}>🎒 인벤</button>
         <button tabIndex={-1} data-tooltip="상점 (S)" onClick={() => setShowShop(v => !v)}>🏪 상점</button>
         <button tabIndex={-1} data-tooltip="상태창 (A)" onClick={() => setShowStats(v => !v)}>📊 상태</button>
@@ -290,8 +298,6 @@ export default function TopBar({
         <button tabIndex={-1} data-tooltip="마을 발전 시스템 (T)" onClick={() => setShowTownHall?.(v => !v)}>🏘 마을</button>
         <button tabIndex={-1} data-tooltip="활동 포인트 상점" onClick={() => setShowPointShop?.(v => !v)}>⭐ 포인트 상점</button>
         <button tabIndex={-1} data-tooltip="게임 설정" onClick={() => setShowSettings(v => !v)}>⚙️ 설정</button>
-        {indoorRoom && <button tabIndex={-1} style={{ color: '#ffaaaa', borderColor: 'rgba(255,100,100,0.4)' }} onClick={handleExitRoom}>🚪 나가기</button>}
-        {indoorRoom === 'mine' && <button tabIndex={-1} style={{ color: '#aaffcc', borderColor: 'rgba(100,255,150,0.4)' }} onClick={() => handleCommand('!광질')}>⛏ 광질</button>}
       </div>
 
       {/* Mobile controls: joystick + action buttons */}

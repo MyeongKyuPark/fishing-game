@@ -156,6 +156,23 @@ html, body {
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.55} }
 
 /* ── Shortcut buttons ── */
+.shortcut-context {
+  position: absolute;
+  bottom: 48px; left: 10px;
+  display: flex; gap: 7px;
+  z-index: 10;
+}
+.shortcut-context button {
+  background: rgba(0,0,0,0.65);
+  color: #ccc;
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 7px;
+  padding: 6px 13px;
+  font-size: 12px; cursor: pointer;
+  backdrop-filter: blur(4px);
+  font-family: inherit;
+}
+.shortcut-context button:hover { background: rgba(255,255,255,0.12); color: #fff; }
 .shortcut-bar {
   position: absolute;
   bottom: 10px; left: 10px;
