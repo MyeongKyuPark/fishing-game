@@ -971,6 +971,47 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
       // Player
       drawIndoorPlayer(ctx, offX + player.x, offY + player.y, player.facing, nickname, hairColorRef.current, bodyColorRef.current, skinColorRef.current, genderRef.current, gameRef.current?.marineGear ?? null, gameRef.current?.equippedItems ?? {});
 
+      // Mining progress ring (GameCanvas tracks state; IndoorCanvas covers it, so we redraw here)
+      if (roomId === 'mine') {
+        const gp = gameRef.current?.player;
+        if (gp?.state === 'mining' && gp.activityStart !== null && gp.activityDuration) {
+          const progress = Math.min(1, (now - gp.activityStart) / gp.activityDuration);
+          const px = offX + player.x;
+          const py = offY + player.y;
+          const ringR = 20;
+          const cx2 = px;
+          const cy2 = py - 50 - ringR;
+          ctx.save();
+          // Track
+          ctx.beginPath(); ctx.arc(cx2, cy2, ringR, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.lineWidth = 4; ctx.stroke();
+          ctx.beginPath(); ctx.arc(cx2, cy2, ringR, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 3; ctx.stroke();
+          // Progress arc
+          if (progress > 0) {
+            ctx.beginPath();
+            ctx.arc(cx2, cy2, ringR, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+            ctx.strokeStyle = '#ffaa44'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+            ctx.shadowColor = '#ffaa44'; ctx.shadowBlur = 7;
+            ctx.stroke(); ctx.shadowBlur = 0;
+          }
+          // Icon
+          ctx.font = '13px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('⛏', cx2, cy2);
+          // Ore label
+          if (gp.currentOre) {
+            const label = `채굴 중: ${gp.currentOre}`;
+            ctx.font = 'bold 10px "Noto Sans KR", sans-serif';
+            const lw = ctx.measureText(label).width + 14;
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.beginPath(); ctx.roundRect(cx2 - lw / 2, cy2 + ringR + 5, lw, 16, 4); ctx.fill();
+            ctx.fillStyle = '#ffcc88'; ctx.textBaseline = 'middle';
+            ctx.fillText(label, cx2, cy2 + ringR + 13);
+          }
+          ctx.restore();
+        }
+      }
+
       // Header bar
       ctx.fillStyle = 'rgba(0,0,0,0.65)';
       ctx.fillRect(0, 0, W, 36);
