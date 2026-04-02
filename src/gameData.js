@@ -125,12 +125,12 @@ export function getAbilityFishTable(abilValue) {
 // reqEnhance: previous rod must reach this enhance level before buying next rod
 export const RODS = {
   초급낚시대: {
-    name: '초급 낚시대', price: 0, color: '#8b6914',
+    name: '초급 낚시대', price: 0, color: '#b08a20',
     catchTimeRange: [8000, 15000],
     timeMult: 1.00,   // base
   },
   중급낚시대: {
-    name: '중급 낚시대', price: 500, color: '#c0c0c0',
+    name: '중급 낚시대', price: 500, color: '#e0e0e0',
     upgradeMats: { 철광석: 3, 구리광석: 2 },
     catchTimeRange: [6000, 12000],
     timeMult: 0.85,
@@ -181,19 +181,19 @@ export function rodEnhanceEffect(enhLevel) {
 
 // ── Ores ─────────────────────────────────────────────────────────────────────
 export const ORES = {
-  철광석:   { price: 30,  color: '#808080', mineRange: [5000, 10000],  w: 50 },
+  철광석:   { price: 30,  color: '#a8a8b0', mineRange: [5000, 10000],  w: 50 },
   구리광석: { price: 50,  color: '#b87333', mineRange: [7000, 14000],  w: 30 },
-  수정:     { price: 100, color: '#a8d8ea', mineRange: [12000, 22000], w: 20 },
+  수정:     { price: 100, color: '#58c0e0', mineRange: [12000, 22000], w: 20 },
   금광석:   { price: 350, color: '#ffd700', mineRange: [18000, 35000], w: 8  },
   // Phase 13: Zone-exclusive ores
   고대광석: { price: 800, color: '#cc9944', mineRange: [20000, 40000], w: 3, reqZone: '고대신전' },
-  빙정광석: { price: 500, color: '#aaddff', mineRange: [15000, 30000], w: 5, reqZone: '설산정상' },
+  빙정광석: { price: 500, color: '#70b8ff', mineRange: [15000, 30000], w: 5, reqZone: '설산정상' },
 };
 
 // ── Pickaxes ─────────────────────────────────────────────────────────────────
 export const PICKAXES = {
-  나무곡괭이: { name: '나무 곡괭이', price: 0,    timeMult: 1.00, color: '#8B6914', desc: '기본 채굴 도구' },
-  철곡괭이:   { name: '철 곡괭이',   price: 300,  timeMult: 0.80, color: '#808080', desc: '채광 속도 +20%', upgradeMats: { 철광석: 5 } },
+  나무곡괭이: { name: '나무 곡괭이', price: 0,    timeMult: 1.00, color: '#b08a20', desc: '기본 채굴 도구' },
+  철곡괭이:   { name: '철 곡괭이',   price: 300,  timeMult: 0.80, color: '#a8a8b0', desc: '채광 속도 +20%', upgradeMats: { 철광석: 5 } },
   금곡괭이:   { name: '금 곡괭이',   price: 1500, timeMult: 0.60, color: '#FFD700', desc: '채광 속도 +40%', upgradeMats: { 금광석: 3, 철광석: 3 } },
   // Phase 14: Legendary pickaxe (crafted)
   전설곡괭이: { name: '전설 곡괭이', price: 0,    timeMult: 0.40, color: '#ff44ff', desc: '채광 속도 +60%, 대박 +10%',
@@ -222,7 +222,7 @@ export function pickaxeEnhanceEffect(enhLevel) {
 
 // ── Boots ────────────────────────────────────────────────────────────────────
 export const BOOTS = {
-  기본신발: { name: '기본 신발', price: 0,    speedBonus: 0,   color: '#aaaaaa' },
+  기본신발: { name: '기본 신발', price: 0,    speedBonus: 0,   color: '#cccccc' },
   빠른신발: { name: '빠른 신발', price: 400,  speedBonus: 1.5, color: '#66ccff' },
   질풍신발: { name: '질풍 신발', price: 1800, speedBonus: 3.2, color: '#ff9944', upgradeMats: { 수정: 3 } },
 };
@@ -241,7 +241,7 @@ export const BAIT = {
 
 // ── Cookware ─────────────────────────────────────────────────────────────────
 export const COOKWARE = {
-  기본프라이팬: { name: '기본 프라이팬', price: 200, mult: 2.0, color: '#888888',
+  기본프라이팬: { name: '기본 프라이팬', price: 200, mult: 2.0, color: '#b8b8b8',
     desc: '물고기 요리 → 가격 2배' },
   고급화로: { name: '고급 화로', price: 900, mult: 3.5, color: '#ff6633',
     desc: '물고기 요리 → 가격 3.5배', upgradeMats: { 철광석: 3 } },
@@ -278,7 +278,7 @@ export const HERBS = {
 // ── Gathering tools (채집 도구) ────────────────────────────────────────────────
 export const GATHER_TOOLS = {
   맨손: { name: '맨손', price: 0, timeMult: 1.00, color: '#f6cc88', desc: '기본 채집' },
-  나무바구니: { name: '나무 바구니', price: 150, timeMult: 0.85, color: '#8B6914', desc: '채집 속도 +15%' },
+  나무바구니: { name: '나무 바구니', price: 150, timeMult: 0.85, color: '#b08a20', desc: '채집 속도 +15%' },
   허브낫: { name: '허브 낫', price: 600, timeMult: 0.65, color: '#66cc44', desc: '채집 속도 +35%', upgradeMats: { 철광석: 3 } },
   황금낫: { name: '황금 낫', price: 2000, timeMult: 0.45, color: '#FFD700', desc: '채집 속도 +55%', upgradeMats: { 금광석: 2, 수정: 2 } },
 };
@@ -287,7 +287,7 @@ export const GATHER_TOOLS = {
 // input: required ores, output: processed ore name, price, color, desc
 export const SMELT_RECIPES = {
   정제철: {
-    name: '정제철', color: '#b0b8c8', price: 200,
+    name: '정제철', color: '#8898c0', price: 200,
     input: { 철광석: 3 },
     desc: '철광석 3개 → 정제철 (장신구 제작 재료)',
   },
@@ -297,7 +297,7 @@ export const SMELT_RECIPES = {
     desc: '철+구리 합금 (장신구 재료)',
   },
   정제수정: {
-    name: '정제수정', color: '#c0e8ff', price: 550,
+    name: '정제수정', color: '#78d0f0', price: 550,
     input: { 수정: 2 },
     desc: '수정 2개 → 정제수정 (고급 장신구)',
   },
@@ -312,7 +312,7 @@ export const SMELT_RECIPES = {
 // effect: passive stat bonus applied to gs.activeJewelry
 export const JEWELRY_RECIPES = {
   철반지: {
-    name: '철반지', icon: '💍', color: '#b0b8c8', price: 300,
+    name: '철반지', icon: '💍', color: '#8898c0', price: 300,
     input: { 정제철: 2 },
     effect: { fishSpeed: 0.05 },   // +5% fishing speed
     desc: '낚시 속도 +5%',
@@ -326,7 +326,7 @@ export const JEWELRY_RECIPES = {
     slot: 'necklace',
   },
   수정반지: {
-    name: '수정반지', icon: '💍', color: '#c0e8ff', price: 1200,
+    name: '수정반지', icon: '💍', color: '#78d0f0', price: 1200,
     input: { 정제수정: 2 },
     effect: { fishSpeed: 0.12, sellBonus: 0.05 },
     desc: '낚시 속도 +12%, 판매가 +5%',
@@ -546,7 +546,7 @@ export const FISHING_ZONES = {
 // ── Hats (모자 아이템) ────────────────────────────────────────────────────────
 export const HATS = {
   밀짚모자: {
-    name: '밀짚모자', icon: '🎩', price: 300, color: '#c8a84a',
+    name: '밀짚모자', icon: '🎩', price: 300, color: '#d8b850',
     desc: '낚시 속도 +5%',
     bonus: { fishTimeMult: 0.95 },
   },
@@ -573,7 +573,7 @@ export const HATS = {
 // ── Fishing outfits (낚시복) ──────────────────────────────────────────────────
 export const FISHING_OUTFITS = {
   기본낚시복: {
-    name: '기본 낚시복', icon: '🎽', price: 0, color: '#aaaaaa',
+    name: '기본 낚시복', icon: '🎽', price: 0, color: '#cccccc',
     desc: '기본 의상',
     bonus: {},
   },
@@ -606,7 +606,7 @@ export const FISHING_OUTFITS = {
 // ── Tops (상의 아이템) ────────────────────────────────────────────────────────
 export const TOPS = {
   기본상의: {
-    name: '기본 상의', icon: '👕', price: 0, color: '#aaaaaa',
+    name: '기본 상의', icon: '👕', price: 0, color: '#cccccc',
     desc: '기본 상의',
     bonus: {},
   },
@@ -623,7 +623,7 @@ export const TOPS = {
     upgradeMats: { 철광석: 3 },
   },
   강철갑옷: {
-    name: '강철 갑옷', icon: '🛡', price: 3500, color: '#778899',
+    name: '강철 갑옷', icon: '🛡', price: 3500, color: '#8899bb',
     desc: '채굴 속도 +10%, 판매가 +5%',
     bonus: { mineTimeMult: 0.90, sellBonus: 0.05 },
     upgradeMats: { 정제철: 2 },
@@ -639,7 +639,7 @@ export const TOPS = {
 // ── Bottoms (하의 아이템) ─────────────────────────────────────────────────────
 export const BOTTOMS = {
   기본하의: {
-    name: '기본 하의', icon: '👖', price: 0, color: '#aaaaaa',
+    name: '기본 하의', icon: '👖', price: 0, color: '#cccccc',
     desc: '기본 하의',
     bonus: {},
   },
@@ -671,7 +671,7 @@ export const BOTTOMS = {
 // ── Belts (벨트 아이템) ───────────────────────────────────────────────────────
 export const BELTS = {
   가죽벨트: {
-    name: '가죽 벨트', icon: '🪢', price: 400, color: '#8b6914',
+    name: '가죽 벨트', icon: '🪢', price: 400, color: '#b08a20',
     desc: '판매가 +5%',
     bonus: { sellBonus: 0.05 },
   },
@@ -697,13 +697,13 @@ export const BELTS = {
 
 // ── Rod skins (낚싯대 스킨) ───────────────────────────────────────────────────
 export const ROD_SKINS = {
-  기본스킨: { name: '기본 스킨', color: '#8b6914', desc: '기본 낚싯대 외형', price: 0 },
+  기본스킨: { name: '기본 스킨', color: '#b08a20', desc: '기본 낚싯대 외형', price: 0 },
   황금스킨: { name: '황금 스킨', color: '#ffd700', desc: '황금빛 낚싯대 외형', price: 2000, upgradeMats: { 황금괴: 1 } },
   수정스킨: { name: '수정 스킨', color: '#88ccff', desc: '수정색 낚싯대 외형', price: 1500, upgradeMats: { 정제수정: 2 } },
   불꽃스킨: { name: '불꽃 스킨', color: '#ff4444', desc: '불꽃 낚싯대 외형', price: 3000, upgradeMats: { 폭풍석: 3 } },
   광부스킨: { name: '광부 스킨', color: '#cc7733', desc: '철수의 의뢰 보상 — 광부의 낚싯대', price: 0, questOnly: true },
   용의가호스킨: { name: '용의 가호 스킨', color: '#ff88ff', desc: '용고기를 5마리 잡으면 해금', price: 0, reqMythic: '용고기', reqCount: 5 },
-  별빛낚싯대: { name: '별빛 낚싯대', icon: '✨', color: '#aaddff', price: 0 },
+  별빛낚싯대: { name: '별빛 낚싯대', icon: '✨', color: '#70b8ff', price: 0 },
 };
 
 // ── Fishing spot decorations (낚시터 꾸미기) ──────────────────────────────────
