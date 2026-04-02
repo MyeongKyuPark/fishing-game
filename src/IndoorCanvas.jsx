@@ -473,7 +473,7 @@ function drawRoomTile(ctx, tile, x, y, room, now) {
 }
 
 // ── NPC drawing ───────────────────────────────────────────────────────────────
-function drawIndoorNPC(ctx, sx, sy, npc, speaking, now) {
+function drawIndoorNPC(ctx, sx, sy, npc, speaking, now, isNear) {
   // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath(); ctx.ellipse(sx, sy + 5, 8, 3.5, 0, 0, Math.PI * 2); ctx.fill();
@@ -501,6 +501,17 @@ function drawIndoorNPC(ctx, sx, sy, npc, speaking, now) {
   ctx.lineWidth = 1.2;
   ctx.beginPath(); ctx.arc(sx, sy - 21, 3, 0.1, Math.PI - 0.1); ctx.stroke();
 
+  // 💬 icon above NPC
+  {
+    const pulse = isNear ? (0.7 + 0.3 * Math.sin(now / 400)) : 0.55;
+    ctx.globalAlpha = pulse;
+    ctx.font = isNear ? '14px serif' : '11px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('💬', sx, sy - 52);
+    ctx.textBaseline = 'alphabetic';
+    ctx.globalAlpha = 1;
+  }
   // Name tag
   ctx.font = 'bold 9px "Noto Sans KR", sans-serif';
   ctx.textAlign = 'center';
@@ -960,7 +971,7 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
         const nsx = offX + (npc.tx + 0.5) * TS;
         const nsy = offY + (npc.ty + 0.5) * TS;
         const dist = Math.hypot(player.x - (npc.tx + 0.5) * TS, player.y - (npc.ty + 0.5) * TS);
-        drawIndoorNPC(ctx, nsx, nsy, npc, dist < 3 * TS, now);
+        drawIndoorNPC(ctx, nsx, nsy, npc, dist < 3 * TS, now, dist < 2.5 * TS);
       }
 
       // Cottage furniture overlay

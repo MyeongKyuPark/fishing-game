@@ -2691,7 +2691,7 @@ export default function Sidebar(props) {
                 { id: '곡괭이',    icon: '⛏',  label: '곡괭이' },
                 { id: '채집도구',  icon: '🧺', label: '채집도구' },
                 { id: '모자',      icon: '🎩', label: '모자' },
-                { id: '낚시복',    icon: '👘', label: '낚시복' },
+                { id: '낚시복',    icon: '👘', label: '직업복' },
                 { id: '상의',      icon: '👕', label: '상의' },
                 { id: '하의',      icon: '👖', label: '하의' },
                 { id: '벨트',      icon: '🪢', label: '벨트' },
@@ -3072,7 +3072,7 @@ export default function Sidebar(props) {
             </div>}
 
             {shopSection === '낚시복' && <div className="section">
-              <div className="section-title">🧥 낚시복</div>
+              <div className="section-title">🧥 직업복</div>
               {Object.entries(FISHING_OUTFITS).map(([key, outfit]) => {
                 const owned = (gs.ownedOutfits ?? ['기본낚시복']).includes(key);
                 const equipped = gs.outfit === key;

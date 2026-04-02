@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { MAP_TILES, DOOR_TRIGGERS } from './mapData';
+import { MAP_TILES, DOOR_TRIGGERS, ZONE_TILES, getActiveZone } from './mapData';
 import { MAP_W, MAP_H, TILE_COLOR, TILE } from './gameData';
 
 // Scale: 2px per tile → 140×100 minimap
@@ -7,26 +7,27 @@ const SCALE = 2;
 const MW = MAP_W * SCALE;
 const MH = MAP_H * SCALE;
 
-// Pre-render static map image once
-let staticMapCache = null;
-function getStaticMapImage() {
-  if (staticMapCache) return staticMapCache;
+// Per-zone static map cache
+const staticMapCache = {};
+function getStaticMapImage(zone) {
+  const tiles = ZONE_TILES[zone] ?? MAP_TILES;
+  if (staticMapCache[zone]) return staticMapCache[zone];
   const offscreen = document.createElement('canvas');
   offscreen.width = MW;
   offscreen.height = MH;
   const ctx = offscreen.getContext('2d');
   for (let ty = 0; ty < MAP_H; ty++) {
     for (let tx = 0; tx < MAP_W; tx++) {
-      const t = MAP_TILES[ty]?.[tx] ?? TILE.WATER;
+      const t = tiles[ty]?.[tx] ?? TILE.WATER;
       ctx.fillStyle = TILE_COLOR[t] ?? '#1a5fa8';
       ctx.fillRect(tx * SCALE, ty * SCALE, SCALE, SCALE);
     }
   }
-  staticMapCache = offscreen;
+  staticMapCache[zone] = offscreen;
   return offscreen;
 }
 
-// Landmark dots
+// Landmark dots (main town only)
 const LANDMARKS = DOOR_TRIGGERS.map(d => ({
   label: d.label.split(' ')[0],
   tx: Math.round(d.wx / 32),
@@ -43,15 +44,19 @@ export default function MiniMap({ gameRef, otherPlayersRef, partyMembersRef }) {
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
 
-      // Background
-      ctx.drawImage(getStaticMapImage(), 0, 0);
+      const zone = getActiveZone() ?? '마을';
 
-      // Landmark icons
-      ctx.font = '8px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      for (const lm of LANDMARKS) {
-        ctx.fillText(lm.label, lm.tx * SCALE, lm.ty * SCALE);
+      // Background — zone-specific map
+      ctx.drawImage(getStaticMapImage(zone), 0, 0);
+
+      // Landmark icons — only on main town map
+      if (zone === '마을') {
+        ctx.font = '8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (const lm of LANDMARKS) {
+          ctx.fillText(lm.label, lm.tx * SCALE, lm.ty * SCALE);
+        }
       }
 
       // Other players
@@ -65,7 +70,6 @@ export default function MiniMap({ gameRef, otherPlayersRef, partyMembersRef }) {
         ctx.beginPath();
         ctx.arc(px, py, partyNicknames.has(p.nickname) ? 3 : 2, 0, Math.PI * 2);
         ctx.fill();
-        // Party member name label
         if (partyNicknames.has(p.nickname)) {
           ctx.fillStyle = 'rgba(100,255,150,0.9)';
           ctx.font = '6px sans-serif';

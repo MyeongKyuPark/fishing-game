@@ -35,7 +35,7 @@ export default function GameCanvas({
   otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, onNearActionChange,
   hairColor, bodyColor, skinColor, gender,
   spotDecos, onZoneTransition, onCancelReturn, onZoneBlocked, onZoneNpcInteract,
-  onNpcQuickMenu,
+  onNpcQuickMenu, onNearZoneNpcChange,
 }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange });
@@ -52,6 +52,7 @@ export default function GameCanvas({
   const onZoneBlockedRef = useRef(onZoneBlocked);
   const onZoneNpcInteractRef = useRef(onZoneNpcInteract);
   const onNpcQuickMenuRef = useRef(onNpcQuickMenu);
+  const onNearZoneNpcChangeRef = useRef(onNearZoneNpcChange);
   const nearZoneNpcRef = useRef(null);
   const nearDoorRef = useRef(null);
   const nearActionZoneRef = useRef(null);
@@ -74,6 +75,7 @@ export default function GameCanvas({
   useEffect(() => { onZoneBlockedRef.current = onZoneBlocked; });
   useEffect(() => { onZoneNpcInteractRef.current = onZoneNpcInteract; });
   useEffect(() => { onNpcQuickMenuRef.current = onNpcQuickMenu; });
+  useEffect(() => { onNearZoneNpcChangeRef.current = onNearZoneNpcChange; });
   useEffect(() => { hairColorRef.current = hairColor ?? '#5a3010'; }, [hairColor]);
   useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
   useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
@@ -450,6 +452,9 @@ export default function GameCanvas({
             break;
           }
         }
+        if (nearZoneNpcRef.current?.id !== nearNpc?.id) {
+          onNearZoneNpcChangeRef.current?.(nearNpc ?? null);
+        }
         nearZoneNpcRef.current = nearNpc;
         g.nearZoneNpc = nearNpc;
       }
@@ -671,6 +676,16 @@ export default function GameCanvas({
             ctx.fill();
             ctx.fillStyle = zoneNpc.color;
             ctx.fillText(zoneNpc.name, nx2, ny2 - 22 + bob);
+            // 💬 icon always visible above NPC
+            {
+              const iconPulse = 0.7 + 0.3 * Math.sin(performance.now() / 600);
+              ctx.globalAlpha = iconPulse;
+              ctx.font = '13px serif';
+              ctx.textBaseline = 'middle';
+              ctx.fillText('💬', nx2, ny2 - 48 + bob);
+              ctx.textBaseline = 'alphabetic';
+              ctx.globalAlpha = 1;
+            }
             if (nearZoneNpcRef.current?.id === zoneNpc.id) {
               const hint = '[F] 대화하기';
               const hw = ctx.measureText(hint).width;
@@ -678,15 +693,15 @@ export default function GameCanvas({
               ctx.globalAlpha = pulse;
               ctx.fillStyle = 'rgba(20,20,40,0.85)';
               ctx.beginPath();
-              ctx.roundRect(nx2 - hw / 2 - 7, ny2 - 54 + bob, hw + 14, 18, 5);
+              ctx.roundRect(nx2 - hw / 2 - 7, ny2 - 66 + bob, hw + 14, 18, 5);
               ctx.fill();
               ctx.strokeStyle = zoneNpc.color;
               ctx.lineWidth = 1;
               ctx.beginPath();
-              ctx.roundRect(nx2 - hw / 2 - 7, ny2 - 54 + bob, hw + 14, 18, 5);
+              ctx.roundRect(nx2 - hw / 2 - 7, ny2 - 66 + bob, hw + 14, 18, 5);
               ctx.stroke();
               ctx.fillStyle = '#fff';
-              ctx.fillText(hint, nx2, ny2 - 41 + bob);
+              ctx.fillText(hint, nx2, ny2 - 53 + bob);
               ctx.globalAlpha = 1;
             }
             ctx.restore();

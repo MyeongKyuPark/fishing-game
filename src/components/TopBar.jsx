@@ -58,7 +58,7 @@ function BuffArc({ expiresAt, totalMs, icon, color, label }) {
 export default function TopBar({
   gs, setGs, nickname, myTitle, roomTitle, weather, currentSeason, activity, isOnline,
   serverQuest, serverBoss, fishSurgeEvent, serverEvent, activeWeatherEvent, roomId,
-  indoorRoom, nearDoor, nearActionZone, nearIndoorNpc, partyId, partyMembersRef, otherPlayersRef,
+  indoorRoom, nearDoor, nearActionZone, nearIndoorNpc, nearZoneNpc, handleZoneNpcInteract, partyId, partyMembersRef, otherPlayersRef,
   pendingInvite, showAnnounce, serverAnnouncements,
   achPopup, gradeUpCelebration,
   gameRef, handleCommand, handleExitRoom, handleNpcInteract,
@@ -359,6 +359,11 @@ export default function TopBar({
             )}
             {nearIndoorNpc && indoorRoom && (
               <button className="action-btn action-btn-sm action-btn-enter" tabIndex={-1} onClick={() => handleNpcInteract(nearIndoorNpc.name)}>
+                <span>💬</span><span className="action-btn-label">대화</span>
+              </button>
+            )}
+            {nearZoneNpc && !indoorRoom && (
+              <button className="action-btn action-btn-sm action-btn-enter" tabIndex={-1} onClick={() => handleZoneNpcInteract(nearZoneNpc.id)}>
                 <span>💬</span><span className="action-btn-label">대화</span>
               </button>
             )}

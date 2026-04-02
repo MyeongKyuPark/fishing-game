@@ -80,7 +80,7 @@
 
 .login-hint {
   margin-top: 22px; font-size: 11px;
-  color: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.45);
 }
 
 /* ── Auth screen ── */
@@ -116,7 +116,7 @@
   border-bottom: 1px solid rgba(255,255,255,0.12);
 }
 .auth-tab {
-  flex: 1; background: none; border: none; color: rgba(255,255,255,0.35);
+  flex: 1; background: none; border: none; color: rgba(255,255,255,0.55);
   padding: 10px 0; font-size: 14px; font-weight: 600; cursor: pointer;
   font-family: inherit; border-bottom: 2px solid transparent;
   margin-bottom: -1px; transition: color 0.15s;
@@ -126,18 +126,18 @@
 }
 
 .auth-link {
-  background: none; border: none; color: rgba(255,255,255,0.35);
+  background: none; border: none; color: rgba(255,255,255,0.55);
   font-size: 12px; cursor: pointer; font-family: inherit;
   text-decoration: underline; margin-top: 2px;
 }
-.auth-link:hover { color: rgba(255,255,255,0.6); }
+.auth-link:hover { color: rgba(255,255,255,0.8); }
 
 .auth-back {
   margin-top: 16px; background: none; border: none;
-  color: rgba(255,255,255,0.3); font-size: 12px;
+  color: rgba(255,255,255,0.55); font-size: 12px;
   cursor: pointer; font-family: inherit;
 }
-.auth-back:hover { color: rgba(255,255,255,0.6); }
+.auth-back:hover { color: rgba(255,255,255,0.85); }
 
 .auth-guest-warn {
   display: flex; flex-direction: column; gap: 4px;
@@ -326,6 +326,7 @@ html, body {
   background: rgba(0,0,0,0.6);
   display: flex; align-items: center; justify-content: center;
   z-index: 200; backdrop-filter: blur(3px);
+  overflow-y: auto;
 }
 
 .panel {
@@ -334,6 +335,7 @@ html, body {
   border-radius: 12px;
   width: 500px; max-width: 95vw; max-height: 82vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .panel::-webkit-scrollbar { width: 4px; }
 .panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
@@ -424,7 +426,7 @@ html, body {
 .badge.owned { background: rgba(100,140,255,0.25); color: #88aaff; }
 
 .rod-meta { font-size: 11px; color: #6688aa; margin-bottom: 3px; }
-.rod-fish { font-size: 10px; color: #5a6a7a; }
+.rod-fish { font-size: 10px; color: rgba(255,255,255,0.45); }
 
 .btn-buy {
   background: #254a8a; color: #fff;
@@ -541,9 +543,9 @@ html, body {
   from { width: 0%; }
   to   { width: var(--pct, 0%); }
 }
-.skill-exp-txt { font-size: 9px; color: rgba(255,255,255,0.35); margin-bottom: 3px; }
+.skill-exp-txt { font-size: 9px; color: rgba(255,255,255,0.5); margin-bottom: 3px; }
 .skill-effect { font-size: 10px; font-weight: 600; margin-bottom: 2px; }
-.skill-source { font-size: 9px; color: rgba(255,255,255,0.3); }
+.skill-source { font-size: 9px; color: rgba(255,255,255,0.5); }
 
 /* ── Stat cards (legacy) ── */
 .stat-grid {
@@ -570,7 +572,7 @@ html, body {
 .rank-tab {
   background: rgba(255,255,255,0.05);
   border: 1px solid rgba(255,255,255,0.12);
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.6);
   border-radius: 20px; padding: 3px 10px;
   font-size: 11px; cursor: pointer; font-family: inherit;
 }
@@ -583,7 +585,7 @@ html, body {
 .rank-fish-header {
   margin-bottom: 10px; font-size: 13px;
 }
-.rank-fish-range { color: rgba(255,255,255,0.4); font-size: 11px; }
+.rank-fish-range { color: rgba(255,255,255,0.55); font-size: 11px; }
 
 .rank-row {
   display: flex; align-items: center; gap: 8px;
@@ -599,7 +601,7 @@ html, body {
 .rank-pos { min-width: 28px; text-align: center; font-weight: 700; font-size: 14px; }
 .rank-nick { flex: 1; font-weight: 600; color: #dde; }
 .rank-size { font-weight: 700; font-size: 13px; min-width: 64px; text-align: right; }
-.rank-time { color: #556; font-size: 11px; min-width: 48px; text-align: right; }
+.rank-time { color: rgba(255,255,255,0.45); font-size: 11px; min-width: 48px; text-align: right; }
 
 /* ── Rank sidebar (collapsible panel) ── */
 .rank-sidebar {
@@ -675,7 +677,7 @@ html, body {
 }
 
 .rank-sidebar-fish-range {
-  color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.55);
   font-size: 10px;
   font-weight: 400;
 }
@@ -689,7 +691,7 @@ html, body {
 .rank-sidebar-empty {
   padding: 10px 12px;
   font-size: 11px;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.55);
 }
 
 .rank-sidebar-row {
@@ -843,10 +845,14 @@ canvas { touch-action: none; }
   .mobile-controls { display: block; }
 
   /* C-2: panels fit content up to screen height minus top bar */
+  .overlay {
+    align-items: flex-start;
+    padding: 12px 0;
+  }
   .panel {
     width: 96vw !important;
     max-width: 96vw !important;
-    max-height: min(85vh, calc(100dvh - 80px)) !important;
+    max-height: none !important;
   }
 }
 
@@ -953,7 +959,7 @@ canvas { touch-action: none; }
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: rgba(255,255,255,0.45);
+  color: rgba(255,255,255,0.6);
   font-size: 13px;
   font-weight: 600;
   font-family: inherit;
@@ -961,7 +967,7 @@ canvas { touch-action: none; }
   transition: color 0.15s;
   margin-bottom: -1px;
 }
-.stats-tab:hover { color: rgba(255,255,255,0.8); }
+.stats-tab:hover { color: rgba(255,255,255,0.9); }
 .stats-tab-active {
   color: #88ccff;
   border-bottom-color: #88ccff;

@@ -54,7 +54,9 @@ export default function WorldMap({ currentZone, onClose, lockedZones = [], zoneM
       style={{
         position: 'fixed', inset: 0, zIndex: 9100,
         background: 'rgba(0,0,0,0.7)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        overflowY: 'auto',
+        padding: '12px 8px',
       }}
       onClick={onClose}
     >
@@ -63,25 +65,34 @@ export default function WorldMap({ currentZone, onClose, lockedZones = [], zoneM
           background: 'linear-gradient(160deg, #0f1a2e 0%, #0a1020 100%)',
           border: '1px solid rgba(100,160,255,0.2)',
           borderRadius: 20,
-          padding: '24px 28px',
-          minWidth: 360,
+          padding: '16px 16px 20px',
+          width: '100%',
           maxWidth: 480,
           boxShadow: '0 12px 48px rgba(0,0,0,0.7)',
+          position: 'relative',
         }}
         onClick={e => e.stopPropagation()}
       >
+        {/* X 버튼 — 항상 화면 안에 */}
+        <button
+          onClick={onClose}
+          style={{
+            position: 'absolute', top: 12, right: 12,
+            background: 'rgba(255,255,255,0.1)', border: 'none',
+            color: '#fff', fontSize: 18, cursor: 'pointer',
+            width: 32, height: 32, borderRadius: 8,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            lineHeight: 1, zIndex: 1,
+          }}
+        >✕</button>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16, paddingRight: 40 }}>
           <div>
             <div style={{ color: '#e8d888', fontWeight: 700, fontSize: 16 }}>🗺 세계 지도</div>
             <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 2 }}>
               현재 위치: {ZONE_LABELS[currentZone] ?? currentZone}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 18, cursor: 'pointer', padding: '4px 8px' }}
-          >✕</button>
         </div>
 
         {/* Extended grid: 5 rows × up to 7 cols */}

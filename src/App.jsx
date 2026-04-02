@@ -527,6 +527,7 @@ export default function App() {
   const [nearDoor, setNearDoor] = useState(null);
   const [nearActionZone, setNearActionZone] = useState(null);
   const [nearIndoorNpc, setNearIndoorNpc] = useState(null);
+  const [nearZoneNpc, setNearZoneNpc] = useState(null);
   const prevTitleRef = useRef(null);
   const [serverAnnouncements, setServerAnnouncements] = useState([]);
   const [showDex, setShowDex] = useState(false);
@@ -3997,6 +3998,7 @@ nickname={nickname}
           onCancelReturn={handleCancelReturn}
           onZoneBlocked={handleZoneBlocked}
           onZoneNpcInteract={handleZoneNpcInteract}
+          onNearZoneNpcChange={setNearZoneNpc}
           onNpcQuickMenu={(npcId, x, y) => setNpcQuickMenu({ npcId, x, y, tab: '퀘스트' })}
         />
         {/* Phase 13: Map transition wipe overlay */}
@@ -4053,6 +4055,8 @@ nickname={nickname}
           nearDoor={nearDoor}
           nearActionZone={nearActionZone}
           nearIndoorNpc={nearIndoorNpc}
+          nearZoneNpc={nearZoneNpc}
+          handleZoneNpcInteract={handleZoneNpcInteract}
           partyId={partyId}
           partyMembersRef={partyMembersRef}
           otherPlayersRef={otherPlayersRef}
