@@ -418,7 +418,25 @@ export default function App() {
         const snap = await getDoc(doc(db, 'saves', cred.user.uid));
         if (snap.exists()) {
           const { nickname: savedName, data } = snap.data();
-          if (data) localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+          if (data) {
+            try {
+              const remoteGs = JSON.parse(data);
+              const remoteTime = remoteGs?.lastSaveTime ?? 0;
+              const localRaw = localStorage.getItem(saveKey(savedName));
+              let localTime = 0;
+              if (localRaw) {
+                const localGs = JSON.parse(LZString.decompressFromUTF16(localRaw) ?? localRaw);
+                localTime = localGs?.lastSaveTime ?? 0;
+              }
+              if (remoteTime >= localTime) {
+                localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+              }
+            } catch {
+              if (!localStorage.getItem(saveKey(savedName))) {
+                localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+              }
+            }
+          }
           onLogin(savedName, null, cred.user.uid, false);
         } else {
           pendingGoogleUidRef.current = cred.user.uid;
@@ -433,7 +451,27 @@ export default function App() {
           const snap = await getDoc(doc(db, 'saves', user.uid));
           if (snap.exists()) {
             const { nickname: savedName, data } = snap.data();
-            if (data) localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+            if (data) {
+              // Only overwrite localStorage if Firestore data is newer than local save
+              try {
+                const remoteGs = JSON.parse(data);
+                const remoteTime = remoteGs?.lastSaveTime ?? 0;
+                const localRaw = localStorage.getItem(saveKey(savedName));
+                let localTime = 0;
+                if (localRaw) {
+                  const localGs = JSON.parse(LZString.decompressFromUTF16(localRaw) ?? localRaw);
+                  localTime = localGs?.lastSaveTime ?? 0;
+                }
+                if (remoteTime >= localTime) {
+                  localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+                }
+              } catch {
+                // Fallback: only restore if no local save exists
+                if (!localStorage.getItem(saveKey(savedName))) {
+                  localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+                }
+              }
+            }
             setUserId(user.uid);
             setIsGuest(false);
             setNickname(savedName);
