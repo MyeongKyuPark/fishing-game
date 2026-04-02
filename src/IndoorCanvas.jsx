@@ -1010,8 +1010,8 @@ export default function IndoorCanvas({ roomId, nickname, gameRef, onExit, onNpcI
           ctx.font = '13px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.fillText('⛏', cx2, cy2);
           // Ore label
-          if (gp.currentOre) {
-            const label = `채굴 중: ${gp.currentOre}`;
+          if (gp.state === 'mining') {
+            const label = `채굴 중: ???`;
             ctx.font = 'bold 10px "Noto Sans KR", sans-serif';
             const lw = ctx.measureText(label).width + 14;
             ctx.fillStyle = 'rgba(0,0,0,0.7)';

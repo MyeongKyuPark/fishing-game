@@ -2364,7 +2364,8 @@ export default function App() {
       }));
       const ore = weightedPick(oreEntries);
       player.state = 'mining';
-      player.currentOre = ore;
+      player.pendingOre = ore;
+      player.currentOre = null;
       const mineStamAbil = s.abilities?.체력?.value ?? 0;
       const pickaxeKey = s.pickaxe ?? '나무곡괭이';
       const pickaxeEnhLv = s.pickaxeEnhance?.[pickaxeKey] ?? 0;

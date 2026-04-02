@@ -370,10 +370,10 @@ export default function GameCanvas({
                 player.activityProgress = 0;
                 cbRef.current.onActivityChange('fishing');
               } else if (player.state === 'mining') {
-                cbRef.current.onOreMined(player.currentOre);
-                player.currentOre = pickOre();
+                cbRef.current.onOreMined(player.pendingOre);
+                player.pendingOre = pickOre();
                 const mineMult = g.mineTimeMult ?? 1.0;
-                const [mn, mx] = ORES[player.currentOre].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
+                const [mn, mx] = ORES[player.pendingOre].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
                 player.activityDuration = randInt(mn, mx);
               } else if (player.state === 'gathering') {
                 cbRef.current.onHerbGathered?.(player.currentHerb);
