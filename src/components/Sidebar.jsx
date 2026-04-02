@@ -24,6 +24,7 @@ import { createGuild, joinGuild, leaveGuild, sendGuildChat,
 import { listItem, buyItem, cancelListing } from '../marketData';
 import Leaderboard from '../Leaderboard';
 import { rarityColor, SKIN_PRESETS, getWeeklyGoals } from '../hooks/useGameState';
+import { STAT_DEFS, getStatLevel, getStatProgress, getCharLevel, getCharProgress, getStatBonuses } from '../statsData';
 import CottagePanel from './CottagePanel';
 import { sendPlayerMail, fetchMailbox, clearMailbox, subscribeSeasonRankings, getSeasonKey } from '../ranking';
 
@@ -305,12 +306,65 @@ export default function Sidebar(props) {
 
             {/* Tabs */}
             <div className="stats-tabs">
-              {['장비', '어빌리티', '제련/제작', '전설 제작', '장인 작업대', '업적', '펫', '관계도', '탐험', '농장', '박제실'].map(tab => (
+              {['스탯', '장비', '어빌리티', '제련/제작', '전설 제작', '장인 작업대', '업적', '펫', '관계도', '탐험', '농장', '박제실'].map(tab => (
                 <button key={tab} tabIndex={-1}
                   className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''}`}
                   onClick={() => setStatsTab(tab)}>{tab}</button>
               ))}
             </div>
+
+            {/* ── 스탯 tab ── */}
+            {statsTab === '스탯' && (() => {
+              const charXP = gs.charXP ?? 0;
+              const charLv = getCharLevel(charXP);
+              const charProg = getCharProgress(charXP);
+              const statBonuses = getStatBonuses(gs.stats, charXP);
+              return (
+                <div style={{ padding: '12px 4px' }}>
+                  {/* Character level */}
+                  <div style={{ background: 'rgba(255,215,0,0.08)', border: '1px solid rgba(255,215,0,0.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 14 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <span style={{ fontSize: 20 }}>🌟</span>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: '#ffd700' }}>캐릭터 레벨 {charLv}</span>
+                    </div>
+                    <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 6, height: 8, overflow: 'hidden' }}>
+                      <div style={{ width: `${(charProg.current / charProg.needed) * 100}%`, height: '100%', background: 'linear-gradient(90deg,#ffd700,#ffaa00)', borderRadius: 6, transition: 'width 0.3s' }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 3, textAlign: 'right' }}>{charProg.current} / {charProg.needed} XP</div>
+                  </div>
+                  {/* Stats */}
+                  {Object.entries(STAT_DEFS).map(([key, def]) => {
+                    const xp = gs.stats?.[key] ?? 0;
+                    const prog = getStatProgress(xp);
+                    const pct = (prog.current / prog.needed) * 100;
+                    const bonusText = {
+                      str: `채굴 속도 -${((1 - statBonuses.mineTimeMult) * 100).toFixed(1)}%`,
+                      dex: `낚시 속도 -${((1 - statBonuses.fishTimeMult) * 100).toFixed(1)}%`,
+                      int: `판매가 +${((statBonuses.sellMult - 1) * 100).toFixed(1)}%`,
+                      vit: `활동 속도 -${((1 - statBonuses.actTimeMult) * 100).toFixed(1)}%`,
+                      luk: `희귀 확률 +${((statBonuses.lukRareMult - 1) * 100).toFixed(1)}% · 판매가 +${((statBonuses.lukSellMult - 1) * 100).toFixed(1)}%`,
+                    }[key];
+                    return (
+                      <div key={key} style={{ marginBottom: 10, background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '8px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span style={{ fontSize: 16 }}>{def.icon}</span>
+                          <span style={{ fontWeight: 700, color: def.color, fontSize: 13 }}>{def.name}</span>
+                          <span style={{ marginLeft: 'auto', fontSize: 13, color: '#fff', fontWeight: 700 }}>Lv.{prog.level}</span>
+                        </div>
+                        <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: 3 }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: def.color, borderRadius: 4, transition: 'width 0.3s' }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>
+                          <span>{def.gainDesc}</span>
+                          <span>{prog.current}/{prog.needed} XP</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>효과: {bonusText}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* ── 장비 tab ── */}
             {statsTab === '장비' && (() => {

@@ -38,6 +38,7 @@ import { getTimePeriod, msUntilNextTimePeriod } from './timeData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm, setActiveZone, ZONE_TILES, ZONE_LABELS, ZONE_BONUSES, getActiveZone, PLAYER_START_X, PLAYER_START_Y, ZONE_UNLOCK_REQ } from './mapData';
 import { setActiveTiles } from './canvas/drawMap';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
+import { STAT_DEFS, getStatLevel, getCharLevel, getStatBonuses, RARE_ORE_KEYS, RARE_FISH_RARITIES } from './statsData';
 import { PETS, EVOLVED_PETS, EVOLVE_REQUIREMENTS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
 import { NPCS, getAffinityLevel, getShopDiscount } from './npcData';
 import { EXPLORE_ZONES, checkZoneUnlock } from './explorationData';
@@ -983,6 +984,29 @@ export default function App() {
     }));
   }, []);
 
+  const gainStat = useCallback((statKey, xp) => {
+    setGs(prev => {
+      const oldXP = prev.stats?.[statKey] ?? 0;
+      const newXP = oldXP + xp;
+      if (getStatLevel(newXP) > getStatLevel(oldXP)) {
+        const def = STAT_DEFS[statKey];
+        setTimeout(() => addMsgRef.current?.(`✨ ${def.icon} ${def.name} Lv.${getStatLevel(newXP)}!`, 'catch'), 0);
+      }
+      return { ...prev, stats: { ...(prev.stats ?? {}), [statKey]: newXP } };
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const gainCharXP = useCallback((xp) => {
+    setGs(prev => {
+      const oldXP = prev.charXP ?? 0;
+      const newXP = oldXP + xp;
+      if (getCharLevel(newXP) > getCharLevel(oldXP)) {
+        setTimeout(() => addMsgRef.current?.(`🌟 캐릭터 레벨 ${getCharLevel(newXP)}!`, 'catch'), 100);
+      }
+      return { ...prev, charXP: newXP };
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const advanceQuest = useCallback((type, amount = 1) => {
     setGs(prev => {
       const quests = prev.dailyQuests ?? [];
@@ -1294,6 +1318,12 @@ export default function App() {
       table = applyBoosts(table, { 희귀: 1 + timeFishRareBonus, 전설: 1 + timeFishRareBonus * 1.5, 신화: 1 + timeFishRareBonus * 2 });
     }
 
+    // LUK stat rare boost
+    const { lukRareMult } = getStatBonuses(s.stats, s.charXP);
+    if (lukRareMult > 1) {
+      table = applyBoosts(table, { 희귀: lukRareMult, 전설: lukRareMult, 신화: lukRareMult });
+    }
+
     // Filter out seasonal fish that don't match current season
     // Filter out night-exclusive fish unless it's night period
     const currentSeasonId = getCurrentSeason()?.id ?? null;
@@ -1350,7 +1380,8 @@ export default function App() {
     const setFishSellBonus = 1 + (activeSetBonus.fishSellBonus ?? 0) + (activeSetBonus.sellBonus ?? 0);
     const activeWE = activeWeatherEventRef.current;
     const weatherFishSellBonus = (activeWE && (!activeWE.expiresAt || Date.now() < activeWE.expiresAt)) ? (1 + (activeWE.bonus?.fishSellBonus ?? 0)) : 1.0;
-    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus * hatSellBonus * outfitSellBonus * topSellBonus * bottomSellBonus * beltSellBonus * titleSellBonus * furnitureSellBonus * worldZoneSellBonus * mtnSellBonus * deepMasteryBonus * festivalFishBonus * townFishSellBonus * jobClassFishSellBonus * legendRodSellBonus * masteryFishSellBonus * setFishSellBonus * weatherFishSellBonus);
+    const { sellMult: intSellMult, lukSellMult } = getStatBonuses(s.stats, s.charXP);
+    const finalPrice = Math.round(price * seaBonus * petSellBonus * jobSellBonus * seasonPriceBonus * srvSellBonus * prestigeSellBonus * hatSellBonus * outfitSellBonus * topSellBonus * bottomSellBonus * beltSellBonus * titleSellBonus * furnitureSellBonus * worldZoneSellBonus * mtnSellBonus * deepMasteryBonus * festivalFishBonus * townFishSellBonus * jobClassFishSellBonus * legendRodSellBonus * masteryFishSellBonus * setFishSellBonus * weatherFishSellBonus * intSellMult * lukSellMult);
     const seaMsg = seaBonus > 1 ? ` 🌊 [${zoneDef?.name ?? zone}] 보너스!` : '';
 
     // 3% line snap — lose the fish
@@ -1595,8 +1626,15 @@ export default function App() {
     advanceQuest('fish');
     updateWeeklyGoal('fish');
     if (fd.rarity === '전설' || fd.rarity === '신화') updateWeeklyGoal('rare');
+    // Stat gains
+    const dexGain = fd.rarity === '신화' ? 5 : fd.rarity === '전설' ? 4 : fd.rarity === '희귀' ? 3 : 2;
+    gainStat('dex', dexGain);
+    gainStat('vit', 1);
+    if (RARE_FISH_RARITIES.includes(fd.rarity)) gainStat('luk', fd.rarity === '신화' ? 15 : fd.rarity === '전설' ? 10 : 5);
+    gainCharXP(fd.rarity === '신화' ? 15 : fd.rarity === '전설' ? 10 : fd.rarity === '희귀' ? 5 : 3);
+    gainStat('int', Math.max(1, Math.floor(finalPrice / 200)));
 
-  }, [addMsg, grantAbility, advanceQuest, checkAndGrantAchievements, updateWeeklyGoal]);
+  }, [addMsg, grantAbility, gainStat, gainCharXP, advanceQuest, checkAndGrantAchievements, updateWeeklyGoal]);
 
   // 대어 저항 미니게임 완료 처리
   const onResistanceSuccess = useCallback(() => {
@@ -1890,7 +1928,12 @@ export default function App() {
     }
     // Server boss: deal damage on ore mined
     damageServerBoss(1, nicknameRef.current);
-  }, [addMsg, grantAbility, advanceQuest, advanceZoneChallenge, gainNpcAffinity, checkAndGrantAchievements, miningMinigame]);
+    // Stat gains
+    gainStat('str', 2);
+    gainStat('vit', 1);
+    if (RARE_ORE_KEYS.includes(oreName)) gainStat('luk', 3);
+    gainCharXP(4);
+  }, [addMsg, grantAbility, gainStat, gainCharXP, advanceQuest, advanceZoneChallenge, gainNpcAffinity, checkAndGrantAchievements, miningMinigame]);
 
   const onHerbGathered = useCallback((herbName) => {
     // World-zone herb yield bonus (서쪽초원 ×1.4, 북쪽고원 ×1.2)
@@ -1945,7 +1988,9 @@ export default function App() {
     grantAbility('체력', 0.1);
     grantAbility('채집', 0.5);
     advanceQuest('herb');
-  }, [addMsg, grantAbility, advanceQuest, advanceZoneChallenge, checkAndGrantAchievements]);
+    gainStat('vit', 1);
+    gainCharXP(2);
+  }, [addMsg, grantAbility, gainStat, gainCharXP, advanceQuest, advanceZoneChallenge, checkAndGrantAchievements]);
 
   const onActivityChange = useCallback((act) => setActivity(act), []);
 
@@ -2237,8 +2282,9 @@ export default function App() {
         const spotDecoFishMult = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
         const titleFishMult = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
         const masteryFishMult = getMasteryBonus(s.masteryPerks ?? {}).fishTimeMult;
+        const { fishTimeMult: statFishMult, actTimeMult: statActMult } = getStatBonuses(s.stats, s.charXP);
         const timeMult = Math.max(0.3,
-          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * mtnFishMult * timePeriodFishMult * hatFishMult * outfitFishMult * topFishMult * bottomFishMult * beltFishMult * spotDecoFishMult * titleFishMult * masteryFishMult
+          (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus) * (1 - diyFishBonus) * (1 - seasonFishBonus) * petFishMult * jobFishMult * innBuffMult * mtnFishMult * timePeriodFishMult * hatFishMult * outfitFishMult * topFishMult * bottomFishMult * beltFishMult * spotDecoFishMult * titleFishMult * masteryFishMult * statFishMult * statActMult
         );
         const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
         if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -2312,8 +2358,9 @@ export default function App() {
       const spotDecoFishMult2 = (s.spotDecos ?? []).reduce((acc, k) => acc * (SPOT_DECOS[k]?.bonus?.fishTimeMult ?? 1.0), 1.0);
       const titleFishMult2 = getActiveTitleBonus(s).fishTimeMult ?? 1.0;
       const masteryFishMult2 = getMasteryBonus(s.masteryPerks ?? {}).fishTimeMult;
+      const { fishTimeMult: statFishMult2, actTimeMult: statActMult2 } = getStatBonuses(s.stats, s.charXP);
       const timeMult = Math.max(0.3,
-        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * mtnFishMult2 * timePeriodFishMult2 * hatFishMult2 * outfitFishMult2 * topFishMult2 * bottomFishMult2 * beltFishMult2 * spotDecoFishMult2 * titleFishMult2 * masteryFishMult2
+        (1 - fishAbil * 0.004) * (1 - stamAbil * 0.003) * (1 - enhEffect.timeReduction) * (1 - potionFishBonus2) * (1 - diyFishBonus2) * (1 - seasonFishBonus2) * petFishMult2 * jobFishMult2 * innBuffMult2 * mtnFishMult2 * timePeriodFishMult2 * hatFishMult2 * outfitFishMult2 * topFishMult2 * bottomFishMult2 * beltFishMult2 * spotDecoFishMult2 * titleFishMult2 * masteryFishMult2 * statFishMult2 * statActMult2
       );
       const [mn, mx] = RODS[s.rod].catchTimeRange.map(t => Math.max(1000, Math.round(t * timeMult)));
       if (gameRef.current) gameRef.current.fishTimeMult = timeMult;
@@ -2356,11 +2403,13 @@ export default function App() {
       const cheolsuSpecialBoost = cheolsu >= 80 ? 1.5 : 1.0;
       const seasonOreKey = getCurrentSeason()?.oreBoostKey ?? null;
       const seasonOreMult = getCurrentSeason()?.oreBoostMult ?? 1.0;
+      const { lukRareMult: lukOreBoost } = getStatBonuses(s.stats, s.charXP);
       const oreEntries = Object.entries(ORES).map(([k, v]) => ({
         f: k,
         w: v.w * (MINE_DEPTH_ORE_MULT[k]?.[mineDepth - 1] ?? 1.0) * (zoneBoosts[k] ?? 1.0)
           * ((cheolsu >= 80 && (k === '수정' || k === '금광석')) ? cheolsuSpecialBoost : 1.0)
-          * (seasonOreKey && k === seasonOreKey ? seasonOreMult : 1.0),
+          * (seasonOreKey && k === seasonOreKey ? seasonOreMult : 1.0)
+          * (RARE_ORE_KEYS.includes(k) ? lukOreBoost : 1.0),
       }));
       const ore = weightedPick(oreEntries);
       player.state = 'mining';
@@ -2392,7 +2441,8 @@ export default function App() {
       const jobClassMineMult = JOB_CLASSES[s?.jobClass]?.bonus?.mineTimeMult ?? 1.0;
       const setMineMult = getActiveSetBonus(s ?? {}).mineTimeMult ?? 1.0;
       const weatherMineMult = activeWeatherEventRef.current?.bonus?.mineTimeMult ?? 1.0;
-      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * topMineMult * bottomMineMult * titleMineMult * (1 - worldZoneMineReduction) * mtnMineMult * festivalMineMult * townMineMult * jobClassMineMult * setMineMult * weatherMineMult);
+      const { mineTimeMult: statMineMult, actTimeMult: statActMultMine } = getStatBonuses(s.stats, s.charXP);
+      const mineMult = Math.max(0.25, (1 - mineAbil * 0.004) * (1 - mineStamAbil * 0.003) * paxMult * (1 - paxTimeRed) * (1 - potionMineBonus) * (1 - cheolsuMineBonus) * petMineMult * jobMineMult * depthTimeMult * hatMineMult * outfitMineMult * topMineMult * bottomMineMult * titleMineMult * (1 - worldZoneMineReduction) * mtnMineMult * festivalMineMult * townMineMult * jobClassMineMult * setMineMult * weatherMineMult * statMineMult * statActMultMine);
       const [mn, mx] = ORES[ore].mineRange.map(t => Math.max(800, Math.round(t * mineMult)));
       if (gameRef.current) gameRef.current.mineTimeMult = mineMult;
       player.activityStart = performance.now();

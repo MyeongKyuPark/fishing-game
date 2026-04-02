@@ -214,6 +214,9 @@ export const DEFAULT_STATE = {
   zoneMastery: {},
   playerX: null,
   playerY: null,
+  // Character stats (STR/DEX/INT/VIT/LUK)
+  stats: { str: 0, dex: 0, int: 0, vit: 0, luk: 0 },
+  charXP: 0,
   // Phase 12-1: 펫 진화
   evolvedPets: {},
   specialItems: {},
@@ -421,6 +424,14 @@ export function loadSave(nickname) {
       zoneMastery: s.zoneMastery ?? {},
       playerX: s.playerX ?? null,
       playerY: s.playerY ?? null,
+      stats: {
+        str: s.stats?.str ?? 0,
+        dex: s.stats?.dex ?? 0,
+        int: s.stats?.int ?? 0,
+        vit: s.stats?.vit ?? 0,
+        luk: s.stats?.luk ?? 0,
+      },
+      charXP: s.charXP ?? 0,
       // Phase 12-1
       evolvedPets: s.evolvedPets ?? {},
       specialItems: s.specialItems ?? {},
