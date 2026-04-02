@@ -405,6 +405,7 @@ export default function App() {
   const [userId, setUserId] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const firestoreSaveTimerRef = useRef(null);
+  const gsLoadedRef = useRef(false);
   const [roomId, setRoomId] = useState(null);
   const [roomTitle, setRoomTitle] = useState('');
   useEffect(() => { nicknameRef.current = nickname; }, [nickname]);
@@ -769,7 +770,7 @@ export default function App() {
 
   // Save to localStorage (always) + Firestore (authenticated users, debounced 5s)
   useEffect(() => {
-    if (!nickname) return;
+    if (!nickname || !gsLoadedRef.current) return;
     const json = JSON.stringify({ ...gs, lastSaveTime: Date.now(), saveVersion: SAVE_VERSION });
     localStorage.setItem(saveKey(nickname), LZString.compressToUTF16(json));
     if (userId && !isGuest) {
@@ -813,7 +814,7 @@ export default function App() {
   const achPopupRef = useRef(enqueueAchPopup);
   useEffect(() => { achPopupRef.current = enqueueAchPopup; }, [enqueueAchPopup]);
   const checkAndGrantAchievementsRef = useRef(null);
-  useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef });
+  useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef, gsLoadedRef });
 
   // Expire active potion (after addMsg to avoid TDZ)
   useEffect(() => {

@@ -6,7 +6,7 @@ import { getActiveTitleBonus } from '../titleData';
 import { setActiveZone, ZONE_TILES } from '../mapData';
 import { setActiveTiles } from '../canvas/drawMap';
 
-export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef }) {
+export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef, gsLoadedRef }) {
   useEffect(() => {
     if (!nickname) return;
     const saved = loadSave(nickname);
@@ -64,6 +64,7 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
       base = { ...base, mountainBuff: null };
     }
 
+    if (gsLoadedRef) gsLoadedRef.current = true;
     if (bonus > 0) {
       const bonusAchStats = { ...baseAchStats, maxMoney: Math.max(baseAchStats.maxMoney ?? 0, saved.money + bonus) };
       setTimeout(() => checkAndGrantAchievementsRef?.current?.(bonusAchStats), 600);
