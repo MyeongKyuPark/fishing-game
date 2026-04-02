@@ -212,6 +212,8 @@ export const DEFAULT_STATE = {
   worldZone: '마을',
   visitedZones: ['마을'],
   zoneMastery: {},
+  playerX: null,
+  playerY: null,
   // Phase 12-1: 펫 진화
   evolvedPets: {},
   specialItems: {},
@@ -417,6 +419,8 @@ export function loadSave(nickname) {
       worldZone: s.worldZone ?? '마을',
       visitedZones: s.visitedZones ?? ['마을'],
       zoneMastery: s.zoneMastery ?? {},
+      playerX: s.playerX ?? null,
+      playerY: s.playerY ?? null,
       // Phase 12-1
       evolvedPets: s.evolvedPets ?? {},
       specialItems: s.specialItems ?? {},

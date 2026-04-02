@@ -771,7 +771,9 @@ export default function App() {
   // Save to localStorage (always) + Firestore (authenticated users, debounced 5s)
   useEffect(() => {
     if (!nickname || !gsLoadedRef.current) return;
-    const json = JSON.stringify({ ...gs, lastSaveTime: Date.now(), saveVersion: SAVE_VERSION });
+    const px = gameRef.current?.player?.x;
+    const py = gameRef.current?.player?.y;
+    const json = JSON.stringify({ ...gs, lastSaveTime: Date.now(), saveVersion: SAVE_VERSION, ...(px != null ? { playerX: px, playerY: py } : {}) });
     localStorage.setItem(saveKey(nickname), LZString.compressToUTF16(json));
     if (userId && !isGuest) {
       clearTimeout(firestoreSaveTimerRef.current);
@@ -814,7 +816,7 @@ export default function App() {
   const achPopupRef = useRef(enqueueAchPopup);
   useEffect(() => { achPopupRef.current = enqueueAchPopup; }, [enqueueAchPopup]);
   const checkAndGrantAchievementsRef = useRef(null);
-  useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef, gsLoadedRef });
+  useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef, gsLoadedRef, gameRef });
 
   // Expire active potion (after addMsg to avoid TDZ)
   useEffect(() => {

@@ -6,7 +6,7 @@ import { getActiveTitleBonus } from '../titleData';
 import { setActiveZone, ZONE_TILES } from '../mapData';
 import { setActiveTiles } from '../canvas/drawMap';
 
-export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef, gsLoadedRef }) {
+export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchievementsRef, gsLoadedRef, gameRef }) {
   useEffect(() => {
     if (!nickname) return;
     const saved = loadSave(nickname);
@@ -54,17 +54,21 @@ export function useOfflineReward({ nickname, setGs, addMsgRef, checkAndGrantAchi
     const cottageOffBonus = COTTAGE_LEVEL_BONUSES[cottageLevel]?.offlineBonus ?? 0;
     const offlineMult = innOffMult * bankOffMult * furnitureOffMult * (1 + titleOffBonus) * (1 + cottageOffBonus);
     const offlineReward = Math.floor(effectiveMins * 10 * offlineMult);
-    // Always spawn in town on reload — PLAYER_START is on a town path tile;
-    // restoring a non-town zone (e.g. 남쪽심해) can put the spawn on WATER.
-    setActiveZone('마을');
-    setActiveTiles(ZONE_TILES['마을']);
-    base = { ...base, worldZone: '마을' };
+    // Restore last zone; exact saved position avoids landing on water
+    const savedZone = saved.worldZone ?? '마을';
+    setActiveZone(savedZone);
+    setActiveTiles(ZONE_TILES[savedZone] ?? ZONE_TILES['마을']);
     // Clear expired mountainBuff
     if (base.mountainBuff && Date.now() >= base.mountainBuff.expiresAt) {
       base = { ...base, mountainBuff: null };
     }
 
     if (gsLoadedRef) gsLoadedRef.current = true;
+    // Restore player position directly into gameRef (bypasses React state for instant effect)
+    if (saved.playerX != null && gameRef?.current?.player) {
+      gameRef.current.player.x = saved.playerX;
+      gameRef.current.player.y = saved.playerY;
+    }
     if (bonus > 0) {
       const bonusAchStats = { ...baseAchStats, maxMoney: Math.max(baseAchStats.maxMoney ?? 0, saved.money + bonus) };
       setTimeout(() => checkAndGrantAchievementsRef?.current?.(bonusAchStats), 600);
