@@ -87,7 +87,7 @@ export default function RoomLobby({ nickname, onJoin }) {
             <div key={room.id} className="room-row">
               <div className="room-info">
                 <span className="room-title">{room.title}</span>
-                <span className="room-host">by {room.host}</span>
+                <span className="room-host">방장: {room.host}</span>
                 {room.password ? <span className="room-lock">🔒</span> : <span className="room-open">🔓</span>}
               </div>
               {room.password && (

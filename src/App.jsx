@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import LZString from 'lz-string';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
-  sendPasswordResetEmail, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+  sendPasswordResetEmail, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import './App.css';
@@ -186,19 +186,9 @@ function AuthScreen({ onLogin }) {
   const handleGoogle = async () => {
     setErr(''); setLoading(true);
     try {
-      const cred = await signInWithPopup(auth, new GoogleAuthProvider());
-      const snap = await getDoc(doc(db, 'saves', cred.user.uid));
-      if (snap.exists()) {
-        const { nickname: savedName, data } = snap.data();
-        if (data) localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
-        onLogin(savedName, null, cred.user.uid, false);
-      } else {
-        pendingGoogleUidRef.current = cred.user.uid;
-        setLoading(false);
-        go('nickname-google');
-      }
+      await signInWithRedirect(auth, new GoogleAuthProvider());
     } catch (e2) {
-      if (e2.code !== 'auth/popup-closed-by-user') setErr(getFirebaseError(e2.code));
+      setErr(getFirebaseError(e2.code));
       setLoading(false);
     }
   };
@@ -421,6 +411,22 @@ export default function App() {
 
   // Firebase Auth: auto-login for returning users
   useEffect(() => {
+    // Handle Google redirect result
+    getRedirectResult(auth).then(async (cred) => {
+      if (!cred) return;
+      try {
+        const snap = await getDoc(doc(db, 'saves', cred.user.uid));
+        if (snap.exists()) {
+          const { nickname: savedName, data } = snap.data();
+          if (data) localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+          onLogin(savedName, null, cred.user.uid, false);
+        } else {
+          pendingGoogleUidRef.current = cred.user.uid;
+          go('nickname-google');
+        }
+      } catch { /* ignore */ }
+    }).catch(() => {});
+
     const unsub = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
