@@ -36,6 +36,7 @@ export default function GameCanvas({
   hairColor, bodyColor, skinColor, gender,
   spotDecos, onZoneTransition, onCancelReturn, onZoneBlocked, onZoneNpcInteract,
   onNpcQuickMenu, onNearZoneNpcChange,
+  marineGear,
 }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange });
@@ -80,6 +81,7 @@ export default function GameCanvas({
   useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
   useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
   useEffect(() => { genderRef.current = gender ?? 'male'; }, [gender]);
+  useEffect(() => { if (gameRef.current) gameRef.current.marineGear = marineGear ?? null; }, [marineGear]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     cbRef.current = { onFishCaught, onOreMined, onHerbGathered, onActivityChange };

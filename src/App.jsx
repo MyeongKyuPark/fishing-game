@@ -23,7 +23,7 @@ import { JOBS, getAvailableJobs, JOB_CLASSES } from './jobData';
 import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, GATHER_TOOLS,
   SMELT_RECIPES, JEWELRY_RECIPES, POTION_RECIPES, DISH_RECIPES, SEEDS, MAX_FARM_PLOTS,
   FARM_EXPANSION_PRICE, FARM_EXPANSION_SLOTS, FARM_MAX_EXPANSIONS,
-  weightedPick, randInt, TILE_SIZE,
+  weightedPick, randInt, TILE_SIZE, TILE,
   getAbilityFishTable, rodEnhanceCost, rodEnhanceMatsNeeded, rodEnhanceSuccessRate, rodEnhanceEffect,
   pickaxeEnhanceCost, pickaxeEnhanceMatsNeeded, pickaxeEnhanceSuccessRate, pickaxeEnhanceEffect,
   ZONE_FISH, FISHING_ZONES, HATS, FISHING_OUTFITS, TOPS, BOTTOMS, BELTS, ROD_SKINS, SPOT_DECOS, FURNITURE, BAIT_RECIPES, POINT_SHOP_ITEMS,
@@ -36,7 +36,7 @@ import { getTitle, getActiveTitleBonus, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
 import { getTimePeriod, msUntilNextTimePeriod } from './timeData';
 import { nearestChair, nearShop, nearCooking, isInMineZone, isInForestZone, isOnWater, CHAIR_RANGE, pickOre, pickHerb, DOOR_TRIGGERS, nearFarm, setActiveZone, ZONE_TILES, ZONE_LABELS, ZONE_BONUSES, getActiveZone, PLAYER_START_X, PLAYER_START_Y, ZONE_UNLOCK_REQ } from './mapData';
-import { setActiveTiles } from './canvas/drawMap';
+import { setActiveTiles, getTile } from './canvas/drawMap';
 import { ACHIEVEMENTS, checkAchievements } from './achievementData';
 import { STAT_DEFS, getStatLevel, getCharLevel, getStatBonuses, RARE_ORE_KEYS, RARE_FISH_RARITIES } from './statsData';
 import { PETS, EVOLVED_PETS, EVOLVE_REQUIREMENTS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
@@ -2254,7 +2254,7 @@ export default function App() {
 
       // Marine gear: can fish on water without a chair
       const hasMarine = s.marineGear != null;
-      if (hasMarine && isOnWater(player.x, player.y)) {
+      if (hasMarine && getTile(Math.floor(player.x / TILE_SIZE), Math.floor(player.y / TILE_SIZE)) === TILE.WATER) {
         const gear = MARINE_GEAR[s.marineGear];
         player.state = 'fishing';
         player.currentRod = s.rod;
@@ -4092,6 +4092,7 @@ nickname={nickname}
           onZoneNpcInteract={handleZoneNpcInteract}
           onNearZoneNpcChange={setNearZoneNpc}
           onNpcQuickMenu={(npcId, x, y) => setNpcQuickMenu({ npcId, x, y, tab: '퀘스트' })}
+          marineGear={gs.marineGear}
         />
         {/* Phase 13: Map transition wipe overlay */}
         {mapTransitioning && (

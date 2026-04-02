@@ -368,6 +368,7 @@ export function loadSave(nickname) {
       bankDeposit: s.bankDeposit ?? 0,
       bankLastInterest: s.bankLastInterest ?? null,
       bankLoan: s.bankLoan ?? 0,
+      mineDepth: s.mineDepth ?? 1,
       merchantBaitDate: s.merchantBaitDate ?? '',
       sanSinryeongBuffDate: s.sanSinryeongBuffDate ?? '',
       mountainBuff: s.mountainBuff ?? null,
