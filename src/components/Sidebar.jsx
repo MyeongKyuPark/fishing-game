@@ -24,7 +24,7 @@ import { createGuild, joinGuild, leaveGuild, sendGuildChat,
   contributeGuildXP, fetchGuildWarehouse, addToGuildWarehouse, removeFromGuildWarehouse } from '../guildData';
 import { listItem, buyItem, cancelListing } from '../marketData';
 import Leaderboard from '../Leaderboard';
-import { rarityColor, SKIN_PRESETS, getWeeklyGoals } from '../hooks/useGameState';
+import { rarityColor, SKIN_PRESETS, getWeeklyGoals, getSaveCache, setSaveCache, loadSave } from '../hooks/useGameState';
 import { STAT_DEFS, getStatLevel, getStatProgress, getCharLevel, getCharProgress, getStatBonuses } from '../statsData';
 import CottagePanel from './CottagePanel';
 import { sendPlayerMail, fetchMailbox, clearMailbox, subscribeSeasonRankings, getSeasonKey } from '../ranking';
@@ -33,6 +33,22 @@ const TOURNAMENT_PRIZES = [2000, 1000, 500]; // 1위/2위/3위 주간 보상 골
 import { useState } from 'react';
 import { getSettings, setSfxEnabled, setCanvasQuality, setColorBlindMode, subscribeSettings } from '../settingsManager';
 import { setBgmVolume, getBgmVolume } from '../bgm';
+
+// Helper: check mat count from both raw ore and processed ore inventories
+function getMatCount(gs, key) {
+  return (gs.oreInventory?.[key] || 0) + (gs.processedOreInventory?.[key] || 0);
+}
+// Helper: consume mats from the correct inventory (processed first, then raw)
+function consumeMats(prev, mats) {
+  const rawOre = { ...prev.oreInventory };
+  const procOre = { ...(prev.processedOreInventory ?? {}) };
+  for (const [k, n] of Object.entries(mats)) {
+    const procHas = procOre[k] || 0;
+    if (procHas >= n) { procOre[k] = procHas - n; }
+    else { rawOre[k] = (rawOre[k] || 0) - n; }
+  }
+  return { oreInventory: rawOre, processedOreInventory: procOre };
+}
 
 // eslint-disable-next-line no-unused-vars
 export default function Sidebar(props) {
@@ -306,13 +322,22 @@ export default function Sidebar(props) {
             </div>
 
             {/* Tabs */}
-            <div className="stats-tabs">
-              {['스탯', '장비', '어빌리티', '제련/제작', '전설 제작', '장인 작업대', '업적', '펫', '관계도', '탐험', '농장', '박제실'].map(tab => (
-                <button key={tab} tabIndex={-1}
-                  className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''}`}
-                  onClick={() => setStatsTab(tab)}>{tab}</button>
-              ))}
-            </div>
+            {(() => {
+              const canGradeUpAny = Object.values(gs.abilities ?? {}).some(ab => ab.value >= 100);
+              const farmReady = (gs.farmPlots ?? []).some(p => Date.now() >= p.harvestAt);
+              return (
+                <div className="stats-tabs">
+                  {['스탯', '장비', '어빌리티', '제련/제작', '전설 제작', '장인 작업대', '업적', '펫', '관계도', '탐험', '농장', '박제실'].map(tab => {
+                    const blink = (tab === '어빌리티' && canGradeUpAny) || (tab === '농장' && farmReady);
+                    return (
+                      <button key={tab} tabIndex={-1}
+                        className={`stats-tab ${statsTab === tab ? 'stats-tab-active' : ''} ${blink && statsTab !== tab ? 'stats-tab-blink' : ''}`}
+                        onClick={() => setStatsTab(tab)}>{tab}</button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* ── 스탯 tab ── */}
             {statsTab === '스탯' && (() => {
@@ -1441,7 +1466,7 @@ export default function Sidebar(props) {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <span style={{ fontSize: 14 }}>{recipe.icon}</span>
-                          <span style={{ fontWeight: 700, marginLeft: 6 }}>{recipe.name}</span>
+                          <span style={{ fontWeight: 700, marginLeft: 6, color: 'rgba(255,255,255,0.9)' }}>{recipe.name}</span>
                           {craftCount > 0 && <span style={{ fontSize: 10, color: '#88ff88', marginLeft: 6 }}>×{craftCount}</span>}
                         </div>
                         <button
@@ -1494,7 +1519,7 @@ export default function Sidebar(props) {
                     return (
                       <div key={goal.id} className="rod-card" style={{ opacity: claimed ? 0.5 : 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ fontWeight: 700, fontSize: 12 }}>{goal.label}</div>
+                          <div style={{ fontWeight: 700, fontSize: 12, color: 'rgba(255,255,255,0.9)' }}>{goal.label}</div>
                           {done && !claimed && (
                             <button className="btn-buy" style={{ fontSize: 10, padding: '2px 8px' }}
                               onClick={() => claimWeeklyGoalReward?.(goal.id)}>
@@ -1892,8 +1917,44 @@ export default function Sidebar(props) {
                 <>
                   <div className="section">
                     <div className="section-title">🌱 농장 현황 ({plots.length}/{currentMaxPlots}칸)</div>
+                    {plots.length < currentMaxPlots && (() => {
+                      const curSeason = getCurrentSeason();
+                      return (
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>씨앗 심기:</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {Object.entries(SEEDS).map(([key, sd]) => {
+                              const seasonOk = !sd.reqSeason || sd.reqSeason === curSeason?.id;
+                              const canAfford = gs.money >= sd.price;
+                              const ok = canAfford && seasonOk;
+                              return (
+                                <button key={key} className={ok ? 'btn-buy' : 'btn-dis'}
+                                  style={{ fontSize: 11 }}
+                                  disabled={!ok}
+                                  title={sd.seasonDesc ?? ''}
+                                  onClick={() => handleCommand(`!심기 ${key}`, { skipLocationCheck: true })}>
+                                  🌱 {sd.name} ({sd.price}G){sd.reqSeason ? (seasonOk ? ' 🌟' : ' ❌') : ''}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                      {plots.some(p => now >= p.harvestAt) && (
+                        <button className="btn-buy" onClick={() => handleCommand('!수확', { skipLocationCheck: true })}>
+                          🌾 전체 수확
+                        </button>
+                      )}
+                      {plots.some(p => !p.watered && now < p.harvestAt) && (
+                        <button className="btn-eq" onClick={() => handleCommand('!물주기', { skipLocationCheck: true })}>
+                          💧 물 주기 (성장 25%↑)
+                        </button>
+                      )}
+                    </div>
                     {plots.length === 0 && (
-                      <div className="empty">심은 작물이 없습니다. !심기 [씨앗명] 으로 씨앗을 심으세요.</div>
+                      <div className="empty">심은 작물이 없습니다.</div>
                     )}
                     {plots.map(plot => {
                       const sd = SEEDS[plot.seed];
@@ -1921,42 +1982,6 @@ export default function Sidebar(props) {
                         </div>
                       );
                     })}
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                      {plots.some(p => now >= p.harvestAt) && (
-                        <button className="btn-buy" onClick={() => handleCommand('!수확')}>
-                          🌾 전체 수확
-                        </button>
-                      )}
-                      {plots.some(p => !p.watered && now < p.harvestAt) && (
-                        <button className="btn-eq" onClick={() => handleCommand('!물주기')}>
-                          💧 물 주기 (성장 25%↑)
-                        </button>
-                      )}
-                    </div>
-                    {plots.length < currentMaxPlots && (() => {
-                      const curSeason = getCurrentSeason();
-                      return (
-                        <div style={{ marginTop: 8 }}>
-                          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>씨앗 심기 (농장 근처에서):</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                            {Object.entries(SEEDS).map(([key, sd]) => {
-                              const seasonOk = !sd.reqSeason || sd.reqSeason === curSeason?.id;
-                              const canAfford = gs.money >= sd.price;
-                              const ok = canAfford && seasonOk;
-                              return (
-                                <button key={key} className={ok ? 'btn-buy' : 'btn-dis'}
-                                  style={{ fontSize: 11 }}
-                                  disabled={!ok}
-                                  title={sd.seasonDesc ?? ''}
-                                  onClick={() => handleCommand(`!심기 ${key}`)}>
-                                  🌱 {sd.name} ({sd.price}G){sd.reqSeason ? (seasonOk ? ' 🌟' : ' ❌') : ''}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })()}
                     {canExpand && (
                       <div style={{ marginTop: 10, padding: '8px 10px', background: 'rgba(255,200,50,0.1)', borderRadius: 6, border: '1px solid rgba(255,200,50,0.3)' }}>
                         <div style={{ fontSize: 12, color: '#ffcc66', marginBottom: 4 }}>
@@ -2779,7 +2804,7 @@ export default function Sidebar(props) {
                 const needMoney = rod.price > 0;
                 const canAfford = !needMoney || gs.money >= rod.price;
                 const hasMats = rod.upgradeMats
-                  ? Object.entries(rod.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  ? Object.entries(rod.upgradeMats).every(([ore, n]) => getMatCount(gs, ore) >= n)
                   : true;
                 const matsStr = rod.upgradeMats
                   ? Object.entries(rod.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ')
@@ -2818,7 +2843,7 @@ export default function Sidebar(props) {
                 const equipped = gs.boots === key;
                 const canAfford = gs.money >= boot.price;
                 const hasMats = boot.upgradeMats
-                  ? Object.entries(boot.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  ? Object.entries(boot.upgradeMats).every(([ore, n]) => getMatCount(gs, ore) >= n)
                   : true;
                 const canBuy = canAfford && hasMats;
                 const matsStr = boot.upgradeMats ? Object.entries(boot.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
@@ -2950,7 +2975,7 @@ export default function Sidebar(props) {
                 const owned = (gs.ownedCookware ?? []).includes(key);
                 const equipped = gs.cookware === key;
                 const canAfford = gs.money >= cw.price;
-                const hasMats = cw.upgradeMats ? Object.entries(cw.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
+                const hasMats = cw.upgradeMats ? Object.entries(cw.upgradeMats).every(([ore, n]) => getMatCount(gs, ore) >= n) : true;
                 const matsStr = cw.upgradeMats ? Object.entries(cw.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
                 const canBuy = canAfford && hasMats;
                 return (
@@ -2983,7 +3008,7 @@ export default function Sidebar(props) {
                 const equipped = gs.marineGear === key;
                 const canAfford = gs.money >= gear.price;
                 const hasMats = gear.upgradeMats
-                  ? Object.entries(gear.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  ? Object.entries(gear.upgradeMats).every(([ore, n]) => getMatCount(gs, ore) >= n)
                   : true;
                 const canBuy = canAfford && hasMats;
                 const matsStr = gear.upgradeMats ? Object.entries(gear.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
@@ -3019,7 +3044,7 @@ export default function Sidebar(props) {
                 const equipped = gs.pickaxe === key;
                 const canAfford = gs.money >= px.price;
                 const hasMats = px.upgradeMats
-                  ? Object.entries(px.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  ? Object.entries(px.upgradeMats).every(([ore, n]) => getMatCount(gs, ore) >= n)
                   : true;
                 const canBuy = canAfford && hasMats;
                 const matsStr = px.upgradeMats ? Object.entries(px.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
@@ -3055,7 +3080,7 @@ export default function Sidebar(props) {
                 const equipped = gs.gatherTool === key;
                 const canAfford = gs.money >= gt.price;
                 const hasMats = gt.upgradeMats
-                  ? Object.entries(gt.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  ? Object.entries(gt.upgradeMats).every(([ore, n]) => getMatCount(gs, ore) >= n)
                   : true;
                 const canBuy = canAfford && hasMats;
                 const matsStr = gt.upgradeMats ? Object.entries(gt.upgradeMats).map(([k, n]) => `${k}×${n}`).join(', ') : null;
@@ -3093,7 +3118,7 @@ export default function Sidebar(props) {
                 const price = Math.floor(hat.price * discount);
                 const canAfford = gs.money >= price;
                 const hasMats = hat.upgradeMats
-                  ? Object.entries(hat.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+                  ? Object.entries(hat.upgradeMats).every(([ore, n]) => getMatCount(gs, ore) >= n)
                   : true;
                 const canBuy = canAfford && hasMats;
                 return (
@@ -3110,9 +3135,7 @@ export default function Sidebar(props) {
                         : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
                             onClick={() => {
                               if (!canBuy) return;
-                              const newOre = { ...gs.oreInventory };
-                              if (hat.upgradeMats) Object.entries(hat.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
-                              setGs(prev => ({ ...prev, money: prev.money - price, ownedHats: [...(prev.ownedHats ?? []), key], hat: key, oreInventory: newOre }));
+                              setGs(prev => ({ ...prev, money: prev.money - price, ownedHats: [...(prev.ownedHats ?? []), key], hat: key, ...(hat.upgradeMats ? consumeMats(prev, hat.upgradeMats) : {}) }));
                               gainNpcAffinity('상인', 1);
                               addMsg(`🎩 ${hat.name} 구매!`, 'catch');
                             }}>
@@ -3137,7 +3160,7 @@ export default function Sidebar(props) {
                 const hasMats = outfit.upgradeMats
                   ? Object.entries(outfit.upgradeMats).every(([k, n]) => {
                       if (HERBS[k]) return (gs.herbInventory?.[k] || 0) >= n;
-                      return (gs.oreInventory[k] || 0) >= n;
+                      return getMatCount(gs, k) >= n;
                     })
                   : true;
                 const canBuy = canAfford && hasMats;
@@ -3158,13 +3181,15 @@ export default function Sidebar(props) {
                         : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
                             onClick={() => {
                               if (!canBuy) return;
-                              const newOre = { ...gs.oreInventory };
-                              const newHerb = { ...(gs.herbInventory ?? {}) };
-                              if (outfit.upgradeMats) Object.entries(outfit.upgradeMats).forEach(([k, n]) => {
-                                if (HERBS[k]) newHerb[k] = (newHerb[k] || 0) - n;
-                                else newOre[k] = (newOre[k] || 0) - n;
+                              setGs(prev => {
+                                const newHerb = { ...(prev.herbInventory ?? {}) };
+                                const oreMats = {};
+                                if (outfit.upgradeMats) Object.entries(outfit.upgradeMats).forEach(([k, n]) => {
+                                  if (HERBS[k]) newHerb[k] = (newHerb[k] || 0) - n;
+                                  else oreMats[k] = n;
+                                });
+                                return { ...prev, money: prev.money - price, ownedOutfits: [...(prev.ownedOutfits ?? []), key], outfit: key, herbInventory: newHerb, ...consumeMats(prev, oreMats) };
                               });
-                              setGs(prev => ({ ...prev, money: prev.money - price, ownedOutfits: [...(prev.ownedOutfits ?? []), key], outfit: key, oreInventory: newOre, herbInventory: newHerb }));
                               gainNpcAffinity('상인', 1);
                               addMsg(`🧥 ${outfit.name} 구매!`, 'catch');
                             }}>
@@ -3186,7 +3211,7 @@ export default function Sidebar(props) {
                 const price = Math.floor(item.price * discount);
                 const canAfford = gs.money >= price;
                 const hasMats = item.upgradeMats
-                  ? Object.entries(item.upgradeMats).every(([k, n]) => (gs.oreInventory[k] || 0) >= n)
+                  ? Object.entries(item.upgradeMats).every(([k, n]) => getMatCount(gs, k) >= n)
                   : true;
                 const canBuy = canAfford && hasMats;
                 const matsStr = item.upgradeMats
@@ -3206,9 +3231,7 @@ export default function Sidebar(props) {
                         : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
                             onClick={() => {
                               if (!canBuy) return;
-                              const newOre = { ...gs.oreInventory };
-                              if (item.upgradeMats) Object.entries(item.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
-                              setGs(prev => ({ ...prev, money: prev.money - price, ownedTops: [...(prev.ownedTops ?? []), key], top: key, oreInventory: newOre }));
+                              setGs(prev => ({ ...prev, money: prev.money - price, ownedTops: [...(prev.ownedTops ?? []), key], top: key, ...(item.upgradeMats ? consumeMats(prev, item.upgradeMats) : {}) }));
                               gainNpcAffinity('상인', 1);
                               addMsg(`👕 ${item.name} 구매!`, 'catch');
                             }}>
@@ -3231,7 +3254,7 @@ export default function Sidebar(props) {
                 const price = Math.floor(item.price * discount);
                 const canAfford = gs.money >= price;
                 const hasMats = item.upgradeMats
-                  ? Object.entries(item.upgradeMats).every(([k, n]) => (gs.oreInventory[k] || 0) >= n)
+                  ? Object.entries(item.upgradeMats).every(([k, n]) => getMatCount(gs, k) >= n)
                   : true;
                 const canBuy = canAfford && hasMats;
                 const matsStr = item.upgradeMats
@@ -3251,9 +3274,7 @@ export default function Sidebar(props) {
                         : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
                             onClick={() => {
                               if (!canBuy) return;
-                              const newOre = { ...gs.oreInventory };
-                              if (item.upgradeMats) Object.entries(item.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
-                              setGs(prev => ({ ...prev, money: prev.money - price, ownedBottoms: [...(prev.ownedBottoms ?? []), key], bottom: key, oreInventory: newOre }));
+                              setGs(prev => ({ ...prev, money: prev.money - price, ownedBottoms: [...(prev.ownedBottoms ?? []), key], bottom: key, ...(item.upgradeMats ? consumeMats(prev, item.upgradeMats) : {}) }));
                               gainNpcAffinity('상인', 1);
                               addMsg(`👖 ${item.name} 구매!`, 'catch');
                             }}>
@@ -3276,7 +3297,7 @@ export default function Sidebar(props) {
                 const price = Math.floor(item.price * discount);
                 const canAfford = gs.money >= price;
                 const hasMats = item.upgradeMats
-                  ? Object.entries(item.upgradeMats).every(([k, n]) => (gs.oreInventory[k] || 0) >= n)
+                  ? Object.entries(item.upgradeMats).every(([k, n]) => getMatCount(gs, k) >= n)
                   : true;
                 const canBuy = canAfford && hasMats;
                 const matsStr = item.upgradeMats
@@ -3296,9 +3317,7 @@ export default function Sidebar(props) {
                         : <button tabIndex={-1} className={canBuy ? 'btn-buy' : 'btn-dis'} disabled={!canBuy}
                             onClick={() => {
                               if (!canBuy) return;
-                              const newOre = { ...gs.oreInventory };
-                              if (item.upgradeMats) Object.entries(item.upgradeMats).forEach(([k, n]) => { newOre[k] = (newOre[k] || 0) - n; });
-                              setGs(prev => ({ ...prev, money: prev.money - price, ownedBelts: [...(prev.ownedBelts ?? []), key], belt: key, oreInventory: newOre }));
+                              setGs(prev => ({ ...prev, money: prev.money - price, ownedBelts: [...(prev.ownedBelts ?? []), key], belt: key, ...(item.upgradeMats ? consumeMats(prev, item.upgradeMats) : {}) }));
                               gainNpcAffinity('상인', 1);
                               addMsg(`🪢 ${item.name} 구매!`, 'catch');
                             }}>
@@ -4723,13 +4742,12 @@ export default function Sidebar(props) {
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <button tabIndex={-1} className="btn-eq" style={{ fontSize: 12 }}
                     onClick={() => {
-                      const key = `fishingGame_v2_${nickname}`;
-                      const raw = localStorage.getItem(key);
+                      const raw = getSaveCache(nickname);
                       if (!raw) { addMsg('저장 데이터가 없습니다.', 'error'); return; }
-                      const blob = new Blob([raw], { type: 'application/octet-stream' });
+                      const blob = new Blob([raw], { type: 'application/json' });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement('a');
-                      a.href = url; a.download = `tidehaven_${nickname}_backup.save`;
+                      a.href = url; a.download = `tidehaven_${nickname}_backup.json`;
                       a.click(); URL.revokeObjectURL(url);
                       addMsg('💾 세이브 데이터 다운로드 완료!', 'catch');
                     }}>
@@ -4737,7 +4755,7 @@ export default function Sidebar(props) {
                   </button>
                   <label tabIndex={-1} className="btn-eq" style={{ fontSize: 12, cursor: 'pointer' }}>
                     📤 백업 불러오기
-                    <input type="file" accept=".save,.json" style={{ display: 'none' }}
+                    <input type="file" accept=".json,.save" style={{ display: 'none' }}
                       onChange={e => {
                         const file = e.target.files?.[0];
                         if (!file) return;
@@ -4745,9 +4763,10 @@ export default function Sidebar(props) {
                         reader.onload = ev => {
                           try {
                             const raw = ev.target.result;
-                            const key = `fishingGame_v2_${nickname}`;
-                            localStorage.setItem(key, raw);
-                            addMsg('✅ 백업 복구 완료! 새로고침하면 적용됩니다.', 'catch');
+                            JSON.parse(raw); // validate JSON
+                            setSaveCache(nickname, raw);
+                            setGs(loadSave(nickname));
+                            addMsg('✅ 백업 복구 완료!', 'catch');
                           } catch { addMsg('백업 파일 오류', 'error'); }
                         };
                         reader.readAsText(file);

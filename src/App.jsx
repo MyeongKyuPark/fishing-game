@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import LZString from 'lz-string';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
   sendPasswordResetEmail, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -42,7 +41,7 @@ import { STAT_DEFS, getStatLevel, getCharLevel, getStatBonuses, RARE_ORE_KEYS, R
 import { PETS, EVOLVED_PETS, EVOLVE_REQUIREMENTS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from './petData';
 import { NPCS, getAffinityLevel, getShopDiscount } from './npcData';
 import { EXPLORE_ZONES, checkZoneUnlock } from './explorationData';
-import MiniMap from './MiniMap';
+
 import { NPC_QUESTS } from './npcQuestData';
 import ResistanceMinigame from './ResistanceMinigame';
 import MiningMinigame from './MiningMinigame';
@@ -52,7 +51,7 @@ import { listItem, buyItem, cancelListing, subscribeMarket, subscribeMyListings 
 // ── New module imports ────────────────────────────────────────────────────────
 import { SKIN_PRESETS, QUEST_POOL, MINE_DEPTH_ORE_MULT, MINE_DEPTH_REQ, MINE_DEPTH_TIME,
   getDailyQuests, getWeeklyGoals, DEFAULT_STATE, SAVE_VERSION, saveKey, loadSave, DAILY_BONUS,
-  checkDailyBonus, STORY_CHAPTERS, rarityColor, useGameState } from './hooks/useGameState';
+  checkDailyBonus, STORY_CHAPTERS, rarityColor, useGameState, setSaveCache } from './hooks/useGameState';
 import { getZoneDailyChallenge, todayStr } from './zoneChallengeData';
 import { useOfflineReward } from './hooks/useOfflineReward';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -164,7 +163,7 @@ function AuthScreen({ onLogin }) {
       const snap = await getDoc(doc(db, 'saves', cred.user.uid));
       if (!snap.exists()) { setErr('저장 데이터를 찾을 수 없습니다.'); setLoading(false); return; }
       const { nickname: savedName, data } = snap.data();
-      if (data) localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
+      if (data) setSaveCache(savedName, data);
       onLogin(savedName, null, cred.user.uid, false);
     } catch (e2) { setErr(getFirebaseError(e2.code)); setLoading(false); }
   };
@@ -420,25 +419,7 @@ export default function App() {
         const snap = await getDoc(doc(db, 'saves', cred.user.uid));
         if (snap.exists()) {
           const { nickname: savedName, data } = snap.data();
-          if (data) {
-            try {
-              const remoteGs = JSON.parse(data);
-              const remoteTime = remoteGs?.lastSaveTime ?? 0;
-              const localRaw = localStorage.getItem(saveKey(savedName));
-              let localTime = 0;
-              if (localRaw) {
-                const localGs = JSON.parse(LZString.decompressFromUTF16(localRaw) ?? localRaw);
-                localTime = localGs?.lastSaveTime ?? 0;
-              }
-              if (remoteTime >= localTime) {
-                localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
-              }
-            } catch {
-              if (!localStorage.getItem(saveKey(savedName))) {
-                localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
-              }
-            }
-          }
+          if (data) setSaveCache(savedName, data);
           onLogin(savedName, null, cred.user.uid, false);
         } else {
           pendingGoogleUidRef.current = cred.user.uid;
@@ -453,27 +434,7 @@ export default function App() {
           const snap = await getDoc(doc(db, 'saves', user.uid));
           if (snap.exists()) {
             const { nickname: savedName, data } = snap.data();
-            if (data) {
-              // Only overwrite localStorage if Firestore data is newer than local save
-              try {
-                const remoteGs = JSON.parse(data);
-                const remoteTime = remoteGs?.lastSaveTime ?? 0;
-                const localRaw = localStorage.getItem(saveKey(savedName));
-                let localTime = 0;
-                if (localRaw) {
-                  const localGs = JSON.parse(LZString.decompressFromUTF16(localRaw) ?? localRaw);
-                  localTime = localGs?.lastSaveTime ?? 0;
-                }
-                if (remoteTime >= localTime) {
-                  localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
-                }
-              } catch {
-                // Fallback: only restore if no local save exists
-                if (!localStorage.getItem(saveKey(savedName))) {
-                  localStorage.setItem(saveKey(savedName), LZString.compressToUTF16(data));
-                }
-              }
-            }
+            if (data) setSaveCache(savedName, data);
             setUserId(user.uid);
             setIsGuest(false);
             setNickname(savedName);
@@ -593,9 +554,6 @@ export default function App() {
   const [showProfileCard, setShowProfileCard] = useState(false);
   const [mapTransitioning, setMapTransitioning] = useState(false);
   const [townLevels, setTownLevels] = useState({});
-  const [returnCast, setReturnCast] = useState(null); // { expiresAt: number } | null
-  const returnCastRef = useRef(null);
-  const [returnTick, setReturnTick] = useState(0); // forces re-render during casting
   const [npcDialog, setNpcDialog] = useState(null); // npcKey string | null
   const [npcQuickMenu, setNpcQuickMenu] = useState(null); // { npcId, x, y, tab } | null
   const [tutorialStep, setTutorialStep] = useState(0); // 0=hidden, 1-4=steps
@@ -769,13 +727,13 @@ export default function App() {
     }
   }, [gs.abilities, gs.jobClass, nickname]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Save to localStorage (always) + Firestore (authenticated users, debounced 5s)
+  // Save to in-memory cache (always) + Firestore (authenticated users, debounced 5s)
   useEffect(() => {
     if (!nickname || !gsLoadedRef.current) return;
     const px = gameRef.current?.player?.x;
     const py = gameRef.current?.player?.y;
     const json = JSON.stringify({ ...gs, lastSaveTime: Date.now(), saveVersion: SAVE_VERSION, ...(px != null ? { playerX: px, playerY: py } : {}) });
-    localStorage.setItem(saveKey(nickname), LZString.compressToUTF16(json));
+    setSaveCache(nickname, json);
     if (userId && !isGuest) {
       clearTimeout(firestoreSaveTimerRef.current);
       firestoreSaveTimerRef.current = setTimeout(() => {
@@ -843,12 +801,6 @@ export default function App() {
     return () => clearTimeout(t);
   }, [gs.innBuff, addMsg]);
 
-  // Tick for returnCast progress bar animation
-  useEffect(() => {
-    if (!returnCast) return;
-    const interval = setInterval(() => setReturnTick(t => t + 1), 100);
-    return () => clearInterval(interval);
-  }, [returnCast]);
 
   // Phase 9-6: Chapter 5 server event handler
   useEffect(() => {
@@ -2039,7 +1991,7 @@ export default function App() {
 
   // ── Command handler ───────────────────────────────────────────────────────
 
-  const handleCommand = useCallback((input) => {
+  const handleCommand = useCallback((input, opts = {}) => {
     const now0 = Date.now();
     const stamps = cmdTimestampsRef.current;
     // Keep only timestamps in last 4 seconds
@@ -2208,7 +2160,6 @@ export default function App() {
     }
 
     if (cmd === '!그만') {
-      if (returnCastRef.current) handleCancelReturn();
       if (player.state === 'idle') { addMsg('활동 중이 아닙니다.'); return; }
       player.state = 'idle';
       player.activityStart = null;
@@ -2217,31 +2168,6 @@ export default function App() {
       if (gameRef.current) gameRef.current.fishingZone = '강';
       setActivity(null);
       addMsg('활동을 중지했습니다.');
-      return;
-    }
-
-    if (cmd === '!귀환') {
-      const currentZone = getActiveZone();
-      if (currentZone === '마을') { addMsg('이미 마을에 있습니다.', 'info'); return; }
-      if (player.state !== 'idle') { addMsg('활동 중에는 귀환할 수 없습니다. !그만 후 시도하세요.', 'error'); return; }
-      if (returnCastRef.current) { addMsg('귀환이 이미 진행 중입니다.', 'info'); return; }
-      const expiresAt = Date.now() + 5000;
-      const castId = expiresAt; // unique token
-      const timer = setTimeout(() => {
-        if (!returnCastRef.current || returnCastRef.current.castId !== castId) return; // cancelled
-        returnCastRef.current = null;
-        setReturnCast(null);
-        handleZoneTransition('마을');
-        if (gameRef.current?.player) {
-          gameRef.current.player.x = PLAYER_START_X;
-          gameRef.current.player.y = PLAYER_START_Y;
-          gameRef.current.player.state = 'idle';
-        }
-        addMsg('🏠 마을로 귀환했습니다!', 'catch');
-      }, 5000);
-      returnCastRef.current = { castId, timer, expiresAt };
-      setReturnCast({ expiresAt });
-      addMsg('🏠 귀환 준비 중... (5초, 이동 시 취소)', 'info');
       return;
     }
 
@@ -2621,7 +2547,7 @@ export default function App() {
 
     if (input.trim().startsWith('!심기 ')) {
       const seedKey = input.trim().slice(4).trim();
-      if (!nearFarm(player.x, player.y)) { addMsg('🌱 농장 근처로 이동하세요! (지도 동쪽 숲 남쪽)', 'error'); return; }
+      if (!opts.skipLocationCheck && !nearFarm(player.x, player.y)) { addMsg('🌱 농장 근처로 이동하세요! (지도 동쪽 숲 남쪽)', 'error'); return; }
       const seed = SEEDS[seedKey];
       if (!seed) { addMsg('알 수 없는 씨앗입니다. !씨앗 으로 목록 확인', 'error'); return; }
       // Seasonal seed check
@@ -2644,7 +2570,7 @@ export default function App() {
     }
 
     if (cmd === '!물주기') {
-      if (!nearFarm(player.x, player.y)) { addMsg('💧 농장 근처로 이동하세요!', 'error'); return; }
+      if (!opts.skipLocationCheck && !nearFarm(player.x, player.y)) { addMsg('💧 농장 근처로 이동하세요!', 'error'); return; }
       const plots = stateRef.current?.farmPlots ?? [];
       const waterable = plots.filter(p => !p.watered && Date.now() < p.harvestAt);
       if (waterable.length === 0) { addMsg('💧 물을 줄 수 있는 작물이 없습니다. (이미 완료되거나 모두 물줌)', 'error'); return; }
@@ -2665,7 +2591,7 @@ export default function App() {
     }
 
     if (cmd === '!수확') {
-      if (!nearFarm(player.x, player.y)) { addMsg('🌾 농장 근처로 이동하세요!', 'error'); return; }
+      if (!opts.skipLocationCheck && !nearFarm(player.x, player.y)) { addMsg('🌾 농장 근처로 이동하세요!', 'error'); return; }
       const nowMs = Date.now();
       const plots = stateRef.current?.farmPlots ?? [];
       const ready = plots.filter(p => !p.harvested && nowMs >= p.harvestAt);
@@ -3056,14 +2982,18 @@ export default function App() {
     const discountedPrice = needMoney ? Math.round(rod.price * (1 - discount)) : 0;
     const canAfford = !needMoney || gs.money >= discountedPrice;
     const hasMats = rod.upgradeMats
-      ? Object.entries(rod.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+      ? Object.entries(rod.upgradeMats).every(([ore, n]) => ((gs.oreInventory[ore] || 0) + (gs.processedOreInventory?.[ore] || 0)) >= n)
       : true;
     if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
-      const ores = { ...prev.oreInventory };
-      if (rod.upgradeMats) for (const [ore, n] of Object.entries(rod.upgradeMats)) ores[ore] -= n;
-      return { ...prev, money: needMoney ? prev.money - discountedPrice : prev.money, oreInventory: ores, ownedRods: [...prev.ownedRods, rodKey], rod: rodKey };
+      const rawOre = { ...prev.oreInventory };
+      const procOre = { ...(prev.processedOreInventory ?? {}) };
+      if (rod.upgradeMats) for (const [k, n] of Object.entries(rod.upgradeMats)) {
+        if ((procOre[k] || 0) >= n) procOre[k] = (procOre[k] || 0) - n;
+        else rawOre[k] = (rawOre[k] || 0) - n;
+      }
+      return { ...prev, money: needMoney ? prev.money - discountedPrice : prev.money, oreInventory: rawOre, processedOreInventory: procOre, ownedRods: [...prev.ownedRods, rodKey], rod: rodKey };
     });
     if (gameRef.current?.player) gameRef.current.player.currentRod = rodKey;
     addMsg(`🎣 ${rod.name} ${needMoney ? '구매' : '획득'}!${discount > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
@@ -3084,14 +3014,18 @@ export default function App() {
     const discountedPrice = Math.round(boot.price * (1 - discount));
     const canAfford = gs.money >= discountedPrice;
     const hasMats = boot.upgradeMats
-      ? Object.entries(boot.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+      ? Object.entries(boot.upgradeMats).every(([ore, n]) => ((gs.oreInventory[ore] || 0) + (gs.processedOreInventory?.[ore] || 0)) >= n)
       : true;
     if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
-      const ores = { ...prev.oreInventory };
-      if (boot.upgradeMats) for (const [ore, n] of Object.entries(boot.upgradeMats)) ores[ore] -= n;
-      return { ...prev, money: prev.money - discountedPrice, oreInventory: ores, ownedBoots: [...(prev.ownedBoots ?? ['기본신발']), key], boots: key };
+      const rawOre = { ...prev.oreInventory };
+      const procOre = { ...(prev.processedOreInventory ?? {}) };
+      if (boot.upgradeMats) for (const [k, n] of Object.entries(boot.upgradeMats)) {
+        if ((procOre[k] || 0) >= n) procOre[k] = (procOre[k] || 0) - n;
+        else rawOre[k] = (rawOre[k] || 0) - n;
+      }
+      return { ...prev, money: prev.money - discountedPrice, oreInventory: rawOre, processedOreInventory: procOre, ownedBoots: [...(prev.ownedBoots ?? ['기본신발']), key], boots: key };
     });
     addMsg(`👟 ${boot.name} 구매!${discount > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
     gainNpcAffinity('상인', 2);
@@ -3130,14 +3064,18 @@ export default function App() {
     const discountedPrice = Math.round(gear.price * (1 - discount));
     const canAfford = gs.money >= discountedPrice;
     const hasMats = gear.upgradeMats
-      ? Object.entries(gear.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n)
+      ? Object.entries(gear.upgradeMats).every(([ore, n]) => ((gs.oreInventory[ore] || 0) + (gs.processedOreInventory?.[ore] || 0)) >= n)
       : true;
     if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
-      const ores = { ...prev.oreInventory };
-      if (gear.upgradeMats) for (const [ore, n] of Object.entries(gear.upgradeMats)) ores[ore] -= n;
-      return { ...prev, money: prev.money - discountedPrice, oreInventory: ores,
+      const rawOre = { ...prev.oreInventory };
+      const procOre = { ...(prev.processedOreInventory ?? {}) };
+      if (gear.upgradeMats) for (const [k, n] of Object.entries(gear.upgradeMats)) {
+        if ((procOre[k] || 0) >= n) procOre[k] = (procOre[k] || 0) - n;
+        else rawOre[k] = (rawOre[k] || 0) - n;
+      }
+      return { ...prev, money: prev.money - discountedPrice, oreInventory: rawOre, processedOreInventory: procOre,
         ownedMarineGear: [...(prev.ownedMarineGear ?? []), key], marineGear: key };
     });
     addMsg(`🌊 ${gear.name} 구매 및 장착!${discount > 0 ? ` (${Math.round(discount * 100)}% 할인)` : ''}`, 'catch');
@@ -3155,7 +3093,7 @@ export default function App() {
     const discount = getShopDiscount(gs.npcAffinity);
     const discountedPrice = Math.round(cw.price * (1 - discount));
     const canAfford = gs.money >= discountedPrice;
-    const hasMats = cw.upgradeMats ? Object.entries(cw.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
+    const hasMats = cw.upgradeMats ? Object.entries(cw.upgradeMats).every(([ore, n]) => ((gs.oreInventory[ore] || 0) + (gs.processedOreInventory?.[ore] || 0)) >= n) : true;
     if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
@@ -3178,7 +3116,7 @@ export default function App() {
     const discount = getShopDiscount(gs.npcAffinity);
     const discountedPrice = gt.price > 0 ? Math.round(gt.price * (1 - discount)) : 0;
     const canAfford = gs.money >= discountedPrice;
-    const hasMats = gt.upgradeMats ? Object.entries(gt.upgradeMats).every(([ore, n]) => (gs.oreInventory[ore] || 0) >= n) : true;
+    const hasMats = gt.upgradeMats ? Object.entries(gt.upgradeMats).every(([ore, n]) => ((gs.oreInventory[ore] || 0) + (gs.processedOreInventory?.[ore] || 0)) >= n) : true;
     if (!canAfford) { addMsg(`💰 골드 부족 (${discountedPrice}G 필요)`, 'error'); return; }
     if (!hasMats) { addMsg('재료 부족', 'error'); return; }
     setGs(prev => {
@@ -4005,13 +3943,6 @@ export default function App() {
     addMsg(`🔒 ${zoneName} 진입 불가 — ${req.desc}`, 'error');
   }, [addMsg]);
 
-  const handleCancelReturn = useCallback(() => {
-    if (!returnCastRef.current) return;
-    clearTimeout(returnCastRef.current.timer);
-    returnCastRef.current = null;
-    setReturnCast(null);
-    addMsg('🏠 이동으로 귀환이 취소되었습니다.', 'error');
-  }, [addMsg]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -4087,7 +4018,6 @@ nickname={nickname}
           gender={gs.gender}
           spotDecos={gs.spotDecos}
           onZoneTransition={handleZoneTransition}
-          onCancelReturn={handleCancelReturn}
           onZoneBlocked={handleZoneBlocked}
           onZoneNpcInteract={handleZoneNpcInteract}
           onNearZoneNpcChange={setNearZoneNpc}
@@ -4190,42 +4120,6 @@ nickname={nickname}
         )}
       </div>
 
-      {/* 귀환 캐스팅 HUD */}
-      {returnCast && !indoorRoom && (() => {
-        void returnTick; // consumed to ensure re-render on each tick
-        const pct = Math.max(0, Math.min(1, 1 - (returnCast.expiresAt - Date.now()) / 5000));
-        return (
-          <div style={{
-            position: 'fixed', bottom: 90, left: '50%', transform: 'translateX(-50%)',
-            zIndex: 8000, background: 'rgba(10,20,40,0.92)', border: '1px solid #4488ff88',
-            borderRadius: 10, padding: '8px 18px', minWidth: 180, textAlign: 'center',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-          }}>
-            <div style={{ color: '#aaddff', fontSize: 13, fontWeight: 700, marginBottom: 5 }}>🏠 마을로 귀환 중...</div>
-            <div style={{ height: 8, background: 'rgba(255,255,255,0.1)', borderRadius: 4, overflow: 'hidden' }}>
-              <div style={{ width: `${pct * 100}%`, height: '100%', background: 'linear-gradient(90deg,#2266cc,#66aaff)', borderRadius: 4 }} />
-            </div>
-            <button onClick={handleCancelReturn} style={{
-              marginTop: 6, background: 'none', border: 'none', color: 'rgba(255,100,100,0.7)',
-              fontSize: 11, cursor: 'pointer',
-            }}>취소</button>
-          </div>
-        );
-      })()}
-
-      {/* 외곽 존 모바일 귀환 버튼 */}
-      {!indoorRoom && gs.worldZone && gs.worldZone !== '마을' && (
-        <button
-          onClick={() => handleCommand('!귀환')}
-          style={{
-            position: 'fixed', bottom: 140, right: 16, zIndex: 7500,
-            background: 'rgba(10,20,50,0.9)', border: '1px solid #4488ff88',
-            borderRadius: 20, padding: '8px 14px', color: '#aaddff',
-            fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.5)',
-          }}
-        >🏠 귀환</button>
-      )}
 
       {catchPopup && (
         <div className="catch-popup" style={{ border: `2px solid ${rarityColor(catchPopup.rarity)}` }}>

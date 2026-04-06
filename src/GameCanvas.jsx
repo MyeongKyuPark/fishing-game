@@ -34,7 +34,7 @@ export default function GameCanvas({
   nickname, title, titleColor,
   otherPlayersRef, onPlayerInspect, onEnterRoom, onNearDoorChange, onNearActionChange,
   hairColor, bodyColor, skinColor, gender,
-  spotDecos, onZoneTransition, onCancelReturn, onZoneBlocked, onZoneNpcInteract,
+  spotDecos, onZoneTransition, onZoneBlocked, onZoneNpcInteract,
   onNpcQuickMenu, onNearZoneNpcChange,
   marineGear,
 }) {
@@ -49,7 +49,7 @@ export default function GameCanvas({
   const onNearDoorChangeRef = useRef(onNearDoorChange);
   const onNearActionChangeRef = useRef(onNearActionChange);
   const onZoneTransitionRef = useRef(onZoneTransition);
-  const onCancelReturnRef = useRef(onCancelReturn);
+
   const onZoneBlockedRef = useRef(onZoneBlocked);
   const onZoneNpcInteractRef = useRef(onZoneNpcInteract);
   const onNpcQuickMenuRef = useRef(onNpcQuickMenu);
@@ -72,7 +72,7 @@ export default function GameCanvas({
   useEffect(() => { onNearDoorChangeRef.current = onNearDoorChange; });
   useEffect(() => { onNearActionChangeRef.current = onNearActionChange; });
   useEffect(() => { onZoneTransitionRef.current = onZoneTransition; });
-  useEffect(() => { onCancelReturnRef.current = onCancelReturn; });
+
   useEffect(() => { onZoneBlockedRef.current = onZoneBlocked; });
   useEffect(() => { onZoneNpcInteractRef.current = onZoneNpcInteract; });
   useEffect(() => { onNpcQuickMenuRef.current = onNpcQuickMenu; });
@@ -276,8 +276,6 @@ export default function GameCanvas({
           }
         }
         const spd = ACCEL * dt / 16;
-        const moving = keys.ArrowLeft || keys.ArrowRight || keys.ArrowUp || keys.ArrowDown || g.clickTarget;
-        if (moving) onCancelReturnRef.current?.();
         if (keys.ArrowLeft)  { player.vx -= spd; player.facing = 'left';  g.clickTarget = null; }
         if (keys.ArrowRight) { player.vx += spd; player.facing = 'right'; g.clickTarget = null; }
         if (keys.ArrowUp)    { player.vy -= spd; player.facing = 'up';    g.clickTarget = null; }

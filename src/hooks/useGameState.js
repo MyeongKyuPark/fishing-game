@@ -1,7 +1,6 @@
 // ── Game State: constants, pure functions, and useGameState hook ─────────────
 import { useState, useEffect, useRef } from 'react';
 import { DEFAULT_ABILITIES } from '../abilityData';
-import LZString from 'lz-string';
 
 export const SKIN_PRESETS = ['#f6cc88', '#e8a870', '#c8845a', '#a06040', '#7a4830', '#fddbb4'];
 
@@ -42,7 +41,7 @@ export const MINE_DEPTH_ORE_MULT = {
   금광석:  [1.00, 2.00, 3.50, 5.00, 7.00],
 };
 export const MINE_DEPTH_REQ = [0, 0, 10, 25, 50, 80]; // required 채굴 ability per depth
-export const MINE_DEPTH_TIME = [1.00, 1.35, 1.75, 2.20, 2.70]; // time multiplier per depth
+export const MINE_DEPTH_TIME = [1.00, 0.88, 0.76, 0.65, 0.55]; // time multiplier per depth (deeper = faster)
 
 export function getDailyQuests(extraCount = 0) {
   const dateStr = new Date().toDateString();
@@ -276,28 +275,15 @@ export const SAVE_VERSION = 2;
 export function saveKey(nickname) { return `fishingGame_v2_${nickname}`; }
 export function saveKeyV1(nickname) { return `fishingGame_v1_${nickname}`; }
 
-function decompressRaw(raw) {
-  if (!raw) return null;
-  // Try LZ decompression first, fall back to plain JSON
-  try {
-    const decompressed = LZString.decompressFromUTF16(raw);
-    if (decompressed) return decompressed;
-  } catch { /* ignore */ }
-  return raw; // already plain JSON
-}
+// In-memory save cache — replaces localStorage to prevent client-side manipulation
+const _saveCache = {};
+export function setSaveCache(nickname, data) { _saveCache[nickname] = data; }
+export function getSaveCache(nickname) { return _saveCache[nickname] ?? null; }
 
 export function loadSave(nickname) {
   try {
-    let raw = localStorage.getItem(saveKey(nickname));
-    if (!raw) {
-      const v1 = localStorage.getItem(saveKeyV1(nickname));
-      if (v1) {
-        localStorage.setItem(saveKey(nickname), v1);
-        localStorage.removeItem(saveKeyV1(nickname));
-        raw = v1;
-      }
-    }
-    const s = JSON.parse(decompressRaw(raw));
+    const raw = _saveCache[nickname] ?? null;
+    const s = JSON.parse(raw);
     if (!s) return DEFAULT_STATE;
     const savedAbil = s.abilities ?? {};
     const abilities = Object.fromEntries(

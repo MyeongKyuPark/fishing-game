@@ -1,5 +1,4 @@
 import RankSidebar from '../RankSidebar';
-import MiniMap from '../MiniMap';
 import Joystick from '../Joystick';
 import { RODS, FISH } from '../gameData';
 import { ZONE_LABELS } from '../mapData';
@@ -264,8 +263,6 @@ export default function TopBar({
       {/* Rank sidebar (desktop only) */}
       {!indoorRoom && <RankSidebar myNickname={nickname} />}
 
-      {/* Minimap (desktop only, hidden indoors) */}
-      {!indoorRoom && <MiniMap gameRef={gameRef} otherPlayersRef={otherPlayersRef} partyMembersRef={partyMembersRef} />}
 
       {/* Shortcut buttons (desktop only) */}
       {/* Context-sensitive actions — separate row above shortcut bar so fixed icons never shift */}

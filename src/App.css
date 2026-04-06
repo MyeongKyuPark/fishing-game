@@ -950,10 +950,19 @@ canvas { touch-action: none; }
 /* ── Stats modal tabs ── */
 .stats-tabs {
   display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   border-bottom: 1px solid rgba(255,255,255,0.10);
   padding: 0 12px;
   gap: 0;
+  scrollbar-width: none;
 }
+.stats-tabs::-webkit-scrollbar { display: none; }
+@keyframes tab-blink {
+  0%, 100% { color: rgba(255,255,255,0.6); }
+  50% { color: #ffcc44; text-shadow: 0 0 6px #ffcc44; }
+}
+.stats-tab-blink { animation: tab-blink 1s ease-in-out infinite; }
 .stats-tab {
   padding: 8px 18px;
   background: none;

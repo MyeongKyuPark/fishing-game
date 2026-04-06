@@ -1,9 +1,11 @@
 // ── Phase 12-3: 마을 발전 시스템 UI ──────────────────────────────────────────
 import { useState } from 'react';
 import { TOWN_BUILDINGS } from '../townData';
+import { ORES, HERBS } from '../gameData';
 
 export default function TownHall({ gs, townLevels, onContribute, onClose }) {
   const [contributeModal, setContributeModal] = useState(null); // { buildingId }
+  const [selectedItem, setSelectedItem] = useState('');
   const [qtyInput, setQtyInput] = useState('1');
 
   return (
@@ -21,11 +23,9 @@ export default function TownHall({ gs, townLevels, onContribute, onClose }) {
             const lv = townLevels?.[key] ?? 0;
             const myContrib = (gs.myTownContributions ?? {})[key] ?? 0;
             const lvReqs = building.lvReqs;
-            // Calculate progress to next level
             let cumReq = 0;
             for (let i = 0; i < lv; i++) cumReq += lvReqs[i] ?? 0;
             const nextLvReq = lvReqs[lv] ?? null;
-            // We don't have exact global total in local state, show level bar based on lv
             const pct = lv >= building.maxLv ? 100 : (nextLvReq ? Math.min(100, (myContrib / nextLvReq) * 100) : 100);
             const bonusObj = building.bonus(lv);
             const bonusStr = Object.entries(bonusObj).map(([k, v]) => {
@@ -42,7 +42,7 @@ export default function TownHall({ gs, townLevels, onContribute, onClose }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 20 }}>{building.icon}</span>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 14 }}>{building.name}</div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: 'rgba(255,255,255,0.9)' }}>{building.name}</div>
                       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>{building.desc}</div>
                     </div>
                   </div>
@@ -53,7 +53,6 @@ export default function TownHall({ gs, townLevels, onContribute, onClose }) {
                     {lv > 0 && <div style={{ fontSize: 10, color: '#88ff88' }}>{bonusStr}</div>}
                   </div>
                 </div>
-                {/* Level bar */}
                 <div style={{ height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, marginBottom: 6, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${pct}%`, background: lv >= building.maxLv ? '#ffd700' : '#44aaff', borderRadius: 3, transition: 'width 0.3s' }} />
                 </div>
@@ -68,7 +67,26 @@ export default function TownHall({ gs, townLevels, onContribute, onClose }) {
                       tabIndex={-1}
                       className="btn-buy"
                       style={{ fontSize: 11, padding: '3px 10px' }}
-                      onClick={() => { setContributeModal({ buildingId: key }); setQtyInput('1'); }}
+                      onClick={() => {
+                        // Set default selected item based on type
+                        let defaultItem = '';
+                        if (building.contributeItemType === 'fish') {
+                          const fish = (gs.fishInventory ?? []).find(f => !f.cooked);
+                          defaultItem = fish?.name ?? '';
+                        } else if (building.contributeItemType === 'ore') {
+                          const ore = Object.entries(gs.oreInventory ?? {}).find(([, n]) => n > 0);
+                          defaultItem = ore?.[0] ?? '';
+                        } else if (building.contributeItemType === 'herb') {
+                          const herb = Object.entries(gs.herbInventory ?? {}).find(([, n]) => n > 0);
+                          defaultItem = herb?.[0] ?? '';
+                        } else if (building.contributeItemType === 'dish') {
+                          const dish = Object.entries(gs.dishInventory ?? {}).find(([, n]) => n > 0);
+                          defaultItem = dish?.[0] ?? '';
+                        }
+                        setSelectedItem(defaultItem);
+                        setContributeModal({ buildingId: key });
+                        setQtyInput('1');
+                      }}
                     >
                       기여하기
                     </button>
@@ -87,28 +105,67 @@ export default function TownHall({ gs, townLevels, onContribute, onClose }) {
         {contributeModal && (() => {
           const building = TOWN_BUILDINGS[contributeModal.buildingId];
           const qty = parseInt(qtyInput) || 1;
+          const itemType = building.contributeItemType;
+
+          // Build item options based on type
+          let itemOptions = [];
+          if (itemType === 'fish') {
+            const counts = {};
+            (gs.fishInventory ?? []).filter(f => !f.cooked).forEach(f => { counts[f.name] = (counts[f.name] || 0) + 1; });
+            itemOptions = Object.entries(counts).map(([name, count]) => ({ key: name, label: `${name} (${count}마리)`, count }));
+          } else if (itemType === 'ore') {
+            itemOptions = Object.entries(gs.oreInventory ?? {}).filter(([, n]) => n > 0)
+              .map(([k, n]) => ({ key: k, label: `${k} (${n}개)`, count: n }));
+          } else if (itemType === 'herb') {
+            itemOptions = Object.entries(gs.herbInventory ?? {}).filter(([, n]) => n > 0)
+              .map(([k, n]) => ({ key: k, label: `${k} (${n}개)`, count: n }));
+          } else if (itemType === 'dish') {
+            itemOptions = Object.entries(gs.dishInventory ?? {}).filter(([, n]) => n > 0)
+              .map(([k, n]) => ({ key: k, label: `${k} (${n}개)`, count: n }));
+          }
+
+          const selectedCount = itemOptions.find(o => o.key === selectedItem)?.count ?? 0;
+          const canContribute = selectedItem && qty > 0 && selectedCount >= qty;
+
           return (
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: '20px 24px', minWidth: 280 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{building.icon} {building.name} 기여</div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 12 }}>
-                  필요 아이템: <b>{building.contributeItem}</b>
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
-                  <span style={{ fontSize: 12 }}>수량:</span>
-                  <input
-                    type="number" min="1" max="999"
-                    value={qtyInput}
-                    onChange={e => setQtyInput(e.target.value)}
-                    style={{ width: 70, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, color: '#fff', padding: '3px 6px', fontSize: 13 }}
-                  />
-                </div>
+              <div style={{ background: '#1a1a2e', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 10, padding: '20px 24px', minWidth: 300 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12, color: 'rgba(255,255,255,0.9)' }}>{building.icon} {building.name} 기여</div>
+                {itemOptions.length === 0 ? (
+                  <div style={{ fontSize: 12, color: '#ff8888', marginBottom: 16 }}>기여 가능한 {building.contributeItem}이 없습니다.</div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginBottom: 8 }}>아이템 선택:</div>
+                    <select
+                      value={selectedItem}
+                      onChange={e => setSelectedItem(e.target.value)}
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, color: '#fff', padding: '5px 8px', fontSize: 13, marginBottom: 12 }}
+                    >
+                      <option value="" style={{ background: '#1a1a2e' }}>-- 선택 --</option>
+                      {itemOptions.map(o => (
+                        <option key={o.key} value={o.key} style={{ background: '#1a1a2e' }}>{o.label}</option>
+                      ))}
+                    </select>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16 }}>
+                      <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>수량:</span>
+                      <input
+                        type="number" min="1" max={selectedCount || 999}
+                        value={qtyInput}
+                        onChange={e => setQtyInput(e.target.value)}
+                        style={{ width: 70, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, color: '#fff', padding: '3px 6px', fontSize: 13 }}
+                      />
+                      {selectedItem && <span style={{ fontSize: 11, color: '#aaa' }}>/ 보유 {selectedCount}개</span>}
+                    </div>
+                  </>
+                )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
-                    className="btn-buy"
+                    className={canContribute ? 'btn-buy' : 'btn-dis'}
                     style={{ flex: 1 }}
+                    disabled={!canContribute}
                     onClick={() => {
-                      onContribute(contributeModal.buildingId, building.contributeItem, building.contributeItemType, qty);
+                      if (!canContribute) return;
+                      onContribute(contributeModal.buildingId, selectedItem, itemType, qty);
                       setContributeModal(null);
                     }}
                   >
