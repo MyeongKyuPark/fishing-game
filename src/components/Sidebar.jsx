@@ -9,7 +9,8 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   BAIT_RECIPES, DELIVERY_ORDER_POOL,
   ARTISAN_RECIPES, EQUIPMENT_SETS, getActiveSetBonus } from '../gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, doGradeUp, gradeRareBonus,
-  SELL_ABILITY_PER_100G, ENHANCE_ABILITY_GAIN, MASTERY_PERKS, getMasteryBonus } from '../abilityData';
+  SELL_ABILITY_PER_100G, ENHANCE_ABILITY_GAIN, MASTERY_PERKS, getMasteryBonus,
+  MINING_PERKS, getMiningBonus } from '../abilityData';
 import { getTitle, TITLES } from '../titleData';
 import { PETS, EVOLVED_PETS, EVOLVE_REQUIREMENTS, PET_RARITY_COLOR, PET_EXP_THRESHOLDS, PET_MAX_LEVEL, PET_LEVEL_MULT } from '../petData';
 import { JOB_CLASSES } from '../jobData';
@@ -24,13 +25,13 @@ import { createGuild, joinGuild, leaveGuild, sendGuildChat,
   contributeGuildXP, fetchGuildWarehouse, addToGuildWarehouse, removeFromGuildWarehouse } from '../guildData';
 import { listItem, buyItem, cancelListing } from '../marketData';
 import Leaderboard from '../Leaderboard';
-import { rarityColor, SKIN_PRESETS, getWeeklyGoals, getSaveCache, setSaveCache, loadSave } from '../hooks/useGameState';
+import { rarityColor, SKIN_PRESETS, getWeeklyGoals } from '../hooks/useGameState';
 import { STAT_DEFS, getStatLevel, getStatProgress, getCharLevel, getCharProgress, getStatBonuses } from '../statsData';
 import CottagePanel from './CottagePanel';
 import { sendPlayerMail, fetchMailbox, clearMailbox, subscribeSeasonRankings, getSeasonKey } from '../ranking';
 
 const TOURNAMENT_PRIZES = [2000, 1000, 500]; // 1위/2위/3위 주간 보상 골드
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { getSettings, setSfxEnabled, setCanvasQuality, setColorBlindMode, subscribeSettings } from '../settingsManager';
 import { setBgmVolume, getBgmVolume } from '../bgm';
 
@@ -48,6 +49,119 @@ function consumeMats(prev, mats) {
     else { rawOre[k] = (rawOre[k] || 0) - n; }
   }
   return { oreInventory: rawOre, processedOreInventory: procOre };
+}
+
+// ── 채굴 마스터리 퍽 트리 컴포넌트 ──────────────────────────────────────────────
+const MINE_PATH_COLOR = { 범위: '#44ccff', 속도: '#ffaa44', 시간: '#88ff88', 수확: '#ffd700', 특수: '#dd88ff' };
+const MINE_PATH_DESC  = { 범위: '도달 타일 반경 확장', 속도: '채굴 시간 단축', 시간: '미니게임 지속시간 증가', 수확: '획득 광석 증가', 특수: '특수 효과' };
+
+function MiningPerkTree({ gs, setGs }) {
+  const [expanded, setExpanded] = React.useState({});
+  const toggle = (path) => setExpanded(e => ({ ...e, [path]: !e[path] }));
+
+  const mb = getMiningBonus(gs.miningPerks ?? {});
+  const paths = ['범위', '속도', '시간', '수확', '특수'];
+
+  const summaryParts = [];
+  if (mb.mineRange > 1)        summaryParts.push(`범위 +${mb.mineRange - 1}칸`);
+  if (mb.mineSpeedMult < 1)    summaryParts.push(`속도 +${Math.round((1 - mb.mineSpeedMult) * 100)}%`);
+  if (mb.mineTimerBonus > 0)   summaryParts.push(`시간 +${mb.mineTimerBonus}s`);
+  if (mb.mineYieldBonus > 0)   summaryParts.push(`수확 +${mb.mineYieldBonus}/회`);
+  if (mb.mineDoubleChance > 0) summaryParts.push(`2배 확률 ${Math.round(mb.mineDoubleChance * 100)}%`);
+  if (mb.mineExtraOres > 0)    summaryParts.push(`광석 노드 +${mb.mineExtraOres}`);
+  if (mb.mineChainBonus > 0)   summaryParts.push(`연쇄 ${Math.round(mb.mineChainBonus * 100)}%`);
+
+  return (
+    <div className="section">
+      <div className="section-title">⛏ 채굴 마스터리 특성
+        <span style={{ float: 'right', fontSize: 11, color: '#ffcc44' }}>
+          포인트: {gs.miningPerkPoints ?? 0}
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 8 }}>
+        채굴 어빌리티 그레이드업 시 포인트 1 획득. 정밀 채굴 미니게임에 적용됩니다.
+      </div>
+
+      {paths.map(path => {
+        const pathColor = MINE_PATH_COLOR[path];
+        const pathPerks = Object.entries(MINING_PERKS).filter(([, p]) => p.path === path);
+        const isOpen = expanded[path];
+        const anyUnlocked = pathPerks.some(([id]) => gs.miningPerks?.[id]);
+
+        return (
+          <div key={path} style={{ marginBottom: 6, border: `1px solid ${pathColor}22`, borderRadius: 8 }}>
+            {/* Category header (expandable) */}
+            <div
+              onClick={() => toggle(path)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', cursor: 'pointer', borderRadius: 8, background: anyUnlocked ? `${pathColor}10` : 'transparent' }}
+            >
+              <span style={{ fontSize: 10, color: pathColor }}>{isOpen ? '▼' : '▶'}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: pathColor }}>{path}</span>
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', flex: 1 }}>{MINE_PATH_DESC[path]}</span>
+              {anyUnlocked && <span style={{ fontSize: 10, color: pathColor }}>✓</span>}
+            </div>
+
+            {/* Perks (expanded) */}
+            {isOpen && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '0 10px 10px' }}>
+                {pathPerks.map(([id, perk]) => {
+                  const unlocked = !!(gs.miningPerks?.[id]);
+                  const reqMet   = !perk.req || !!(gs.miningPerks?.[perk.req]);
+                  const canUnlock = !unlocked && reqMet && (gs.miningPerkPoints ?? 0) >= perk.cost;
+                  const bonusDesc = Object.entries(perk.bonus).map(([k, v]) => {
+                    if (k === 'mineRange')        return `범위 +${v}칸`;
+                    if (k === 'mineSpeedMult')    return `속도 +${Math.round((1-v)*100)}%`;
+                    if (k === 'mineTimerBonus')   return `시간 +${v}s`;
+                    if (k === 'mineYieldBonus')   return `수확 +${v}/회`;
+                    if (k === 'mineDoubleChance') return `2배 확률 ${Math.round(v*100)}%`;
+                    if (k === 'mineExtraOres')    return `노드 +${v}`;
+                    if (k === 'mineChainBonus')   return `연쇄 ${Math.round(v*100)}%`;
+                    return '';
+                  }).join(' · ');
+
+                  return (
+                    <div key={id} style={{
+                      padding: '5px 9px', borderRadius: 6, fontSize: 11, minWidth: 110,
+                      background: unlocked ? `${pathColor}22` : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${unlocked ? pathColor : 'rgba(255,255,255,0.12)'}`,
+                      opacity: reqMet ? 1 : 0.4,
+                    }}>
+                      <div style={{ fontWeight: 700, color: unlocked ? pathColor : '#ccc' }}>{perk.label}</div>
+                      <div style={{ color: '#aaa', fontSize: 10, margin: '2px 0' }}>{bonusDesc}</div>
+                      {!unlocked && (
+                        <button
+                          className="btn-buy"
+                          style={{ fontSize: 10, padding: '2px 7px', marginTop: 2,
+                            background: canUnlock ? pathColor : 'rgba(255,255,255,0.08)',
+                            color: canUnlock ? '#000' : '#555', cursor: canUnlock ? 'pointer' : 'not-allowed' }}
+                          disabled={!canUnlock}
+                          onClick={() => {
+                            if (!canUnlock) return;
+                            setGs(prev => ({
+                              ...prev,
+                              miningPerks: { ...(prev.miningPerks ?? {}), [id]: true },
+                              miningPerkPoints: (prev.miningPerkPoints ?? 0) - perk.cost,
+                            }));
+                          }}
+                        >
+                          해금 ({perk.cost}pt)
+                        </button>
+                      )}
+                      {unlocked && <div style={{ color: '#88ff88', fontSize: 10 }}>✓ 해금됨</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {summaryParts.length > 0 && (
+        <div style={{ fontSize: 11, color: '#88ffcc', marginTop: 6 }}>현재 합산: {summaryParts.join(' · ')}</div>
+      )}
+    </div>
+  );
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -715,6 +829,7 @@ export default function Sidebar(props) {
                                 abilities: { ...(prev.abilities ?? DEFAULT_ABILITIES),
                                   [name]: doGradeUp(prev.abilities?.[name] ?? { value: 100, grade: 0 }) },
                                 masteryPerkPoints: name === '낚시' ? (prev.masteryPerkPoints ?? 0) + 1 : (prev.masteryPerkPoints ?? 0),
+                                miningPerkPoints: name === '채굴' ? (prev.miningPerkPoints ?? 0) + 1 : (prev.miningPerkPoints ?? 0),
                               }));
                               addMsg(`🌟 ${def.icon} ${name} 그레이드 ${ab.grade + 1} 달성! 희귀 보너스 +${((ab.grade + 1) * 10)}%`, 'catch');
                               playLevelUp();
@@ -997,8 +1112,8 @@ export default function Sidebar(props) {
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 8 }}>
                     낚시 어빌리티 그레이드업 시 특성 포인트 1 획득. 경로 하나를 특화하세요.
                   </div>
-                  {['빠른낚시', '황금어부', '심해개척'].map(path => {
-                    const pathColor = { 빠른낚시: '#44aaff', 황금어부: '#ffd700', 심해개척: '#aa44ff' }[path];
+                  {['빠른낚시', '황금어부', '심해개척', '대어격투'].map(path => {
+                    const pathColor = { 빠른낚시: '#44aaff', 황금어부: '#ffd700', 심해개척: '#aa44ff', 대어격투: '#ff6644' }[path];
                     const pathPerks = Object.entries(MASTERY_PERKS).filter(([, p]) => p.path === path);
                     return (
                       <div key={path} style={{ marginBottom: 10 }}>
@@ -1009,9 +1124,13 @@ export default function Sidebar(props) {
                             const reqMet = !perk.req || !!(gs.masteryPerks?.[perk.req]);
                             const canUnlock = !unlocked && reqMet && (gs.masteryPerkPoints ?? 0) >= perk.cost;
                             const bonusDesc = Object.entries(perk.bonus).map(([k, v]) => {
-                              if (k === 'fishTimeMult') return `속도 +${Math.round((1 - v) * 100)}%`;
-                              if (k === 'fishSellBonus') return `판매 +${Math.round(v * 100)}%`;
+                              if (k === 'fishTimeMult')    return `속도 +${Math.round((1 - v) * 100)}%`;
+                              if (k === 'fishSellBonus')   return `판매 +${Math.round(v * 100)}%`;
                               if (k === 'deepRarityBonus') return `희귀도 +${Math.round(v * 100)}%`;
+                              if (k === 'resistDecayBonus')   return `스트레스 회복 +${v}/s`;
+                              if (k === 'resistStressReduce') return `스트레스 감소 -${Math.round(v * 100)}%`;
+                              if (k === 'resistMaxStress')    return `내구도 +${v}`;
+                              if (k === 'resistDistReduce')   return `시작 거리 -${Math.round(v * 100)}%`;
                               return '';
                             }).join(' · ');
                             return (
@@ -1055,13 +1174,20 @@ export default function Sidebar(props) {
                   {(() => {
                     const mb = getMasteryBonus(gs.masteryPerks ?? {});
                     const parts = [];
-                    if (mb.fishTimeMult < 1) parts.push(`낚시 속도 +${Math.round((1 - mb.fishTimeMult) * 100)}%`);
-                    if (mb.fishSellBonus > 0) parts.push(`생선 판매가 +${Math.round(mb.fishSellBonus * 100)}%`);
+                    if (mb.fishTimeMult < 1)    parts.push(`낚시 속도 +${Math.round((1 - mb.fishTimeMult) * 100)}%`);
+                    if (mb.fishSellBonus > 0)   parts.push(`판매가 +${Math.round(mb.fishSellBonus * 100)}%`);
                     if (mb.deepRarityBonus > 0) parts.push(`심해 희귀도 +${Math.round(mb.deepRarityBonus * 100)}%`);
+                    if (mb.resistDecayBonus   > 0) parts.push(`릴 회복 +${mb.resistDecayBonus}/s`);
+                    if (mb.resistStressReduce > 0) parts.push(`릴 스트레스 -${Math.round(mb.resistStressReduce * 100)}%`);
+                    if (mb.resistMaxStress    > 0) parts.push(`릴 내구도 +${mb.resistMaxStress}`);
+                    if (mb.resistDistReduce   > 0) parts.push(`릴 시작거리 -${Math.round(mb.resistDistReduce * 100)}%`);
                     if (parts.length === 0) return null;
                     return <div style={{ fontSize: 11, color: '#88ffcc', marginTop: 4 }}>현재 합산: {parts.join(' · ')}</div>;
                   })()}
                 </div>
+
+                {/* ── 채굴 마스터리 특성 트리 ── */}
+                <MiningPerkTree gs={gs} setGs={setGs} />
               </>
             )}
 
@@ -2085,6 +2211,7 @@ export default function Sidebar(props) {
       {/* 광석 정밀 채굴 미니게임 */}
       {miningMinigame && <MiningMinigame
         oreName={miningMinigame.oreName}
+        miningBonus={miningMinigame.miningBonus ?? {}}
         onFinish={(score) => {
           setMiningMinigame(null);
           if (score > 0) {
@@ -2104,6 +2231,8 @@ export default function Sidebar(props) {
         fishName={resistanceGame.name}
         rarity={resistanceGame.fd?.rarity}
         size={resistanceGame.size}
+        fishGrade={resistanceGame.fishGrade ?? 0}
+        resistMastery={resistanceGame.resistMastery}
         onSuccess={onResistanceSuccess}
         onFail={onResistanceFail}
       />}
@@ -4734,48 +4863,6 @@ export default function Sidebar(props) {
                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>
                   낮음: 파티클·장식 감소 / 중간: 기본 / 높음: 최대 품질 (다음 접속부터 적용)
                 </div>
-              </div>
-
-              {/* Cloud save backup */}
-              <div className="section">
-                <div className="section-title">💾 세이브 데이터 백업</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <button tabIndex={-1} className="btn-eq" style={{ fontSize: 12 }}
-                    onClick={() => {
-                      const raw = getSaveCache(nickname);
-                      if (!raw) { addMsg('저장 데이터가 없습니다.', 'error'); return; }
-                      const blob = new Blob([raw], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url; a.download = `tidehaven_${nickname}_backup.json`;
-                      a.click(); URL.revokeObjectURL(url);
-                      addMsg('💾 세이브 데이터 다운로드 완료!', 'catch');
-                    }}>
-                    📥 백업 다운로드
-                  </button>
-                  <label tabIndex={-1} className="btn-eq" style={{ fontSize: 12, cursor: 'pointer' }}>
-                    📤 백업 불러오기
-                    <input type="file" accept=".json,.save" style={{ display: 'none' }}
-                      onChange={e => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = ev => {
-                          try {
-                            const raw = ev.target.result;
-                            JSON.parse(raw); // validate JSON
-                            setSaveCache(nickname, raw);
-                            setGs(loadSave(nickname));
-                            addMsg('✅ 백업 복구 완료!', 'catch');
-                          } catch { addMsg('백업 파일 오류', 'error'); }
-                        };
-                        reader.readAsText(file);
-                        e.target.value = '';
-                      }}
-                    />
-                  </label>
-                </div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>세이브 파일을 로컬에 백업하고 복구합니다.</div>
               </div>
 
               {/* Push notifications */}

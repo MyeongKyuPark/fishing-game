@@ -1,144 +1,332 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// 광석 정밀 채굴 미니게임
-// 화면에 원이 줄어들고, 타이밍에 맞게 클릭하면 추가 광석 획득
-// 녹색 링 안에 들어올 때 클릭 → 성공, 총 3번 기회, 맞출수록 많은 보너스
+/**
+ * 아이소메트릭 타일 정밀 채굴 미니게임
+ * - 5x5 대각선 뷰 그리드, 플레이어(⛏)가 중앙(2,2)
+ * - 타일 위에 광석 노드가 떠있음
+ * - 범위 내 광석을 클릭/터치 홀드 → 진행률이 차면 채굴 완료
+ * - 타이머가 끝나면 채굴한 수를 보고 종료
+ */
 
-const ORE_COLORS = {
-  철광석: '#b0b8c8',
-  구리광석: '#d4a050',
-  수정: '#88ccff',
-  금광석: '#ffd700',
-};
+const GRID       = 5;
+const CENTER     = 2;
+const TILE_W     = 56;   // 타일 다이아몬드 가로
+const TILE_H     = 28;   // 타일 다이아몬드 세로
+const SVG_W      = 310;
+const SVG_H      = 215;
+const ORIGIN_X   = 155;
+const ORIGIN_Y   = 50;
+const PROG_R     = 15;   // 진행 링 반지름
+const PROG_CIRC  = 2 * Math.PI * PROG_R;
+const BASE_MINE_TIME = 1.5;   // 초
+const BASE_DURATION  = 20;    // 초
+const BASE_ORE_COUNT = 8;     // 초기 광석 수
 
-export default function MiningMinigame({ oreName, onFinish }) {
-  const [phase, setPhase]     = useState(0);   // 0,1,2 = 세 번의 기회
-  const [score, setScore]     = useState(0);   // 성공 횟수
-  const [radius, setRadius]   = useState(100); // 줄어드는 원 반지름
-  const [flash,  setFlash]    = useState(null);// 'hit'|'miss'
-  const [done,   setDone]     = useState(false);
-  const TARGET_R = 28;  // 타겟 반지름 (녹색 링)
-  const TARGET_TOLERANCE = 14; // 허용 오차 px
-  const SHRINK_SPEED = 0.7; // px per frame
-  const rafRef  = useRef(null);
-  const radRef  = useRef(100);
-  const lastRef = useRef(null);
+const ORE_COLORS = { 철광석: '#b0b8c8', 구리광석: '#d4a050', 수정: '#88ccff', 금광석: '#ffd700' };
+const ORE_GLYPH  = { 철광석: '■', 구리광석: '●', 수정: '◆', 금광석: '★' };
 
-  const oreColor = ORE_COLORS[oreName] ?? '#aaaaaa';
+// 체비쇼프 거리
+function cheby(col, row) { return Math.max(Math.abs(col - CENTER), Math.abs(row - CENTER)); }
 
-  const handleResult = useCallback((isHit) => {
-    cancelAnimationFrame(rafRef.current);
-    setFlash(isHit ? 'hit' : 'miss');
-    if (isHit) setScore(s => s + 1);
-    setTimeout(() => {
-      setFlash(null);
-      const next = phase + 1;
-      if (next >= 3) {
-        setDone(true);
-        // score is state, need +1 if hit
-        setTimeout(() => onFinish(isHit ? score + 1 : score), 600);
-      } else {
-        setPhase(next);
-        radRef.current = 100;
-        lastRef.current = null;
-      }
-    }, 400);
-  }, [phase, score, onFinish]);
+// 아이소메트릭 좌표 → SVG 좌표 (타일 최상단 꼭짓점)
+function iso(col, row) {
+  return {
+    x: ORIGIN_X + (col - row) * (TILE_W / 2),
+    y: ORIGIN_Y + (col + row) * (TILE_H / 2),
+  };
+}
 
+// 초기 광석 배치 (shuffle → 앞에서 n개 선택)
+function genOres(count) {
+  const pool = [];
+  for (let c = 0; c < GRID; c++)
+    for (let r = 0; r < GRID; r++)
+      if (!(c === CENTER && r === CENTER)) pool.push({ col: c, row: r });
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, Math.min(count, pool.length)).map((p, i) => ({
+    id: i, col: p.col, row: p.row, chainCredit: 0,
+  }));
+}
+
+export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) {
+  const mineRange        = miningBonus.mineRange        ?? 1;
+  const mineSpeedMult    = miningBonus.mineSpeedMult    ?? 1;
+  const mineTimerBonus   = miningBonus.mineTimerBonus   ?? 0;
+  const mineYieldBonus   = miningBonus.mineYieldBonus   ?? 0;
+  const mineDoubleChance = miningBonus.mineDoubleChance ?? 0;
+  const mineExtraOres    = miningBonus.mineExtraOres    ?? 0;
+  const mineChainBonus   = miningBonus.mineChainBonus   ?? 0;
+
+  const MINE_TIME = BASE_MINE_TIME * mineSpeedMult;
+  const DURATION  = BASE_DURATION + mineTimerBonus;
+
+  // ── 상태 ──────────────────────────────────────────────────────
+  const [ores, setOres]             = useState(() => genOres(BASE_ORE_COUNT + mineExtraOres));
+  const [holdTargetId, setHoldTgt]  = useState(null);
+  const [holdProgress, setHoldProg] = useState(0);
+  const [timeLeft, setTimeLeft]     = useState(DURATION);
+  const [minedCount, setMinedCount] = useState(0);
+  const [totalYield, setTotalYield] = useState(0);
+  const [flashId, setFlashId]       = useState(null); // 채굴 완료 효과
+  const [phase, setPhase]           = useState('playing');
+
+  // ── 내부 ref (RAF 루프) ───────────────────────────────────────
+  const oresRef     = useRef(ores);
+  const holdRef     = useRef({ id: null, startTs: null });
+  const timeRef     = useRef(DURATION);
+  const yieldRef    = useRef(0);
+  const rafRef      = useRef(null);
+  const lastRef     = useRef(null);
+
+  useEffect(() => { oresRef.current = ores; }, [ores]);
+
+  // ── 게임 루프 ──────────────────────────────────────────────────
   useEffect(() => {
-    if (done) return;
-    radRef.current = 100;
-    setRadius(100);
+    if (phase !== 'playing') return;
     const tick = (ts) => {
       if (!lastRef.current) lastRef.current = ts;
-      const dt = (ts - lastRef.current) / 16.67;
+      const dt = Math.min((ts - lastRef.current) / 1000, 0.1);
       lastRef.current = ts;
-      radRef.current = Math.max(4, radRef.current - SHRINK_SPEED * dt);
-      setRadius(radRef.current);
-      if (radRef.current <= 4) {
-        // Auto-fail if circle hits center
-        handleResult(false);
+
+      // 타이머
+      timeRef.current = Math.max(0, timeRef.current - dt);
+      setTimeLeft(timeRef.current);
+      if (timeRef.current <= 0) {
+        setPhase('done');
+        setTimeout(() => onFinish(yieldRef.current), 800);
         return;
       }
+
+      // 홀드 진행률
+      const h = holdRef.current;
+      if (h.id !== null && h.startTs !== null) {
+        const elapsed = (ts - h.startTs) / 1000;
+        const prog = Math.min(elapsed / MINE_TIME, 1);
+        setHoldProg(prog);
+
+        if (prog >= 1) {
+          // 채굴 완료
+          const minedId  = h.id;
+          const minedOre = oresRef.current.find(o => o.id === minedId);
+          h.id = null; h.startTs = null;
+          setHoldTgt(null); setHoldProg(0);
+
+          // 수확 계산
+          let gain = 1 + mineYieldBonus;
+          if (Math.random() < mineDoubleChance) gain += 1;
+          yieldRef.current += gain;
+          setMinedCount(c => c + 1);
+          setTotalYield(yieldRef.current);
+          setFlashId(minedId);
+          setTimeout(() => setFlashId(null), 450);
+
+          setOres(prev => {
+            let next = prev.filter(o => o.id !== minedId);
+            // 연쇄 채굴: 인접 광석에 크레딧 부여
+            if (mineChainBonus > 0 && minedOre) {
+              next = next.map(o => {
+                const adj = Math.max(Math.abs(o.col - minedOre.col), Math.abs(o.row - minedOre.row)) <= 1;
+                return adj ? { ...o, chainCredit: Math.min((o.chainCredit ?? 0) + mineChainBonus, 0.9) } : o;
+              });
+            }
+            return next;
+          });
+        }
+      }
+
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(rafRef.current); lastRef.current = null; };
-  }, [phase, done, handleResult]);
+  }, [phase, MINE_TIME, mineYieldBonus, mineDoubleChance, mineChainBonus, onFinish]);
 
-  const handleClick = useCallback(() => {
-    if (done || flash) return;
-    const r = radRef.current;
-    const inZone = Math.abs(r - TARGET_R) <= TARGET_TOLERANCE;
-    handleResult(inZone);
-  }, [done, flash, handleResult]);
+  // ── 인터랙션 ──────────────────────────────────────────────────
+  const startHold = useCallback((oreId, inRange) => {
+    if (!inRange || phase !== 'playing') return;
+    const ore = oresRef.current.find(o => o.id === oreId);
+    const credit = ore?.chainCredit ?? 0;
+    holdRef.current = { id: oreId, startTs: performance.now() - credit * MINE_TIME * 1000 };
+    setHoldTgt(oreId);
+    setHoldProg(credit);
+  }, [phase, MINE_TIME]);
 
-  useEffect(() => {
-    const onKey = (e) => { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); handleClick(); } };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [handleClick]);
+  const stopHold = useCallback(() => {
+    if (!holdRef.current.id) return;
+    holdRef.current = { id: null, startTs: null };
+    setHoldTgt(null); setHoldProg(0);
+  }, []);
 
-  const SIZE = 200;
-  const cx = SIZE / 2, cy = SIZE / 2;
-  const isInZone = Math.abs(radius - TARGET_R) <= TARGET_TOLERANCE;
+  // ── 렌더 준비 ─────────────────────────────────────────────────
+  const oreColor = ORE_COLORS[oreName] ?? '#aaaaaa';
+  const timePct  = timeLeft / DURATION;
+
+  // 타일 painter's algorithm 정렬: col+row 오름차순
+  const sortedTiles = Array.from({ length: GRID * GRID }, (_, i) => ({
+    col: i % GRID, row: Math.floor(i / GRID),
+  })).sort((a, b) => (a.col + a.row) - (b.col + b.row));
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.75)',
-    }} onClick={handleClick}>
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.85)' }}
+      onPointerUp={stopHold}
+      onPointerLeave={stopHold}
+      onPointerCancel={stopHold}
+    >
       <div style={{
-        background: '#0a1218', border: `2px solid ${oreColor}`,
-        borderRadius: 16, padding: '24px 32px',
+        background: '#080f18', border: `2px solid ${oreColor}`,
+        borderRadius: 18, padding: '16px 18px',
         textAlign: 'center', userSelect: 'none',
-        boxShadow: `0 0 30px ${oreColor}44`,
+        boxShadow: `0 0 36px ${oreColor}44`,
+        maxWidth: 360,
       }}>
-        <div style={{ fontSize: 16, color: oreColor, fontWeight: 800, marginBottom: 4 }}>
-          ⛏ {oreName} 정밀 채굴
+        {/* 헤더 */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontSize: 14, color: oreColor, fontWeight: 800 }}>⛏ {oreName} 정밀 채굴</div>
+          <div style={{ fontSize: 13, fontWeight: timeLeft < 5 ? 800 : 400, color: timeLeft < 5 ? '#ff4444' : timeLeft < 10 ? '#ffaa22' : '#aaa' }}>
+            ⏱ {Math.ceil(timeLeft)}s
+          </div>
         </div>
-        <div style={{ fontSize: 11, color: '#aaa', marginBottom: 12 }}>
-          녹색 링에 원이 겹칠 때 클릭!
-        </div>
-
-        {/* Circles */}
-        <div style={{ position: 'relative', width: SIZE, height: SIZE, margin: '0 auto' }}>
-          <svg width={SIZE} height={SIZE}>
-            {/* Target ring (green) */}
-            <circle cx={cx} cy={cy} r={TARGET_R + TARGET_TOLERANCE} fill="none" stroke="#44ff8844" strokeWidth={TARGET_TOLERANCE * 2} />
-            <circle cx={cx} cy={cy} r={TARGET_R} fill="none" stroke="#44ff88" strokeWidth={2} />
-            {/* Shrinking circle */}
-            <circle cx={cx} cy={cy} r={Math.max(4, radius)}
-              fill="none"
-              stroke={flash === 'hit' ? '#44ff88' : flash === 'miss' ? '#ff4444' : isInZone ? '#ffdd44' : oreColor}
-              strokeWidth={3}
-              style={{ transition: 'stroke 0.1s' }}
-            />
-            {/* Center ore icon */}
-            <text x={cx} y={cy + 6} textAnchor="middle" fontSize={18} fill={oreColor}>⛏</text>
-          </svg>
+        <div style={{ fontSize: 10, color: '#556', marginBottom: 8, display: 'flex', gap: 12, justifyContent: 'center' }}>
+          <span>범위 <span style={{ color: oreColor }}>{mineRange}</span>칸</span>
+          <span>채굴 <span style={{ color: oreColor }}>{minedCount}</span>회</span>
+          <span>획득 <span style={{ color: '#ffd700' }}>{totalYield}</span>개</span>
+          {mineChainBonus > 0 && <span style={{ color: '#dd88ff' }}>연쇄</span>}
         </div>
 
-        {/* Phase dots */}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 14 }}>
-          {[0, 1, 2].map(i => (
-            <div key={i} style={{
-              width: 14, height: 14, borderRadius: '50%',
-              background: i < phase ? (i < score ? '#44ff88' : '#ff4444') : i === phase ? oreColor : '#333',
-              border: `2px solid ${i === phase ? oreColor : '#444'}`,
-            }} />
-          ))}
+        {/* 타임바 */}
+        <div style={{ height: 3, background: '#1a2a3a', borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
+          <div style={{ height: '100%', width: `${timePct * 100}%`, background: timeLeft < 5 ? '#ff4444' : timeLeft < 10 ? '#ffaa22' : oreColor, transition: 'width 0.1s linear, background 0.3s', borderRadius: 2 }} />
         </div>
 
-        {done && (
-          <div style={{ marginTop: 12, fontSize: 15, fontWeight: 800, color: score >= 2 ? '#44ff88' : score === 1 ? '#ffdd44' : '#aaa' }}>
-            {score >= 2 ? `💎 정밀 채굴 성공! +${score}개 추가` : score === 1 ? `⛏ 보통 결과 +1개 추가` : '광석 추가 없음'}
+        {/* 아이소메트릭 그리드 */}
+        <svg
+          width={SVG_W} height={SVG_H}
+          style={{ display: 'block', margin: '0 auto', touchAction: 'none' }}
+        >
+          {sortedTiles.map(({ col, row }) => {
+            const isCenter = col === CENTER && row === CENTER;
+            const dist     = cheby(col, row);
+            const inRange  = !isCenter && dist <= mineRange;
+            const pos      = iso(col, row);
+            const ore      = ores.find(o => o.col === col && o.row === row);
+            const isMining = ore != null && holdTargetId === ore.id;
+            const prog     = isMining ? holdProgress : (ore?.chainCredit ?? 0);
+            const isFlash  = ore != null && flashId === ore.id;
+
+            // 타일 다이아몬드 꼭짓점
+            const pts = [
+              `${pos.x},${pos.y}`,
+              `${pos.x + TILE_W / 2},${pos.y + TILE_H / 2}`,
+              `${pos.x},${pos.y + TILE_H}`,
+              `${pos.x - TILE_W / 2},${pos.y + TILE_H / 2}`,
+            ].join(' ');
+
+            // 타일 색상
+            const tileFill   = isCenter ? '#162640' : inRange ? '#0e1e30' : '#090f18';
+            const tileStroke = isCenter ? '#2255aa' : inRange ? '#1a3050' : '#0d1620';
+
+            // 광석 위치 (타일 꼭대기에서 위로 떠있음)
+            const ox = pos.x;
+            const oy = pos.y - 12;
+
+            return (
+              <g key={`${col}-${row}`}>
+                {/* 타일 면 */}
+                <polygon points={pts} fill={tileFill} stroke={tileStroke} strokeWidth={1} />
+
+                {/* 범위 강조 */}
+                {inRange && (
+                  <polygon points={pts} fill={`${oreColor}0c`} stroke={`${oreColor}28`} strokeWidth={0.8} />
+                )}
+
+                {/* 광석 노드 */}
+                {ore && !isFlash && (
+                  <g
+                    style={{ cursor: inRange ? 'pointer' : 'default' }}
+                    onPointerDown={(e) => { e.stopPropagation(); startHold(ore.id, inRange); }}
+                  >
+                    {/* 진행 링 */}
+                    {prog > 0 && (
+                      <circle
+                        cx={ox} cy={oy} r={PROG_R}
+                        fill="none"
+                        stroke={isMining ? oreColor : `${oreColor}88`}
+                        strokeWidth={isMining ? 3 : 2}
+                        strokeDasharray={`${prog * PROG_CIRC} ${PROG_CIRC}`}
+                        strokeLinecap="round"
+                        transform={`rotate(-90,${ox},${oy})`}
+                      />
+                    )}
+                    {/* 외곽 글로우 (범위 내 + 홀드 중) */}
+                    {inRange && isMining && (
+                      <circle cx={ox} cy={oy} r={12} fill={`${oreColor}20`} stroke={`${oreColor}60`} strokeWidth={1} />
+                    )}
+                    {/* 광석 몸체 */}
+                    <circle
+                      cx={ox} cy={oy} r={9}
+                      fill={inRange ? `${oreColor}30` : '#0a1520'}
+                      stroke={inRange ? oreColor : '#1e2e3e'}
+                      strokeWidth={inRange ? 1.5 : 1}
+                    />
+                    {/* 광석 글리프 */}
+                    <text x={ox} y={oy + 4} textAnchor="middle" fontSize={9}
+                      fill={inRange ? oreColor : '#2a3a4a'}
+                      style={{ pointerEvents: 'none', fontWeight: 'bold' }}>
+                      {ORE_GLYPH[oreName] ?? '●'}
+                    </text>
+                    {/* 범위 밖 표시 */}
+                    {!inRange && (
+                      <text x={ox} y={oy - 14} textAnchor="middle" fontSize={8} fill="#2a3a4a" style={{ pointerEvents: 'none' }}>
+                        범위밖
+                      </text>
+                    )}
+                  </g>
+                )}
+
+                {/* 채굴 완료 플래시 */}
+                {isFlash && (
+                  <text x={ox} y={oy} textAnchor="middle" fontSize={16} style={{ pointerEvents: 'none' }}>
+                    ✨
+                  </text>
+                )}
+
+                {/* 플레이어 */}
+                {isCenter && (
+                  <text
+                    x={pos.x} y={pos.y + TILE_H / 2 + 6}
+                    textAnchor="middle" fontSize={17}
+                    style={{ pointerEvents: 'none' }}>
+                    ⛏
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* 퍽 정보 */}
+        {(mineTimerBonus > 0 || mineSpeedMult < 1 || mineExtraOres > 0 || mineChainBonus > 0) && (
+          <div style={{ fontSize: 10, color: '#dd88ff', marginTop: 8 }}>
+            퍽 적용됨
+            {mineSpeedMult < 1  ? ` · 속도 +${Math.round((1 - mineSpeedMult) * 100)}%` : ''}
+            {mineTimerBonus > 0 ? ` · 시간 +${mineTimerBonus}s` : ''}
+            {mineExtraOres > 0  ? ` · 노드 +${mineExtraOres}` : ''}
+            {mineChainBonus > 0 ? ` · 연쇄 ${Math.round(mineChainBonus * 100)}%` : ''}
           </div>
         )}
 
-        <div style={{ marginTop: 10, fontSize: 11, color: '#666' }}>
-          클릭 또는 스페이스/엔터
+        {/* 결과 */}
+        {phase === 'done' && (
+          <div style={{ marginTop: 10, fontSize: 15, fontWeight: 800, color: totalYield > 0 ? oreColor : '#aaa' }}>
+            {totalYield > 0 ? `💎 ${oreName} +${totalYield}개 추가!` : '이번엔 채굴 못했어요'}
+          </div>
+        )}
+
+        <div style={{ marginTop: 8, fontSize: 9, color: '#333' }}>
+          광석을 꾹 눌러 채굴 · 범위 밖은 퍽으로 확장 가능
         </div>
       </div>
     </div>

@@ -3,162 +3,331 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 const RARITY_COLOR = { 전설: '#ffdd44', 신화: '#ff88ff' };
 const RARITY_ICON  = { 전설: '⭐', 신화: '🌟' };
 
-// 대어 저항 미니게임: 이동하는 인디케이터를 녹색 구간에서 3회 적중해야 포획 성공
-// 전설: 3타 성공 / 신화: 4타 성공, 실패 허용 2회
-export default function ResistanceMinigame({ fishName, rarity, size, onSuccess, onFail }) {
-  const MAX_HITS  = rarity === '신화' ? 4 : 3;
-  const MAX_FAILS = 2;
-  const ZONE_W    = rarity === '신화' ? 0.18 : 0.24; // green zone width (fraction of bar)
-  const SPEED     = rarity === '신화' ? 0.0038 : 0.003; // indicator speed
+/**
+ * 릴 미니게임: 꾹 눌러서 릴을 감아 물고기를 당겨오는 방식
+ * - 스페이스/엔터/터치/클릭 홀드 → 릴 감기 (거리 감소)
+ * - 릴 감는 중 스트레스 증가 → 100% 도달 시 줄 끊김
+ * - 손 떼면 스트레스 회복, 물고기는 천천히 멀어짐
+ * - 물고기가 주기적으로 저항(돌진) → 거리 급증 + 스트레스 급증
+ * - 거리 0 도달 시 포획 성공
+ */
+export default function ResistanceMinigame({ fishName, rarity, size, fishGrade = 0, resistMastery = {}, onSuccess, onFail }) {
+  const isMythic = rarity === '신화';
+  const rColor   = RARITY_COLOR[rarity] ?? '#ffdd44';
+  const rIcon    = RARITY_ICON[rarity]  ?? '⭐';
 
-  const [indicator, setIndicator] = useState(0.5); // 0~1
-  const [direction, setDirection] = useState(1);
-  const [hits,   setHits]   = useState(0);
-  const [misses, setMisses] = useState(0);
-  const [flash,  setFlash]  = useState(null); // 'hit' | 'miss'
-  const [done,   setDone]   = useState(false);
-  const stateRef = useRef({ indicator: 0.5, direction: 1, hits: 0, misses: 0 });
-  const rafRef   = useRef(null);
-  const lastRef  = useRef(null);
+  // ── 그레이드 보너스 ─────────────────────────────────────────
+  const gradeReelBonus    = fishGrade * 0.6;           // 릴 속도 +0.6m/s per grade
+  const gradeStressReduce = Math.min(fishGrade * 0.02, 0.16); // 스트레스 증가 최대 -16%
+  const gradeDecayBonus   = fishGrade * 1.5;           // 스트레스 회복 +1.5%/s per grade
+  const gradeDriftReduce  = fishGrade >= 3 ? 0.25 : 0; // grade 3+ 비릴 시 흘러가는 속도 -25%
 
-  // Zone: centered around random position, shifts each hit
-  const [zoneCenter, setZoneCenter] = useState(() => 0.3 + Math.random() * 0.4);
+  // ── 퍽 보너스 ──────────────────────────────────────────────
+  const perkDecayBonus    = resistMastery.resistDecayBonus   ?? 0;  // %/s
+  const perkStressReduce  = resistMastery.resistStressReduce ?? 0;  // 비율 감소
+  const perkMaxStress     = resistMastery.resistMaxStress    ?? 0;  // 최대치 +
+  const perkDistReduce    = resistMastery.resistDistReduce   ?? 0;  // 시작 거리 -
 
-  const zoneLeft  = Math.max(0.02, zoneCenter - ZONE_W / 2);
-  const zoneRight = Math.min(0.98, zoneCenter + ZONE_W / 2);
+  // ── 게임 파라미터 ────────────────────────────────────────────
+  const MAX_STRESS    = 100 + perkMaxStress;
+  const REEL_RATE     = (isMythic ? 9 : 12) + gradeReelBonus;       // m/s
+  const DRIFT_RATE    = (isMythic ? 5 : 3.5) * (1 - gradeDriftReduce); // m/s (비릴 시 멀어지는 속도)
+  const STRESS_RATE   = (isMythic ? 22 : 17) * (1 - gradeStressReduce) * (1 - perkStressReduce); // %/s
+  const DECAY_RATE    = (isMythic ? 18 : 22) + gradeDecayBonus + perkDecayBonus; // %/s
+  const FIGHT_INTERVAL_MIN = isMythic ? 2.5 : 3.5; // 저항 최소 간격 (s)
+  const FIGHT_INTERVAL_RNG = isMythic ? 2.5 : 3.0; // 랜덤 추가
+  const FIGHT_DURATION_MIN = isMythic ? 1.2 : 0.8;
+  const FIGHT_DURATION_RNG = isMythic ? 1.5 : 1.2;
+  const FIGHT_DRIFT_MULT   = isMythic ? 5   : 4;   // 저항 중 drift 배율
+  const FIGHT_STRESS_EXTRA = isMythic ? 18  : 12;  // 저항 중 스트레스 추가 %/s
 
-  // Animate indicator
+  // ── 초기 거리 (1회만 계산) ──────────────────────────────────
+  const initDistRef = useRef(null);
+  if (initDistRef.current === null) {
+    const base = isMythic ? (150 + Math.random() * 150) : (80 + Math.random() * 120);
+    initDistRef.current = Math.round(base * (1 - perkDistReduce));
+  }
+  const INIT_DIST = initDistRef.current;
+
+  // ── React 상태 (렌더용) ──────────────────────────────────────
+  const [distance,   setDistance]   = useState(INIT_DIST);
+  const [stress,     setStress]     = useState(0);
+  const [isReeling,  setIsReeling]  = useState(false);
+  const [isFighting, setIsFighting] = useState(false);
+  const [phase,      setPhase]      = useState('playing'); // 'playing' | 'success' | 'fail'
+
+  // ── 내부 ref (RAF 루프용) ─────────────────────────────────────
+  const stRef   = useRef({ distance: INIT_DIST, stress: 0, reeling: false, fighting: false, done: false });
+  const rafRef  = useRef(null);
+  const lastRef = useRef(null);
+  const fightRef = useRef({
+    nextFightAt: FIGHT_INTERVAL_MIN + Math.random() * FIGHT_INTERVAL_RNG,
+    fightEndAt:  0,
+    elapsed:     0,
+  });
+
+  // ── 게임 루프 ────────────────────────────────────────────────
   useEffect(() => {
-    if (done) return;
+    if (phase !== 'playing') return;
     const tick = (ts) => {
       if (lastRef.current == null) lastRef.current = ts;
-      const dt = (ts - lastRef.current) / 16.67; // normalize to ~60fps
+      const dt = Math.min((ts - lastRef.current) / 1000, 0.1); // seconds, cap 100ms
       lastRef.current = ts;
-      const st = stateRef.current;
-      let pos = st.indicator + st.direction * SPEED * dt;
-      let dir = st.direction;
-      if (pos >= 1) { pos = 1; dir = -1; }
-      if (pos <= 0) { pos = 0; dir = 1;  }
-      stateRef.current.indicator = pos;
-      stateRef.current.direction = dir;
-      setIndicator(pos);
-      setDirection(dir);
+
+      const st = stRef.current;
+      const fr = fightRef.current;
+      if (st.done) return;
+
+      fr.elapsed += dt;
+
+      // 저항 상태 갱신
+      if (!st.fighting && fr.elapsed >= fr.nextFightAt) {
+        st.fighting = true;
+        setIsFighting(true);
+        fr.fightEndAt = fr.elapsed + FIGHT_DURATION_MIN + Math.random() * FIGHT_DURATION_RNG;
+      }
+      if (st.fighting && fr.elapsed >= fr.fightEndAt) {
+        st.fighting = false;
+        setIsFighting(false);
+        fr.nextFightAt = fr.elapsed + FIGHT_INTERVAL_MIN + Math.random() * FIGHT_INTERVAL_RNG;
+      }
+
+      // 거리 갱신
+      let dist = st.distance;
+      if (st.reeling) {
+        dist -= REEL_RATE * dt;
+        if (st.fighting) dist += DRIFT_RATE * FIGHT_DRIFT_MULT * dt; // 저항으로 되밀림
+      } else {
+        dist += DRIFT_RATE * (st.fighting ? FIGHT_DRIFT_MULT : 1) * dt;
+      }
+      dist = Math.max(0, Math.min(INIT_DIST * 1.3, dist));
+
+      // 스트레스 갱신
+      let str = st.stress;
+      if (st.reeling) {
+        str += STRESS_RATE * dt;
+        if (st.fighting) str += FIGHT_STRESS_EXTRA * dt;
+      } else {
+        str -= DECAY_RATE * dt;
+      }
+      str = Math.max(0, str);
+
+      st.distance = dist;
+      st.stress   = str;
+      setDistance(Math.round(dist));
+      setStress(str);
+
+      // 승패 판정
+      if (dist <= 0) {
+        st.done = true;
+        cancelAnimationFrame(rafRef.current);
+        setPhase('success');
+        setTimeout(() => onSuccess(), 600);
+        return;
+      }
+      if (str >= MAX_STRESS) {
+        st.done = true;
+        cancelAnimationFrame(rafRef.current);
+        setPhase('fail');
+        setTimeout(() => onFail(), 600);
+        return;
+      }
+
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [done, SPEED]);
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleCatch = useCallback(() => {
-    if (done) return;
-    const pos = stateRef.current.indicator;
-    const isHit = pos >= zoneLeft && pos <= zoneRight;
-    if (isHit) {
-      const newHits = stateRef.current.hits + 1;
-      stateRef.current.hits = newHits;
-      setHits(newHits);
-      setFlash('hit');
-      setZoneCenter(0.25 + Math.random() * 0.5);
-      setTimeout(() => setFlash(null), 300);
-      if (newHits >= MAX_HITS) {
-        setDone(true);
-        setTimeout(() => onSuccess(), 500);
-      }
-    } else {
-      const newMisses = stateRef.current.misses + 1;
-      stateRef.current.misses = newMisses;
-      setMisses(newMisses);
-      setFlash('miss');
-      setTimeout(() => setFlash(null), 300);
-      if (newMisses > MAX_FAILS) {
-        setDone(true);
-        setTimeout(() => onFail(), 500);
-      }
-    }
-  }, [done, zoneLeft, zoneRight, MAX_HITS, MAX_FAILS, onSuccess, onFail]);
+  // ── 릴 조작 ─────────────────────────────────────────────────
+  const startReel = useCallback(() => {
+    if (stRef.current.done) return;
+    stRef.current.reeling = true;
+    setIsReeling(true);
+  }, []);
 
-  // Keyboard support
+  const stopReel = useCallback(() => {
+    stRef.current.reeling = false;
+    setIsReeling(false);
+  }, []);
+
+  // 키보드
   useEffect(() => {
-    const onKey = (e) => { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); handleCatch(); } };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [handleCatch]);
+    const onDown = (e) => { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); startReel(); } };
+    const onUp   = (e) => { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); stopReel(); } };
+    window.addEventListener('keydown', onDown);
+    window.addEventListener('keyup',   onUp);
+    return () => { window.removeEventListener('keydown', onDown); window.removeEventListener('keyup', onUp); };
+  }, [startReel, stopReel]);
 
-  const rColor = RARITY_COLOR[rarity] ?? '#ffdd44';
-  const rIcon  = RARITY_ICON[rarity]  ?? '⭐';
+  // ── 계산된 표시값 ────────────────────────────────────────────
+  const stressPct   = Math.min((stress / MAX_STRESS) * 100, 100);
+  const distPct     = Math.min(distance / INIT_DIST, 1); // 1 = 멀다, 0 = 잡았다
+  const stressColor = stressPct > 75 ? '#ff4444' : stressPct > 45 ? '#ffaa22' : '#44cc88';
+
+  const hasPerkBonus = perkDecayBonus > 0 || perkStressReduce > 0 || perkMaxStress > 0 || perkDistReduce > 0;
 
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9999,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.75)',
-    }}
-      onClick={handleCatch}
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.82)' }}
+      onMouseDown={startReel}
+      onMouseUp={stopReel}
+      onMouseLeave={stopReel}
+      onTouchStart={(e) => { e.preventDefault(); startReel(); }}
+      onTouchEnd={(e)   => { e.preventDefault(); stopReel();  }}
+      onTouchCancel={(e)=> { e.preventDefault(); stopReel();  }}
     >
       <div style={{
         background: '#0a1a2a', border: `2px solid ${rColor}`,
-        borderRadius: 16, padding: '24px 32px', minWidth: 320,
+        borderRadius: 18, padding: '22px 28px', minWidth: 340, maxWidth: 400,
         textAlign: 'center', userSelect: 'none',
-        boxShadow: `0 0 30px ${rColor}44`,
+        boxShadow: `0 0 36px ${rColor}44`,
       }}>
-        <div style={{ fontSize: 28, marginBottom: 4 }}>{rIcon}</div>
+        {/* 헤더 */}
+        <div style={{ fontSize: 26, marginBottom: 3 }}>{rIcon}</div>
         <div style={{ fontSize: 18, color: rColor, fontWeight: 800, marginBottom: 2 }}>
           {fishName} {size}cm
         </div>
-        <div style={{ fontSize: 12, color: '#aaa', marginBottom: 16 }}>
-          {rarity} — 녹색 구간에서 클릭/스페이스!
+        <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8 }}>
+          {rarity} — 꾹 눌러서 릴을 감으세요
         </div>
 
-        {/* Hit/miss indicators */}
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 14 }}>
-          {Array.from({ length: MAX_HITS }).map((_, i) => (
-            <div key={i} style={{
-              width: 16, height: 16, borderRadius: '50%',
-              background: i < hits ? '#44ff88' : 'rgba(255,255,255,0.15)',
-              border: `2px solid ${i < hits ? '#44ff88' : '#444'}`,
-            }} />
-          ))}
-          <div style={{ width: 8 }} />
-          {Array.from({ length: MAX_FAILS + 1 }).map((_, i) => (
-            <div key={i} style={{
-              width: 16, height: 16, borderRadius: '50%',
-              background: i < misses ? '#ff4444' : 'rgba(255,255,255,0.15)',
-              border: `2px solid ${i < misses ? '#ff4444' : '#444'}`,
-            }} />
-          ))}
-        </div>
-        <div style={{ fontSize: 10, color: '#888', marginBottom: 16 }}>
-          ● = 성공 &nbsp;|&nbsp; ○ = 실패 허용
-        </div>
-
-        {/* Bar */}
-        <div style={{ position: 'relative', width: '100%', height: 32, background: '#1a2a3a', borderRadius: 8, overflow: 'hidden' }}>
-          {/* Green zone */}
-          <div style={{
-            position: 'absolute', top: 0, bottom: 0,
-            left: `${zoneLeft * 100}%`, width: `${(zoneRight - zoneLeft) * 100}%`,
-            background: flash === 'hit' ? '#88ffaa88' : '#44ff8844',
-            borderLeft: '2px solid #44ff88', borderRight: '2px solid #44ff88',
-            transition: 'left 0.25s ease-out',
-          }} />
-          {/* Indicator */}
-          <div style={{
-            position: 'absolute', top: 2, bottom: 2, width: 6,
-            left: `calc(${indicator * 100}% - 3px)`,
-            background: flash === 'hit' ? '#44ff88' : flash === 'miss' ? '#ff4444' : '#fff',
-            borderRadius: 3,
-            boxShadow: `0 0 8px ${flash === 'hit' ? '#44ff88' : flash === 'miss' ? '#ff4444' : '#ffffff88'}`,
-          }} />
-        </div>
-
-        {done && (
-          <div style={{ marginTop: 14, fontSize: 16, fontWeight: 800, color: hits >= MAX_HITS ? '#44ff88' : '#ff4444' }}>
-            {hits >= MAX_HITS ? '🎉 포획 성공!' : '💔 도주...'}
+        {/* 그레이드 / 퍽 정보 */}
+        {(fishGrade > 0 || hasPerkBonus) && (
+          <div style={{ fontSize: 10, marginBottom: 12, lineHeight: 1.7 }}>
+            {fishGrade > 0 && (
+              <span style={{ color: '#88ccff' }}>
+                낚시 {fishGrade}성 — 릴 +{gradeReelBonus.toFixed(1)}m/s
+                {gradeDecayBonus > 0 ? ` · 회복 +${gradeDecayBonus.toFixed(0)}%/s` : ''}
+                {gradeStressReduce > 0 ? ` · 스트레스 -${Math.round(gradeStressReduce * 100)}%` : ''}
+                {gradeDriftReduce > 0 ? ' · 흘러가기 -25%' : ''}
+              </span>
+            )}
+            {hasPerkBonus && (
+              <span style={{ color: '#ff9977', display: 'block' }}>
+                대어격투 퍽
+                {perkDecayBonus   > 0 ? ` · 회복 +${perkDecayBonus}%/s`            : ''}
+                {perkStressReduce > 0 ? ` · 스트레스 -${Math.round(perkStressReduce * 100)}%` : ''}
+                {perkMaxStress    > 0 ? ` · 내구도 +${perkMaxStress}`               : ''}
+                {perkDistReduce   > 0 ? ` · 거리 -${Math.round(perkDistReduce * 100)}%`        : ''}
+              </span>
+            )}
           </div>
         )}
 
-        <div style={{ marginTop: 12, fontSize: 11, color: '#666' }}>
-          화면 클릭 또는 스페이스/엔터
+        {/* 거리 바 */}
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#aaa', marginBottom: 5 }}>
+            <span>🎣</span>
+            <span style={{
+              color: isFighting ? '#ff6644' : '#cccccc',
+              fontWeight: isFighting ? 800 : 400,
+              fontSize: isFighting ? 13 : 11,
+            }}>
+              {isFighting ? '⚡ 저항 중!' : `${distance}m`}
+            </span>
+            <span style={{ color: rColor }}>{rIcon}</span>
+          </div>
+
+          {/* 줄 + 물고기 */}
+          <div style={{ position: 'relative', height: 28, background: '#111e2e', borderRadius: 8, overflow: 'hidden' }}>
+            {/* 감긴 줄 표시 */}
+            <div style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0,
+              width: `${(1 - distPct) * 100}%`,
+              background: isReeling
+                ? `linear-gradient(90deg, ${rColor}55, ${rColor}22)`
+                : 'rgba(255,255,255,0.05)',
+              transition: 'background 0.2s',
+            }} />
+            {/* 낚싯줄 */}
+            <div style={{
+              position: 'absolute', top: '50%', left: 0,
+              width: `${(1 - distPct) * 100}%`,
+              height: 2,
+              background: isReeling ? rColor : '#445566',
+              transform: 'translateY(-50%)',
+              transition: 'background 0.15s',
+            }} />
+            {/* 물고기 아이콘 */}
+            <div style={{
+              position: 'absolute', top: '50%',
+              left: `${(1 - distPct) * 100}%`,
+              transform: 'translateY(-50%) translateX(-2px)',
+              fontSize: 18,
+              filter: isFighting ? 'hue-rotate(30deg) brightness(1.3)' : 'none',
+              transition: 'left 0.08s linear, filter 0.15s',
+            }}>
+              🐟
+            </div>
+          </div>
+
+          <div style={{ fontSize: 10, color: '#445566', marginTop: 3, textAlign: 'right' }}>
+            {distance}m / {INIT_DIST}m
+          </div>
+        </div>
+
+        {/* 스트레스 게이지 */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+            <span style={{ color: '#aaa' }}>릴 스트레스</span>
+            <span style={{ color: stressColor, fontWeight: 700 }}>
+              {Math.round(stressPct)}% / {MAX_STRESS > 100 ? `${MAX_STRESS}` : '100'}
+            </span>
+          </div>
+          <div style={{ position: 'relative', height: 14, background: '#111e2e', borderRadius: 7, overflow: 'hidden' }}>
+            {/* 경고 구간 표시 (75%) */}
+            <div style={{
+              position: 'absolute', left: '75%', top: 0, bottom: 0, width: 1,
+              background: 'rgba(255,80,80,0.3)',
+            }} />
+            <div style={{
+              position: 'absolute', left: 0, top: 0, bottom: 0,
+              width: `${stressPct}%`,
+              background: stressColor,
+              borderRadius: 7,
+              transition: 'width 0.05s linear, background 0.2s',
+              boxShadow: stressPct > 75 ? `0 0 8px ${stressColor}` : 'none',
+            }} />
+          </div>
+          {perkMaxStress > 0 && (
+            <div style={{ fontSize: 9, color: '#ff9977', marginTop: 2, textAlign: 'right' }}>
+              강인한 줄 — 내구도 +{perkMaxStress}
+            </div>
+          )}
+        </div>
+
+        {/* 릴 버튼 */}
+        {phase === 'playing' && (
+          <div
+            style={{
+              padding: '13px 0', borderRadius: 10,
+              background: isReeling ? rColor : 'rgba(255,255,255,0.07)',
+              color: isReeling ? '#000' : '#777',
+              fontWeight: 800, fontSize: 15,
+              border: `2px solid ${isReeling ? rColor : 'rgba(255,255,255,0.12)'}`,
+              cursor: 'pointer',
+              transition: 'all 0.1s',
+              boxShadow: isReeling ? `0 0 16px ${rColor}88` : 'none',
+            }}
+            onMouseDown={(e) => { e.stopPropagation(); startReel(); }}
+            onMouseUp={(e)   => { e.stopPropagation(); stopReel();  }}
+            onTouchStart={(e)=> { e.stopPropagation(); e.preventDefault(); startReel(); }}
+            onTouchEnd={(e)  => { e.stopPropagation(); e.preventDefault(); stopReel();  }}
+          >
+            {isReeling ? '🎣 릴 감는 중...' : '꾹 눌러서 릴 감기'}
+          </div>
+        )}
+
+        {/* 결과 */}
+        {phase !== 'playing' && (
+          <div style={{ padding: '13px 0', fontSize: 16, fontWeight: 800, color: phase === 'success' ? '#44ff88' : '#ff4444' }}>
+            {phase === 'success' ? '🎉 포획 성공!' : '💔 줄이 끊어졌습니다!'}
+          </div>
+        )}
+
+        <div style={{ marginTop: 10, fontSize: 10, color: '#444' }}>
+          스페이스/엔터 또는 화면을 꾹 누르세요
         </div>
       </div>
     </div>

@@ -259,6 +259,8 @@ export const DEFAULT_STATE = {
   // Phase 16-1: 낚시 마스터리 특성 트리
   masteryPerks: {},
   masteryPerkPoints: 0,
+  miningPerks: {},
+  miningPerkPoints: 0,
   // Phase 16-2: 장인 작업대
   artisanLog: {},
   // Phase 16-3: 동적 날씨 이벤트
@@ -457,6 +459,8 @@ export function loadSave(nickname) {
       bossContribHistory: s.bossContribHistory ?? [],
       masteryPerks: s.masteryPerks ?? {},
       masteryPerkPoints: s.masteryPerkPoints ?? 0,
+      miningPerks: s.miningPerks ?? {},
+      miningPerkPoints: s.miningPerkPoints ?? 0,
       artisanLog: s.artisanLog ?? {},
       weatherEventHistory: s.weatherEventHistory ?? [],
       friends: s.friends ?? [],

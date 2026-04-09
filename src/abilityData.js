@@ -58,20 +58,69 @@ export const MASTERY_PERKS = {
   deep_2:  { path: '심해개척', label: '암류 감지',    cost: 1, bonus: { deepRarityBonus: 0.08 }, req: 'deep_1' },
   deep_3:  { path: '심해개척', label: '신화의 인도',  cost: 2, bonus: { deepRarityBonus: 0.12 }, req: 'deep_2' },
   deep_4:  { path: '심해개척', label: '심해의 군주',  cost: 3, bonus: { deepRarityBonus: 0.18 }, req: 'deep_3' },
+  // 대어격투 경로 (릴 미니게임 특화)
+  resist_1: { path: '대어격투', label: '낚시의 호흡', cost: 1, bonus: { resistDecayBonus: 5 },       req: null },
+  resist_2: { path: '대어격투', label: '집중력',       cost: 1, bonus: { resistStressReduce: 0.10 }, req: 'resist_1' },
+  resist_3: { path: '대어격투', label: '강인한 줄',    cost: 2, bonus: { resistMaxStress: 20 },      req: 'resist_2' },
+  resist_4: { path: '대어격투', label: '전설사냥꾼',   cost: 3, bonus: { resistDistReduce: 0.25 },   req: 'resist_3' },
 };
 
 /** Compute cumulative mastery bonus from all unlocked perks */
 export function getMasteryBonus(masteryPerks = {}) {
   let fishTimeMult = 1, fishSellBonus = 0, deepRarityBonus = 0;
+  let resistDecayBonus = 0, resistStressReduce = 0, resistMaxStress = 0, resistDistReduce = 0;
   for (const [id, unlocked] of Object.entries(masteryPerks)) {
     if (!unlocked) continue;
     const p = MASTERY_PERKS[id];
     if (!p) continue;
-    if (p.bonus.fishTimeMult  != null) fishTimeMult  *= p.bonus.fishTimeMult;
-    if (p.bonus.fishSellBonus != null) fishSellBonus += p.bonus.fishSellBonus;
-    if (p.bonus.deepRarityBonus != null) deepRarityBonus += p.bonus.deepRarityBonus;
+    if (p.bonus.fishTimeMult       != null) fishTimeMult       *= p.bonus.fishTimeMult;
+    if (p.bonus.fishSellBonus      != null) fishSellBonus      += p.bonus.fishSellBonus;
+    if (p.bonus.deepRarityBonus    != null) deepRarityBonus    += p.bonus.deepRarityBonus;
+    if (p.bonus.resistDecayBonus   != null) resistDecayBonus   += p.bonus.resistDecayBonus;
+    if (p.bonus.resistStressReduce != null) resistStressReduce += p.bonus.resistStressReduce;
+    if (p.bonus.resistMaxStress    != null) resistMaxStress    += p.bonus.resistMaxStress;
+    if (p.bonus.resistDistReduce   != null) resistDistReduce   += p.bonus.resistDistReduce;
   }
-  return { fishTimeMult, fishSellBonus, deepRarityBonus };
+  return { fishTimeMult, fishSellBonus, deepRarityBonus, resistDecayBonus, resistStressReduce, resistMaxStress, resistDistReduce };
+}
+
+// ── 채굴 미니게임 퍽 트리 ──────────────────────────────────────────────────────
+// 채굴 어빌리티 그레이드업 시 포인트 1 획득. 5개 경로.
+export const MINING_PERKS = {
+  // 범위 경로 (도달 가능 타일 반경 확장)
+  mrange_1: { path: '범위', label: '넓은 손길',   cost: 1, bonus: { mineRange: 1 },           req: null },
+  mrange_2: { path: '범위', label: '장거리 채굴',  cost: 2, bonus: { mineRange: 1 },           req: 'mrange_1' },
+  // 속도 경로 (채굴 소요 시간 단축)
+  mspeed_1: { path: '속도', label: '날렵한 손',    cost: 1, bonus: { mineSpeedMult: 0.78 },    req: null },
+  mspeed_2: { path: '속도', label: '숙련된 타격',  cost: 2, bonus: { mineSpeedMult: 0.68 },    req: 'mspeed_1' },
+  // 시간 경로 (미니게임 지속시간 증가)
+  mtime_1:  { path: '시간', label: '집중력',       cost: 1, bonus: { mineTimerBonus: 6 },      req: null },
+  mtime_2:  { path: '시간', label: '광맥 분석',    cost: 2, bonus: { mineTimerBonus: 9 },      req: 'mtime_1' },
+  // 수확 경로 (채굴당 보너스 광석 증가)
+  myield_1: { path: '수확', label: '정밀 채굴',    cost: 1, bonus: { mineYieldBonus: 1 },      req: null },
+  myield_2: { path: '수확', label: '풍부한 광맥',  cost: 2, bonus: { mineDoubleChance: 0.30 }, req: 'myield_1' },
+  // 특수 경로
+  mspec_1:  { path: '특수', label: '광맥 감지',    cost: 2, bonus: { mineExtraOres: 2 },       req: null },
+  mspec_2:  { path: '특수', label: '연쇄 채굴',    cost: 3, bonus: { mineChainBonus: 0.50 },   req: 'mspec_1' },
+};
+
+/** Compute cumulative mining perk bonus */
+export function getMiningBonus(miningPerks = {}) {
+  let mineRange = 1, mineSpeedMult = 1, mineTimerBonus = 0;
+  let mineYieldBonus = 0, mineDoubleChance = 0, mineExtraOres = 0, mineChainBonus = 0;
+  for (const [id, unlocked] of Object.entries(miningPerks)) {
+    if (!unlocked) continue;
+    const p = MINING_PERKS[id];
+    if (!p) continue;
+    if (p.bonus.mineRange        != null) mineRange        += p.bonus.mineRange;
+    if (p.bonus.mineSpeedMult    != null) mineSpeedMult    *= p.bonus.mineSpeedMult;
+    if (p.bonus.mineTimerBonus   != null) mineTimerBonus   += p.bonus.mineTimerBonus;
+    if (p.bonus.mineYieldBonus   != null) mineYieldBonus   += p.bonus.mineYieldBonus;
+    if (p.bonus.mineDoubleChance != null) mineDoubleChance += p.bonus.mineDoubleChance;
+    if (p.bonus.mineExtraOres    != null) mineExtraOres    += p.bonus.mineExtraOres;
+    if (p.bonus.mineChainBonus   != null) mineChainBonus   += p.bonus.mineChainBonus;
+  }
+  return { mineRange, mineSpeedMult, mineTimerBonus, mineYieldBonus, mineDoubleChance, mineExtraOres, mineChainBonus };
 }
 
 // ── EXP amounts per event ────────────────────────────────────────────────────

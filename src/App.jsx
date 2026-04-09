@@ -30,7 +30,7 @@ import { FISH, RODS, ORES, BOOTS, BAIT, COOKWARE, HERBS, MARINE_GEAR, PICKAXES, 
   ARTISAN_RECIPES, EQUIPMENT_SETS, getActiveSetBonus } from './gameData';
 import { DEFAULT_ABILITIES, ABILITY_DEFS, gainAbility, doGradeUp, gradeRareBonus,
   FISH_ABILITY_GAIN, ORE_ABILITY_GAIN, COOK_ABILITY_GAIN,
-  SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN, getMasteryBonus } from './abilityData';
+  SELL_ABILITY_PER_100G, STAMINA_GAIN, ENHANCE_ABILITY_GAIN, getMasteryBonus, getMiningBonus } from './abilityData';
 import { getTitle, getActiveTitleBonus, TITLES } from './titleData';
 import { getWeather, msUntilNextWeather } from './weatherData';
 import { getTimePeriod, msUntilNextTimePeriod } from './timeData';
@@ -480,6 +480,7 @@ export default function App() {
   const tournamentScoreRef = useRef(0); // local fish count this week
   const seasonScoreRef = useRef(0); // local fish count this month (season league)
   const [resistanceGame, setResistanceGame] = useState(null); // { active, name, fd, size, finalPrice, rodKey, seaMsg, id }
+  const resistanceGameActiveRef = useRef(false);
   const [miningMinigame, setMiningMinigame] = useState(null); // { oreName } — precision mining
 
   // Server boss
@@ -607,7 +608,7 @@ export default function App() {
     if (!nickname) return;
     let unsub;
     subscribeTownProgress((id, data) => {
-      setTownLevels(prev => ({ ...prev, [id]: data.level ?? 0 }));
+      setTownLevels(prev => ({ ...prev, [id]: { level: data.level ?? 0, total: data.totalContribution ?? 0 } }));
     }).then(u => { unsub = u; });
     return () => { if (unsub) unsub(); };
   }, [nickname]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1346,7 +1347,10 @@ export default function App() {
 
     // 대어 저항 미니게임: 전설/신화 물고기는 저항 미니게임 트리거
     if (fd.rarity === '전설' || fd.rarity === '신화') {
-      setResistanceGame({ active: true, name, fd, size, finalPrice, rodKey, seaMsg, id: Date.now() + Math.random() });
+      if (resistanceGameActiveRef.current) return; // 미니게임 진행 중이면 새 물고기로 덮어쓰지 않음
+      resistanceGameActiveRef.current = true;
+      const resistMastery = getMasteryBonus(s?.masteryPerks ?? {});
+      setResistanceGame({ active: true, name, fd, size, finalPrice, rodKey, seaMsg, fishGrade, resistMastery, id: Date.now() + Math.random() });
       addMsg(`${fd.rarity === '신화' ? '🌟' : '⭐'} ${name}이(가) 저항하고 있습니다! 타이밍을 맞춰 낚아채세요!`, 'catch');
       return;
     }
@@ -1592,6 +1596,7 @@ export default function App() {
   const onResistanceSuccess = useCallback(() => {
     const rg = resistanceGame;
     if (!rg) return;
+    resistanceGameActiveRef.current = false;
     setResistanceGame(null);
     const { name, fd, size, finalPrice, rodKey, seaMsg, id } = rg;
     const s = stateRef.current;
@@ -1667,6 +1672,7 @@ export default function App() {
   const onResistanceFail = useCallback(() => {
     const rg = resistanceGame;
     if (!rg) return;
+    resistanceGameActiveRef.current = false;
     setResistanceGame(null);
     addMsg(`💔 ${rg.name}이(가) 낚싯줄을 끊고 도망쳤습니다!`, 'error');
     if (gameRef.current?.player)
@@ -1849,7 +1855,8 @@ export default function App() {
     gainNpcAffinity('채굴사', 0.8);
     // 광석 정밀 채굴 미니게임: 수정/금광석에서 20% 확률 트리거
     if ((oreName === '수정' || oreName === '금광석') && Math.random() < 0.20 && !miningMinigame) {
-      setMiningMinigame({ oreName });
+      const miningBonus = getMiningBonus(stateRef.current?.miningPerks ?? {});
+      setMiningMinigame({ oreName, miningBonus });
     }
     // 폭풍 강화 이벤트: 폭풍 시 8% 확률로 폭풍석 획득
     if (weatherRef.current?.id === 'storm' && Math.random() < 0.08) {
