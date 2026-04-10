@@ -30,21 +30,21 @@ export default function ResistanceMinigame({ fishName, rarity, size, fishGrade =
 
   // ── 게임 파라미터 ────────────────────────────────────────────
   const MAX_STRESS    = 100 + perkMaxStress;
-  const REEL_RATE     = (isMythic ? 9 : 12) + gradeReelBonus;       // m/s
-  const DRIFT_RATE    = (isMythic ? 5 : 3.5) * (1 - gradeDriftReduce); // m/s (비릴 시 멀어지는 속도)
-  const STRESS_RATE   = (isMythic ? 22 : 17) * (1 - gradeStressReduce) * (1 - perkStressReduce); // %/s
-  const DECAY_RATE    = (isMythic ? 18 : 22) + gradeDecayBonus + perkDecayBonus; // %/s
-  const FIGHT_INTERVAL_MIN = isMythic ? 2.5 : 3.5; // 저항 최소 간격 (s)
-  const FIGHT_INTERVAL_RNG = isMythic ? 2.5 : 3.0; // 랜덤 추가
-  const FIGHT_DURATION_MIN = isMythic ? 1.2 : 0.8;
-  const FIGHT_DURATION_RNG = isMythic ? 1.5 : 1.2;
-  const FIGHT_DRIFT_MULT   = isMythic ? 5   : 4;   // 저항 중 drift 배율
-  const FIGHT_STRESS_EXTRA = isMythic ? 18  : 12;  // 저항 중 스트레스 추가 %/s
+  const REEL_RATE     = (isMythic ? 11 : 13) + gradeReelBonus;       // m/s
+  const DRIFT_RATE    = (isMythic ? 3.5 : 2.5) * (1 - gradeDriftReduce); // m/s (비릴 시 멀어지는 속도)
+  const STRESS_RATE   = (isMythic ? 16 : 13) * (1 - gradeStressReduce) * (1 - perkStressReduce); // %/s
+  const DECAY_RATE    = (isMythic ? 22 : 25) + gradeDecayBonus + perkDecayBonus; // %/s
+  const FIGHT_INTERVAL_MIN = isMythic ? 3.5 : 4.5; // 저항 최소 간격 (s)
+  const FIGHT_INTERVAL_RNG = isMythic ? 3.0 : 3.5; // 랜덤 추가
+  const FIGHT_DURATION_MIN = isMythic ? 0.9 : 0.6;
+  const FIGHT_DURATION_RNG = isMythic ? 1.1 : 0.9;
+  const FIGHT_DRIFT_MULT   = isMythic ? 3.5 : 3;   // 저항 중 drift 배율
+  const FIGHT_STRESS_EXTRA = isMythic ? 13  : 9;   // 저항 중 스트레스 추가 %/s
 
   // ── 초기 거리 (1회만 계산) ──────────────────────────────────
   const initDistRef = useRef(null);
   if (initDistRef.current === null) {
-    const base = isMythic ? (150 + Math.random() * 150) : (80 + Math.random() * 120);
+    const base = isMythic ? (120 + Math.random() * 100) : (70 + Math.random() * 90);
     initDistRef.current = Math.round(base * (1 - perkDistReduce));
   }
   const INIT_DIST = initDistRef.current;
