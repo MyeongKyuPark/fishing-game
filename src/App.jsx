@@ -1769,13 +1769,15 @@ export default function App() {
     damageServerBoss(1, nicknameRef.current);
   }, [iceHoleGame, addMsg, grantAbility, advanceQuest, advanceZoneChallenge, checkAndGrantAchievements]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Zone mini-game: triggered when player enters directional zone
+  // Zone mini-game: triggered by NPC interaction in each directional zone
   const handleZoneMiniGameEnter = useCallback((zone) => {
     setZoneMiniGame({ zone });
-    // Freeze player movement while mini-game is active
-    if (gameRef.current?.player) {
-      gameRef.current.player.vx = 0;
-      gameRef.current.player.vy = 0;
+    if (gameRef.current) {
+      gameRef.current.zoneMiniGameActive = true;
+      if (gameRef.current.player) {
+        gameRef.current.player.vx = 0;
+        gameRef.current.player.vy = 0;
+      }
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -3904,10 +3906,16 @@ export default function App() {
   }, [gainNpcAffinity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleZoneNpcInteract = useCallback((npcId) => {
+    const MINI_GAME_NPC = { mine_guide: 'mine', fishing_guide: 'fishing', farm_guide: 'farm' };
+    if (MINI_GAME_NPC[npcId]) {
+      playNpcInteract();
+      handleZoneMiniGameEnter(MINI_GAME_NPC[npcId]);
+      return;
+    }
     playNpcInteract();
     gainNpcAffinity(npcId, 0.3);
     setNpcDialog(npcId);
-  }, [gainNpcAffinity]);
+  }, [gainNpcAffinity, handleZoneMiniGameEnter]);
 
   // ── Season/weather transition fade (must be before early returns per hook rules) ──
   const _currentSeasonForFade = getCurrentSeason();
@@ -4087,7 +4095,6 @@ nickname={nickname}
           onNearZoneNpcChange={setNearZoneNpc}
           onNpcQuickMenu={(npcId, x, y) => setNpcQuickMenu({ npcId, x, y, tab: '퀘스트' })}
           marineGear={gs.marineGear}
-          onZoneMiniGameEnter={handleZoneMiniGameEnter}
         />
         {/* Phase 13: Map transition wipe overlay */}
         {mapTransitioning && (

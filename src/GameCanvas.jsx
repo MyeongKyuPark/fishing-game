@@ -36,7 +36,7 @@ export default function GameCanvas({
   hairColor, bodyColor, skinColor, gender,
   spotDecos, onZoneTransition, onZoneBlocked, onZoneNpcInteract,
   onNpcQuickMenu, onNearZoneNpcChange,
-  marineGear, onZoneMiniGameEnter,
+  marineGear,
 }) {
   const canvasRef = useRef(null);
   const cbRef = useRef({ onFishCaught, onOreMined, onHerbGathered, onActivityChange });
@@ -54,8 +54,6 @@ export default function GameCanvas({
   const onZoneNpcInteractRef = useRef(onZoneNpcInteract);
   const onNpcQuickMenuRef = useRef(onNpcQuickMenu);
   const onNearZoneNpcChangeRef = useRef(onNearZoneNpcChange);
-  const onZoneMiniGameEnterRef = useRef(onZoneMiniGameEnter);
-  const prevMgZoneRef = useRef(null);
   const nearZoneNpcRef = useRef(null);
   const nearDoorRef = useRef(null);
   const nearActionZoneRef = useRef(null);
@@ -79,7 +77,6 @@ export default function GameCanvas({
   useEffect(() => { onZoneNpcInteractRef.current = onZoneNpcInteract; });
   useEffect(() => { onNpcQuickMenuRef.current = onNpcQuickMenu; });
   useEffect(() => { onNearZoneNpcChangeRef.current = onNearZoneNpcChange; });
-  useEffect(() => { onZoneMiniGameEnterRef.current = onZoneMiniGameEnter; });
   useEffect(() => { hairColorRef.current = hairColor ?? '#5a3010'; }, [hairColor]);
   useEffect(() => { bodyColorRef.current = bodyColor ?? '#5a7aaa'; }, [bodyColor]);
   useEffect(() => { skinColorRef.current = skinColor ?? '#f6cc88'; }, [skinColor]);
@@ -391,28 +388,6 @@ export default function GameCanvas({
               player.activityStart = ts;
               player.activityProgress = 0;
             }
-          }
-        }
-      }
-
-      // ── Zone mini-game entry detection (runs BEFORE door proximity) ──
-      // mine: tx>=54 fires before mine DOOR_TRIGGER range (~tx=54.5), blocking auto-enter
-      {
-        const currentZone = gameRef.current?.worldZone ?? '마을';
-        if (currentZone === '마을' && !gameRef.current?.zoneMiniGameActive) {
-          const ptx = Math.floor(player.x / TILE_SIZE);
-          const pty = Math.floor(player.y / TILE_SIZE);
-          let mgZone = null;
-          if (ptx >= 54 && pty >= 18 && pty <= 28) mgZone = 'mine';
-          else if (pty >= 33) mgZone = 'fishing';
-          else if (ptx <= 11 && pty <= 30) mgZone = 'farm';
-
-          if (mgZone && mgZone !== prevMgZoneRef.current) {
-            prevMgZoneRef.current = mgZone;
-            gameRef.current.zoneMiniGameActive = true;
-            onZoneMiniGameEnterRef.current?.(mgZone);
-          } else if (!mgZone) {
-            prevMgZoneRef.current = null;
           }
         }
       }

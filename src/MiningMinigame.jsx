@@ -83,6 +83,14 @@ export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) 
 
   useEffect(() => { oresRef.current = ores; }, [ores]);
 
+  // 광석이 모두 채굴되면 즉시 완료
+  useEffect(() => {
+    if (phase === 'playing' && ores.length === 0) {
+      setPhase('done');
+      setTimeout(() => onFinish(yieldRef.current), 800);
+    }
+  }, [ores, phase, onFinish]);
+
   // ── 게임 루프 ──────────────────────────────────────────────────
   useEffect(() => {
     if (phase !== 'playing') return;
