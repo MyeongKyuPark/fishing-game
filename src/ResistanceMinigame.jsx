@@ -291,31 +291,40 @@ export default function ResistanceMinigame({ fishName, rarity, size, fishGrade =
           </div>
         </div>
 
-        {/* 스트레스 게이지 */}
+        {/* 스트레스 세그먼트 바 */}
         <div style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 11, marginBottom: 6 }}>
             <span style={{ color: '#aaa' }}>릴 스트레스</span>
-            <span style={{ color: stressColor, fontWeight: 700 }}>
-              {Math.round(stressPct)}% / {MAX_STRESS > 100 ? `${MAX_STRESS}` : '100'}
+            <span style={{ color: stressColor, fontWeight: 800, fontSize: stressPct > 80 ? 13 : 11 }}>
+              {Math.round(stressPct)}%{MAX_STRESS > 100 ? ` / ${MAX_STRESS}` : ''}
             </span>
           </div>
-          <div style={{ position: 'relative', height: 14, background: '#111e2e', borderRadius: 7, overflow: 'hidden' }}>
-            {/* 경고 구간 표시 (75%) */}
-            <div style={{
-              position: 'absolute', left: '75%', top: 0, bottom: 0, width: 1,
-              background: 'rgba(255,80,80,0.3)',
-            }} />
-            <div style={{
-              position: 'absolute', left: 0, top: 0, bottom: 0,
-              width: `${stressPct}%`,
-              background: stressColor,
-              borderRadius: 7,
-              transition: 'width 0.05s linear, background 0.2s',
-              boxShadow: stressPct > 75 ? `0 0 8px ${stressColor}` : 'none',
-            }} />
+          <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end' }}>
+            {Array.from({ length: 10 }, (_, i) => {
+              const filled   = stressPct > i * 10;
+              const segColor = i >= 8 ? '#ff2020'
+                             : i >= 6 ? '#ff7700'
+                             : i >= 4 ? '#ffcc00'
+                             : '#44cc88';
+              const isHot    = filled && stressPct > 80;
+              const pulse    = isHot
+                ? 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / (105 - i * 4) + i * 1.2))
+                : 1;
+              const segH     = 12 + i * 1.5; // 높이를 오른쪽으로 갈수록 높게
+              return (
+                <div key={i} style={{
+                  flex: 1, height: segH, borderRadius: 3,
+                  background: filled ? segColor : '#0d1a28',
+                  border: `1px solid ${filled ? segColor + '99' : '#182434'}`,
+                  opacity: filled ? pulse : 0.35,
+                  boxShadow: isHot ? `0 0 ${4 + i}px ${segColor}bb` : 'none',
+                  alignSelf: 'flex-end',
+                }} />
+              );
+            })}
           </div>
           {perkMaxStress > 0 && (
-            <div style={{ fontSize: 9, color: '#ff9977', marginTop: 2, textAlign: 'right' }}>
+            <div style={{ fontSize: 9, color: '#ff9977', marginTop: 3, textAlign: 'right' }}>
               강인한 줄 — 내구도 +{perkMaxStress}
             </div>
           )}
