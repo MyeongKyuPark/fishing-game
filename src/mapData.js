@@ -814,7 +814,7 @@ export function getActiveZoneNpcs() {
 export const ZONE_TRAVEL_NPCS = {
   '마을': [
     { id: 'mine_guide',    name: '광산 안내인',  icon: '⛏️', color: '#b0b8c8', tx: 55, ty: 22 },
-    { id: 'fishing_guide', name: '낚시터 안내인', icon: '🎣', color: '#44aaff', tx: 30, ty: 35 },
+    { id: 'fishing_guide', name: '낚시터 안내인', icon: '🎣', color: '#44aaff', tx: 30, ty: 28 },
     { id: 'farm_guide',    name: '농장 안내인',   icon: '🌱', color: '#88cc44', tx:  8, ty: 20 },
   ],
   '서쪽초원': { id: '행상인',    name: '행상인',      icon: '🧳', color: '#ddaa44', tx: 20, ty: 12 },
