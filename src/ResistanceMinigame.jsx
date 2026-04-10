@@ -57,9 +57,10 @@ export default function ResistanceMinigame({ fishName, rarity, size, fishGrade =
   const [phase,      setPhase]      = useState('playing'); // 'playing' | 'success' | 'fail'
 
   // ── 내부 ref (RAF 루프용) ─────────────────────────────────────
-  const stRef   = useRef({ distance: INIT_DIST, stress: 0, reeling: false, fighting: false, done: false });
-  const rafRef  = useRef(null);
-  const lastRef = useRef(null);
+  const stRef        = useRef({ distance: INIT_DIST, stress: 0, reeling: false, fighting: false, done: false });
+  const rafRef       = useRef(null);
+  const lastRef      = useRef(null);
+  const lastVibrateRef = useRef(0);
   const fightRef = useRef({
     nextFightAt: FIGHT_INTERVAL_MIN + Math.random() * FIGHT_INTERVAL_RNG,
     fightEndAt:  0,
@@ -117,10 +118,21 @@ export default function ResistanceMinigame({ fishName, rarity, size, fishGrade =
       setDistance(Math.round(dist));
       setStress(str);
 
+      // 스트레스 80% 이상 — 진동 (모바일) / 화면 흔들림은 렌더에서 처리
+      if (str / MAX_STRESS >= 0.8) {
+        const nowMs = performance.now();
+        if (nowMs - lastVibrateRef.current > 120) {
+          const intensity = Math.round(6 + ((str / MAX_STRESS) - 0.8) * 40);
+          navigator.vibrate?.(intensity);
+          lastVibrateRef.current = nowMs;
+        }
+      }
+
       // 승패 판정
       if (dist <= 0) {
         st.done = true;
         cancelAnimationFrame(rafRef.current);
+        navigator.vibrate?.(0);
         setPhase('success');
         setTimeout(() => onSuccess(), 600);
         return;
@@ -128,6 +140,7 @@ export default function ResistanceMinigame({ fishName, rarity, size, fishGrade =
       if (str >= MAX_STRESS) {
         st.done = true;
         cancelAnimationFrame(rafRef.current);
+        navigator.vibrate?.(0);
         setPhase('fail');
         setTimeout(() => onFail(), 600);
         return;
@@ -165,6 +178,16 @@ export default function ResistanceMinigame({ fishName, rarity, size, fishGrade =
   const distPct     = Math.min(distance / INIT_DIST, 1); // 1 = 멀다, 0 = 잡았다
   const stressColor = stressPct > 75 ? '#ff4444' : stressPct > 45 ? '#ffaa22' : '#44cc88';
 
+  // 데스크탑 화면 흔들림 (터치 미지원 기기만)
+  const isTouchDevice = navigator.maxTouchPoints > 0;
+  const shakeAmp = (!isTouchDevice && stressPct > 80 && phase === 'playing')
+    ? ((stressPct - 80) / 20) * 5
+    : 0;
+  const t = performance.now();
+  const shakeTransform = shakeAmp > 0
+    ? `translate(${(Math.sin(t / 40) * shakeAmp).toFixed(1)}px, ${(Math.cos(t / 29) * shakeAmp * 0.6).toFixed(1)}px)`
+    : 'none';
+
   const hasPerkBonus = perkDecayBonus > 0 || perkStressReduce > 0 || perkMaxStress > 0 || perkDistReduce > 0;
 
   return (
@@ -182,6 +205,7 @@ export default function ResistanceMinigame({ fishName, rarity, size, fishGrade =
         borderRadius: 18, padding: '22px 28px', minWidth: 340, maxWidth: 400,
         textAlign: 'center', userSelect: 'none',
         boxShadow: `0 0 36px ${rColor}44`,
+        transform: shakeTransform,
       }}>
         {/* 헤더 */}
         <div style={{ fontSize: 26, marginBottom: 3 }}>{rIcon}</div>

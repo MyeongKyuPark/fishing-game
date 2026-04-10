@@ -1781,50 +1781,57 @@ export default function App() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleZoneMiniGameClose = useCallback((completed, resultData = {}) => {
+  // Zone mini-game: individual game completion (rewards given, player stays in zone)
+  const handleZoneMiniGameComplete = useCallback((resultData) => {
     const zone = zoneMiniGame?.zone;
+    if (!zone || !resultData.won) return;
+    setGs(prev => {
+      const newLevel = (prev.zoneMiniGameLevels?.[zone] ?? 0) + 1;
+      const newPerkPoints = (prev.zoneMiniGamePerkPoints?.[zone] ?? 0) + 1;
+      const updates = {
+        ...prev,
+        zoneMiniGameLevels: { ...prev.zoneMiniGameLevels, [zone]: newLevel },
+        zoneMiniGamePerkPoints: { ...prev.zoneMiniGamePerkPoints, [zone]: newPerkPoints },
+      };
+      if (zone === 'mine' && resultData.count > 0 && resultData.oreName) {
+        updates.oreInventory = { ...prev.oreInventory, [resultData.oreName]: (prev.oreInventory?.[resultData.oreName] ?? 0) + resultData.count };
+        updates.oreLog = { ...prev.oreLog, [resultData.oreName]: (prev.oreLog?.[resultData.oreName] ?? 0) + resultData.count };
+      }
+      if (zone === 'fishing') {
+        updates.money = (prev.money ?? 0) + 50 + newLevel * 20;
+      }
+      return updates;
+    });
+    if (zone === 'fishing') {
+      const newLevel = (stateRef.current?.zoneMiniGameLevels?.[zone] ?? 0) + 1;
+      addMsg(`🎣 낚시 미니게임 완료! +${50 + newLevel * 20}G`);
+    } else if (zone === 'mine' && resultData.count > 0) {
+      addMsg(`⛏️ ${resultData.oreName} ${resultData.count}개 채굴!`);
+    }
+  }, [zoneMiniGame, addMsg]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Zone mini-game: buy perk
+  const handleZoneMiniGameBuyPerk = useCallback((perkId, cost) => {
+    const zone = zoneMiniGame?.zone;
+    if (!zone) return;
+    setGs(prev => ({
+      ...prev,
+      zoneMiniGamePerks: { ...prev.zoneMiniGamePerks, [zone]: [...(prev.zoneMiniGamePerks?.[zone] ?? []), perkId] },
+      zoneMiniGamePerkPoints: { ...prev.zoneMiniGamePerkPoints, [zone]: (prev.zoneMiniGamePerkPoints?.[zone] ?? 0) - cost },
+    }));
+  }, [zoneMiniGame]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Zone mini-game: explicit exit — teleport back to hub center
+  const handleZoneMiniGameClose = useCallback(() => {
     setZoneMiniGame(null);
     if (gameRef.current) gameRef.current.zoneMiniGameActive = false;
-    // Teleport player back to hub center
     if (gameRef.current?.player) {
       gameRef.current.player.x = PLAYER_START_X;
       gameRef.current.player.y = PLAYER_START_Y;
       gameRef.current.player.vx = 0;
       gameRef.current.player.vy = 0;
     }
-    if (completed && zone) {
-      setGs(prev => {
-        const newLevel = (prev.zoneMiniGameLevels?.[zone] ?? 0) + 1;
-        const updates = {
-          ...prev,
-          zoneMiniGameLevels: { ...prev.zoneMiniGameLevels, [zone]: newLevel },
-        };
-        // Mine: add ore to inventory
-        if (zone === 'mine' && resultData.count > 0 && resultData.oreName) {
-          updates.oreInventory = {
-            ...prev.oreInventory,
-            [resultData.oreName]: (prev.oreInventory?.[resultData.oreName] ?? 0) + resultData.count,
-          };
-          updates.oreLog = {
-            ...prev.oreLog,
-            [resultData.oreName]: (prev.oreLog?.[resultData.oreName] ?? 0) + resultData.count,
-          };
-        }
-        // Fishing: add gold reward scaled by level
-        if (zone === 'fishing') {
-          const goldReward = 50 + newLevel * 20;
-          updates.money = (prev.money ?? 0) + goldReward;
-        }
-        return updates;
-      });
-      if (zone === 'fishing') {
-        const newLevel = (stateRef.current?.zoneMiniGameLevels?.[zone] ?? 0) + 1;
-        addMsg(`🎣 낚시 미니게임 완료! +${50 + newLevel * 20}G`);
-      } else if (zone === 'mine' && resultData.count > 0) {
-        addMsg(`⛏️ ${resultData.oreName} ${resultData.count}개 채굴!`);
-      }
-    }
-  }, [zoneMiniGame, addMsg]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onOreMined = useCallback((oreName) => {
     // World-zone ore yield bonus (동쪽절벽 ×1.3, 북쪽고원 ×1.15)
@@ -4629,11 +4636,12 @@ nickname={nickname}
         <ZoneMiniGame
           zone={zoneMiniGame.zone}
           level={gs.zoneMiniGameLevels?.[zoneMiniGame.zone] ?? 0}
+          perks={gs.zoneMiniGamePerks?.[zoneMiniGame.zone] ?? []}
+          perkPoints={gs.zoneMiniGamePerkPoints?.[zoneMiniGame.zone] ?? 0}
           tutorialSeen={gs.zoneTutorialSeen?.[zoneMiniGame.zone] ?? false}
-          onTutorialSeen={(zone) => setGs(prev => ({
-            ...prev,
-            zoneTutorialSeen: { ...prev.zoneTutorialSeen, [zone]: true },
-          }))}
+          onTutorialSeen={(z) => setGs(prev => ({ ...prev, zoneTutorialSeen: { ...prev.zoneTutorialSeen, [z]: true } }))}
+          onComplete={handleZoneMiniGameComplete}
+          onBuyPerk={handleZoneMiniGameBuyPerk}
           onClose={handleZoneMiniGameClose}
         />
       )}
