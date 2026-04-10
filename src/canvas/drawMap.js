@@ -108,8 +108,8 @@ export function drawTile(ctx, tx, ty, sx, sy) {
 }
 
 export function drawShopBuilding(ctx, camX, camY) {
-  const bx = 1 * TILE_SIZE - camX;
-  const by = 1 * TILE_SIZE - camY;
+  const bx = 16 * TILE_SIZE - camX;
+  const by = 11 * TILE_SIZE - camY;
   const bw = 9 * TILE_SIZE;
   const bh = 10 * TILE_SIZE;
   const cx = bx + bw / 2;
@@ -210,8 +210,8 @@ export function drawShopBuilding(ctx, camX, camY) {
 }
 
 export function drawBankBuilding(ctx, camX, camY) {
-  const bx = 1 * TILE_SIZE - camX;
-  const by = 14 * TILE_SIZE - camY;
+  const bx = 47 * TILE_SIZE - camX;
+  const by = 16 * TILE_SIZE - camY;
   const bw = 9 * TILE_SIZE;
   const bh = 4 * TILE_SIZE;
   const cx = bx + bw / 2;
@@ -662,8 +662,8 @@ export function drawCookingBuilding(ctx, camX, camY) {
 }
 
 export function drawInnBuilding(ctx, camX, camY) {
-  const bx = 20 * TILE_SIZE - camX;
-  const by = 1 * TILE_SIZE - camY;
+  const bx = 37 * TILE_SIZE - camX;
+  const by = 11 * TILE_SIZE - camY;
   const bw = 9 * TILE_SIZE;
   const bh = 9 * TILE_SIZE;
   const cx = bx + bw / 2;

@@ -20,13 +20,17 @@ export default function TownHall({ gs, townLevels, onContribute, onClose }) {
             마을 건물에 아이템을 기여하여 마을을 발전시키세요. 레벨이 오를수록 모든 플레이어에게 보너스가 적용됩니다.
           </div>
           {Object.entries(TOWN_BUILDINGS).map(([key, building]) => {
-            const lv = townLevels?.[key] ?? 0;
+            const entry = townLevels?.[key];
+            const lv = (typeof entry === 'object' ? entry.level : entry) ?? 0;
+            const totalContrib = (typeof entry === 'object' ? entry.total : 0) ?? 0;
             const myContrib = (gs.myTownContributions ?? {})[key] ?? 0;
             const lvReqs = building.lvReqs;
-            let cumReq = 0;
-            for (let i = 0; i < lv; i++) cumReq += lvReqs[i] ?? 0;
+            let cumReqForCurrentLevel = 0;
+            for (let i = 0; i < lv; i++) cumReqForCurrentLevel += lvReqs[i] ?? 0;
             const nextLvReq = lvReqs[lv] ?? null;
-            const pct = lv >= building.maxLv ? 100 : (nextLvReq ? Math.min(100, (myContrib / nextLvReq) * 100) : 100);
+            const progressTowardNext = totalContrib - cumReqForCurrentLevel;
+            const remaining = nextLvReq ? Math.max(0, nextLvReq - progressTowardNext) : 0;
+            const pct = lv >= building.maxLv ? 100 : (nextLvReq ? Math.min(100, (progressTowardNext / nextLvReq) * 100) : 100);
             const bonusObj = building.bonus(lv);
             const bonusStr = Object.entries(bonusObj).map(([k, v]) => {
               if (k === 'fishSellBonus') return `물고기 판매가 +${(v * 100).toFixed(0)}%`;
@@ -58,8 +62,8 @@ export default function TownHall({ gs, townLevels, onContribute, onClose }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
-                    내 기여: {myContrib}개
-                    {nextLvReq && lv < building.maxLv && ` · 다음 레벨: ${nextLvReq}개 필요`}
+                    내 기여: {myContrib}개 · 전체: {totalContrib}개
+                    {nextLvReq && lv < building.maxLv && ` · 다음 레벨까지 ${remaining}개 더 필요`}
                     {lv >= building.maxLv && ' · 최대 레벨 달성!'}
                   </div>
                   {lv < building.maxLv && (

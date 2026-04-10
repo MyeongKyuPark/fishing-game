@@ -40,7 +40,8 @@ export const TOWN_BUILDINGS = {
 export function getTownBonuses(townLevels) {
   const bonuses = { fishSellBonus: 0, mineSpeedBonus: 0, herbYieldBonus: 0, cookSellBonus: 0 };
   for (const [key, building] of Object.entries(TOWN_BUILDINGS)) {
-    const lv = townLevels?.[key] ?? 0;
+    const entry = townLevels?.[key];
+    const lv = (typeof entry === 'object' ? entry.level : entry) ?? 0;
     if (lv > 0) {
       const b = building.bonus(lv);
       for (const [bk, bv] of Object.entries(b)) bonuses[bk] = (bonuses[bk] ?? 0) + bv;

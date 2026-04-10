@@ -495,41 +495,48 @@ export default function GameCanvas({
 
       // Buildings & signs (town-specific)
       if (getActiveZone() === '마을') {
-        const bsx = 1 * TILE_SIZE - camX, bsy = 1 * TILE_SIZE - camY;
+        // Shop (cols 16-24, rows 11-20)
+        const bsx = 16 * TILE_SIZE - camX, bsy = 11 * TILE_SIZE - camY;
         if (bsx < W && bsx + 10 * TILE_SIZE > 0 && bsy < H && bsy + 11 * TILE_SIZE > 0)
           drawShopBuilding(ctx, camX, camY);
 
+        // Cooking (cols 26-33, rows 12-19)
         const ckx = COOKING_TX * TILE_SIZE - camX, cky = COOKING_TY * TILE_SIZE - camY;
         if (ckx > -10 * TILE_SIZE && ckx < W + 2 * TILE_SIZE && cky > -10 * TILE_SIZE && cky < H)
           drawCookingBuilding(ctx, camX, camY);
 
-        const innbx = 20 * TILE_SIZE - camX, innby = 1 * TILE_SIZE - camY;
+        // Inn (cols 37-45, rows 11-19)
+        const innbx = 37 * TILE_SIZE - camX, innby = 11 * TILE_SIZE - camY;
         if (innbx > -12 * TILE_SIZE && innbx < W + 2 * TILE_SIZE && innby > -10 * TILE_SIZE && innby < H)
           drawInnBuilding(ctx, camX, camY);
 
+        // Bank (cols 47-55, rows 16-19)
         {
-          const sx = 13 * TILE_SIZE + TILE_SIZE / 2 - camX;
-          const sy = 18 * TILE_SIZE - camY;
-          if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
-            drawFishingSign(ctx, sx, sy);
-        }
-
-        {
-          const bbx = 1 * TILE_SIZE - camX, bby = 14 * TILE_SIZE - camY;
+          const bbx = 47 * TILE_SIZE - camX, bby = 16 * TILE_SIZE - camY;
           if (bbx < W + 2 * TILE_SIZE && bbx + 9 * TILE_SIZE > 0 && bby < H + TILE_SIZE && bby + 4 * TILE_SIZE > 0)
             drawBankBuilding(ctx, camX, camY);
         }
 
+        // Fishing sign (south arm near beach, col 35 row 30)
         {
-          const sx = 19 * TILE_SIZE + TILE_SIZE / 2 - camX;
-          const sy = 15 * TILE_SIZE - camY;
+          const sx = 35 * TILE_SIZE + TILE_SIZE / 2 - camX;
+          const sy = 30 * TILE_SIZE - camY;
+          if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
+            drawFishingSign(ctx, sx, sy);
+        }
+
+        // Freshwater pond sign (north edge of pond, col 30 row 24)
+        {
+          const sx = 30 * TILE_SIZE + TILE_SIZE / 2 - camX;
+          const sy = 24 * TILE_SIZE - camY;
           if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
             drawFreshwaterSign(ctx, sx, sy);
         }
 
+        // Golden pond sign (hidden in west forest, col 6 row 7)
         {
-          const sx = 38 * TILE_SIZE + TILE_SIZE / 2 - camX;
-          const sy = 8 * TILE_SIZE - camY;
+          const sx = 6 * TILE_SIZE + TILE_SIZE / 2 - camX;
+          const sy = 7 * TILE_SIZE - camY;
           if (sx > -80 && sx < W + 80 && sy > -80 && sy < H + 80)
             drawGoldenPondSign(ctx, sx, sy);
         }
@@ -587,15 +594,22 @@ export default function GameCanvas({
         ctx.font = 'bold 12px "Noto Sans KR", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
-        const fl = [14 * TILE_SIZE - camX, 16 * TILE_SIZE - camY];
+        // ↓ 낚시터 label near beach approach
+        const fl = [35 * TILE_SIZE - camX, 30 * TILE_SIZE + TILE_SIZE * 2 - camY];
         if (fl[0] > 0 && fl[0] < W && fl[1] > 0 && fl[1] < H)
           ctx.fillText('↓ 낚시터', fl[0], fl[1]);
-        const ml = [34 * TILE_SIZE - camX, 1 * TILE_SIZE - camY];
+        // → 광산 label in east stone area
+        const ml = [62 * TILE_SIZE - camX, 5 * TILE_SIZE - camY];
         if (ml[0] > 0 && ml[0] < W && ml[1] > 0 && ml[1] < H)
-          ctx.fillText('광산 지역', ml[0], ml[1]);
-        const fml = [34 * TILE_SIZE - camX, 16 * TILE_SIZE - camY];
+          ctx.fillText('→ 광산', ml[0], ml[1]);
+        // ← 농장 label in west forest
+        const fml = [5 * TILE_SIZE - camX, 19 * TILE_SIZE - camY];
         if (fml[0] > 0 && fml[0] < W && fml[1] > 0 && fml[1] < H)
-          ctx.fillText('🌱 농장', fml[0], fml[1]);
+          ctx.fillText('← 농장', fml[0], fml[1]);
+        // ↑ 내 집 label near cottage
+        const hl = [35 * TILE_SIZE - camX, 5 * TILE_SIZE - camY];
+        if (hl[0] > 0 && hl[0] < W && hl[1] > 0 && hl[1] < H)
+          ctx.fillText('↑ 내 집', hl[0], hl[1]);
       }
 
       // Farm crops (town-specific)

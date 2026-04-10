@@ -3,140 +3,104 @@ import { TILE, MAP_W, MAP_H, TILE_SIZE, ORES, HERBS, weightedPick } from './game
 function buildMap() {
   const t = Array.from({ length: MAP_H }, () => Array(MAP_W).fill(TILE.GRASS));
 
-  // ── Mine zone: cols 45-69, rows 0-22 ──────────────────────────────────────
-  for (let r = 0; r <= 22; r++)
-    for (let c = 45; c < MAP_W; c++)
-      t[r][c] = TILE.STONE;
-
-  // ── Shop building: cols 1-9, rows 1-10 ────────────────────────────────────
-  for (let r = 1; r <= 10; r++)
-    for (let c = 1; c <= 9; c++)
-      t[r][c] = TILE.BUILDING;
-
-  // Shop entrance path: rows 10-11, cols 4-5
-  t[10][4] = TILE.PATH;
-  t[10][5] = TILE.PATH;
-  t[11][4] = TILE.PATH;
-  t[11][5] = TILE.PATH;
-
-  // ── Cooking building: cols 11-18, rows 2-9 ────────────────────────────────
-  for (let r = 2; r <= 9; r++)
-    for (let c = 11; c <= 18; c++)
-      t[r][c] = TILE.BUILDING;
-
-  // Cooking entrance path: rows 10-11, cols 13-14
-  t[10][13] = TILE.PATH;
-  t[10][14] = TILE.PATH;
-  t[11][13] = TILE.PATH;
-  t[11][14] = TILE.PATH;
-
-  // ── INN building: cols 20-28, rows 1-9 ────────────────────────────────────
-  for (let r = 1; r <= 9; r++)
-    for (let c = 20; c <= 28; c++)
-      t[r][c] = TILE.BUILDING;
-
-  // INN entrance path: rows 10-11, cols 23-24
-  t[10][23] = TILE.PATH;
-  t[10][24] = TILE.PATH;
-  t[11][23] = TILE.PATH;
-  t[11][24] = TILE.PATH;
-
-  // ── Main horizontal path: rows 12-13, cols 0-44 ────────────────────────────
-  for (let c = 0; c <= 44; c++) {
-    t[12][c] = TILE.PATH;
-    t[13][c] = TILE.PATH;
-  }
-
-  // ── Vertical path: cols 13-14, rows 0-12 ──────────────────────────────────
-  for (let r = 0; r <= 12; r++) {
-    t[r][13] = TILE.PATH;
-    t[r][14] = TILE.PATH;
-  }
-
-  // ── Forest zone: cols 30-44, rows 0-18 ────────────────────────────────────
-  for (let r = 0; r <= 18; r++)
-    for (let c = 30; c <= 44; c++)
+  // ── WEST: Forest + Farm zone (cols 0-11, rows 0-30) ──────────────────────
+  for (let r = 0; r <= 30; r++)
+    for (let c = 0; c <= 11; c++)
       t[r][c] = TILE.FOREST;
+  // Farm clearing inside forest (cols 3-10, rows 22-27)
+  for (let r = 22; r <= 27; r++)
+    for (let c = 3; c <= 10; c++)
+      t[r][c] = TILE.GRASS;
+  // Hidden golden pond (cols 4-8, rows 8-11)
+  for (let r = 8; r <= 11; r++)
+    for (let c = 4; c <= 8; c++)
+      t[r][c] = TILE.WATER;
 
-  // Scatter a few stone rocks in forest
-  const forestRocks = [
-    [3,32],[5,35],[2,38],[8,31],[10,40],[6,44],[14,33],[16,37],[12,42],
-  ];
-  for (const [r, c] of forestRocks) {
-    if (r >= 0 && r <= 18 && c >= 30 && c <= 44)
+  // ── EAST: Mine zone (cols 56-69, rows 0-30) ───────────────────────────────
+  for (let r = 0; r <= 30; r++)
+    for (let c = 56; c < MAP_W; c++)
       t[r][c] = TILE.STONE;
-  }
 
-  // ── Farm zone: cols 30-38, rows 14-17 ─────────────────────────────────────
-  // (between forest and beach, south of path)
-  for (let r = 14; r <= 17; r++)
-    for (let c = 30; c <= 38; c++)
-      t[r][c] = TILE.GRASS; // keep as grass, farm plots drawn on top
-
-  // ── Freshwater pond: cols 16-22, rows 15-17 ───────────────────────────────
-  for (let r = 15; r <= 17; r++)
-    for (let c = 16; c <= 22; c++)
+  // ── NORTH HOME: Cottage building (cols 27-45, rows 1-9) ──────────────────
+  for (let r = 1; r <= 9; r++)
+    for (let c = 27; c <= 45; c++)
+      t[r][c] = TILE.BUILDING;
+  // Cottage entrance path (connects to vertical path cols 34-35)
+  t[9][33] = TILE.PATH; t[9][34] = TILE.PATH; t[9][35] = TILE.PATH;
+  t[10][33] = TILE.PATH; t[10][34] = TILE.PATH; t[10][35] = TILE.PATH;
+  // Garden pond near cottage (cols 47-53, rows 2-8)
+  for (let r = 2; r <= 8; r++)
+    for (let c = 47; c <= 53; c++)
       t[r][c] = TILE.WATER;
 
-  // ── Golden pond: cols 36-40, rows 8-10 (hidden in forest) ─────────────────
-  for (let r = 8; r <= 10; r++)
-    for (let c = 36; c <= 40; c++)
-      t[r][c] = TILE.WATER;
-
-  // ── Bank building: cols 1-9, rows 14-17 ───────────────────────────────────
-  // (south of main path, above sand — entrance at south face)
-  for (let r = 14; r <= 17; r++)
-    for (let c = 1; c <= 9; c++)
+  // ── BUILDINGS ROW (flanking north arm of hub) ─────────────────────────────
+  // Shop: cols 16-24, rows 11-20
+  for (let r = 11; r <= 20; r++)
+    for (let c = 16; c <= 24; c++)
       t[r][c] = TILE.BUILDING;
-  // Bank entrance path (row 17 bottom edge, not overwritten by sand at row 18+)
-  t[17][4] = TILE.PATH;
-  t[17][5] = TILE.PATH;
-
-  // ── Guild Hall building: cols 11-19, rows 14-17 ────────────────────────────
-  for (let r = 14; r <= 17; r++)
-    for (let c = 11; c <= 19; c++)
+  // Cooking: cols 26-33, rows 12-19
+  for (let r = 12; r <= 19; r++)
+    for (let c = 26; c <= 33; c++)
       t[r][c] = TILE.BUILDING;
-  // Guild hall entrance path
-  t[17][14] = TILE.PATH;
-  t[17][15] = TILE.PATH;
-
-  // ── Cottage zone: cols 21-27, rows 14-17 ─────────────────────────────────
-  for (let r = 14; r <= 17; r++)
-    for (let c = 21; c <= 27; c++)
+  // Inn: cols 37-45, rows 11-19
+  for (let r = 11; r <= 19; r++)
+    for (let c = 37; c <= 45; c++)
       t[r][c] = TILE.BUILDING;
-  // Cottage entrance path
-  t[17][23] = TILE.PATH;
-  t[17][24] = TILE.PATH;
+  // Bank: cols 47-55, rows 16-19
+  for (let r = 16; r <= 19; r++)
+    for (let c = 47; c <= 55; c++)
+      t[r][c] = TILE.BUILDING;
 
-  // ── Sand beach: rows 18-20, cols 0-44 ─────────────────────────────────────
-  for (let r = 18; r <= 20; r++)
-    for (let c = 0; c <= 44; c++)
-      t[r][c] = TILE.SAND;
-
-  // ── Main dock: rows 21-22, cols 3-42 ──────────────────────────────────────
+  // ── MAIN HUB PATHS ────────────────────────────────────────────────────────
+  // Horizontal path: rows 21-22, cols 12-55
   for (let r = 21; r <= 22; r++)
-    for (let c = 3; c <= 42; c++)
-      t[r][c] = TILE.WOOD;
-
-  // ── Deep sea pier: rows 23-26, cols 20-30 ─────────────────────────────────
-  for (let r = 23; r <= 26; r++)
-    for (let c = 20; c <= 30; c++)
-      t[r][c] = TILE.WOOD;
-
-  // ── Water: rows 27+ for cols 0-44 ─────────────────────────────────────────
-  for (let r = 27; r < MAP_H; r++)
-    for (let c = 0; c <= 44; c++)
-      t[r][c] = TILE.WATER;
-
-  // Also rows 23-26 outside the pier (cols 0-19 and 31-44) are water
-  for (let r = 23; r <= 26; r++) {
-    for (let c = 0; c < 20; c++) t[r][c] = TILE.WATER;
-    for (let c = 31; c <= 44; c++) t[r][c] = TILE.WATER;
+    for (let c = 12; c <= 55; c++)
+      t[r][c] = TILE.PATH;
+  // Vertical path (north-south spine): cols 34-35, rows 10-32
+  for (let r = 10; r <= 32; r++) {
+    t[r][34] = TILE.PATH;
+    t[r][35] = TILE.PATH;
   }
 
-  // ── Mine area water: rows 23+ for cols 45-69 ──────────────────────────────
-  for (let r = 23; r < MAP_H; r++)
-    for (let c = 45; c < MAP_W; c++)
+  // ── SOUTH HUB (rows 23-30) ────────────────────────────────────────────────
+  // Guild Hall: cols 16-24, rows 23-30
+  for (let r = 23; r <= 30; r++)
+    for (let c = 16; c <= 24; c++)
+      t[r][c] = TILE.BUILDING;
+  // Freshwater pond: cols 27-33, rows 25-29
+  for (let r = 25; r <= 29; r++)
+    for (let c = 27; c <= 33; c++)
+      t[r][c] = TILE.WATER;
+
+  // ── SOUTH FISHING ZONE ────────────────────────────────────────────────────
+  // Beach sand: rows 31-32, all cols
+  for (let r = 31; r <= 32; r++)
+    for (let c = 0; c < MAP_W; c++)
+      t[r][c] = TILE.SAND;
+  // Path connector to beach (override sand on vertical path)
+  t[31][34] = TILE.PATH; t[31][35] = TILE.PATH;
+  t[32][34] = TILE.PATH; t[32][35] = TILE.PATH;
+  // Main dock: rows 33-34, cols 3-66
+  for (let r = 33; r <= 34; r++)
+    for (let c = 3; c <= 66; c++)
+      t[r][c] = TILE.WOOD;
+  // Water outside dock: rows 33-34
+  for (let r = 33; r <= 34; r++) {
+    for (let c = 0; c < 3; c++) t[r][c] = TILE.WATER;
+    for (let c = 67; c < MAP_W; c++) t[r][c] = TILE.WATER;
+  }
+  // Deep pier: rows 35-39, cols 25-45
+  for (let r = 35; r <= 39; r++)
+    for (let c = 25; c <= 45; c++)
+      t[r][c] = TILE.WOOD;
+  // Water surrounding pier: rows 35-39
+  for (let r = 35; r <= 39; r++) {
+    for (let c = 0; c < 25; c++) t[r][c] = TILE.WATER;
+    for (let c = 46; c < MAP_W; c++) t[r][c] = TILE.WATER;
+  }
+  // Deep water: rows 40-49
+  for (let r = 40; r < MAP_H; r++)
+    for (let c = 0; c < MAP_W; c++)
       t[r][c] = TILE.WATER;
 
   return t;
@@ -145,106 +109,112 @@ function buildMap() {
 export const MAP_TILES = buildMap();
 
 export const FISHING_CHAIRS = [
-  // Freshwater pond chairs (row 13, main path north of pond — row 14 is building tiles)
-  { tx: 16, ty: 13, zone: '민물' },
-  { tx: 19, ty: 13, zone: '민물' },
-  { tx: 22, ty: 13, zone: '민물' },
-  // Main dock chairs (row 22) — river zone
-  { tx: 5,  ty: 22, zone: '강' },
-  { tx: 9,  ty: 22, zone: '강' },
-  { tx: 13, ty: 22, zone: '강' },
-  { tx: 17, ty: 22, zone: '강' },
-  { tx: 21, ty: 22, zone: '강' },
-  { tx: 25, ty: 22, zone: '강' },
-  { tx: 29, ty: 22, zone: '강' },
-  { tx: 33, ty: 22, zone: '강' },
-  // Golden pond chairs (row 7, north edge of pond at cols 36-40)
-  { tx: 37, ty: 7, zone: '황금연못' },
-  { tx: 39, ty: 7, zone: '황금연못' },
-  // Deep pier chairs (row 26) — sea fishing zone
-  { tx: 22, ty: 26, seaFishing: true, zone: '바다' },
-  { tx: 24, ty: 26, seaFishing: true, zone: '바다' },
-  { tx: 26, ty: 26, seaFishing: true, zone: '바다' },
-  { tx: 28, ty: 26, seaFishing: true, zone: '바다' },
+  // Freshwater pond chairs (row 24, north edge of pond at rows 25-29)
+  { tx: 28, ty: 24, zone: '민물' },
+  { tx: 30, ty: 24, zone: '민물' },
+  { tx: 32, ty: 24, zone: '민물' },
+  // Hidden golden pond chairs (row 7, north of golden pond at rows 8-11)
+  { tx: 5,  ty: 7,  zone: '황금연못' },
+  { tx: 7,  ty: 7,  zone: '황금연못' },
+  // Main dock chairs (row 33)
+  { tx: 6,  ty: 33, zone: '강' },
+  { tx: 10, ty: 33, zone: '강' },
+  { tx: 16, ty: 33, zone: '강' },
+  { tx: 22, ty: 33, zone: '강' },
+  { tx: 28, ty: 33, zone: '강' },
+  { tx: 38, ty: 33, zone: '강' },
+  { tx: 44, ty: 33, zone: '강' },
+  { tx: 50, ty: 33, zone: '강' },
+  { tx: 55, ty: 33, zone: '강' },
+  // Deep pier chairs (row 39) — sea fishing zone
+  { tx: 27, ty: 39, seaFishing: true, zone: '바다' },
+  { tx: 31, ty: 39, seaFishing: true, zone: '바다' },
+  { tx: 35, ty: 39, seaFishing: true, zone: '바다' },
+  { tx: 39, ty: 39, seaFishing: true, zone: '바다' },
+  { tx: 43, ty: 39, seaFishing: true, zone: '바다' },
 ];
 
 export const CHAIR_RANGE = 3 * TILE_SIZE;
 
-export const SHOP_TX = 5;
-export const SHOP_TY = 12;
+// Hub-layout positions (new central map)
+export const SHOP_TX = 20;   // center col of shop (cols 16-24)
+export const SHOP_TY = 21;   // entrance row (horizontal path)
 export const SHOP_RANGE = 4 * TILE_SIZE;
 
-export const MINE_ZONE = { tx1: 45, ty1: 0, tx2: 69, ty2: 22 };
-export const MINE_ENTRANCE = { tx: 47, ty: 8 };
+export const MINE_ZONE = { tx1: 56, ty1: 0, tx2: 69, ty2: 30 };
+export const MINE_ENTRANCE = { tx: 55, ty: 20 }; // visual at col 56-59, rows 21-24
 
-export const COOKING_TX = 13;
-export const COOKING_TY = 11;
+// COOKING_TX used in drawCookingBuilding: bx = (COOKING_TX-2)*TS = 26*TS (col 26)
+// COOKING_TY used in drawCookingBuilding: by = (COOKING_TY-8)*TS = 12*TS (row 12)
+export const COOKING_TX = 28;
+export const COOKING_TY = 20;
 export const COOKING_RANGE = 4 * TILE_SIZE;
 
-export const INN_TX = 23;
-export const INN_TY = 11;
+export const INN_TX = 41;   // center col of inn (cols 37-45)
+export const INN_TY = 21;
 export const INN_RANGE = 4 * TILE_SIZE;
 
-export const FOREST_ZONE = { tx1: 30, ty1: 0, tx2: 44, ty2: 18 };
+export const FOREST_ZONE = { tx1: 0, ty1: 0, tx2: 11, ty2: 30 };
 
-export const FARM_ZONE = { tx1: 30, ty1: 14, tx2: 38, ty2: 17 };
-export const FARM_TX = 34;  // center of farm zone
-export const FARM_TY = 15;
+export const FARM_ZONE = { tx1: 3, ty1: 22, tx2: 10, ty2: 27 };
+export const FARM_TX = 6;   // center of farm clearing
+export const FARM_TY = 24;
 export const FARM_RANGE = 5 * TILE_SIZE;
 
-export const PLAYER_START_X = 15 * TILE_SIZE + TILE_SIZE / 2;
-export const PLAYER_START_Y = 13 * TILE_SIZE + TILE_SIZE / 2;
+// Hub center: col 35, row 21 (intersection of paths)
+export const PLAYER_START_X = 35 * TILE_SIZE + TILE_SIZE / 2;
+export const PLAYER_START_Y = 25 * TILE_SIZE + TILE_SIZE / 2;
 
 // Door triggers: walk near these to get an entry prompt
 export const DOOR_TRIGGERS = [
   {
     id: 'shop',
     label: '🏪 상점 입장',
-    wx: 4.5 * TILE_SIZE, wy: 11 * TILE_SIZE,
+    wx: 20 * TILE_SIZE, wy: 21 * TILE_SIZE,
     range: 1.8 * TILE_SIZE,
-    exitWx: 4.5 * TILE_SIZE, exitWy: 13 * TILE_SIZE,
+    exitWx: 20 * TILE_SIZE, exitWy: 23 * TILE_SIZE,
   },
   {
     id: 'cooking',
     label: '🍳 주방 입장',
-    wx: 13.5 * TILE_SIZE, wy: 10 * TILE_SIZE,
+    wx: 30 * TILE_SIZE, wy: 21 * TILE_SIZE,
     range: 1.8 * TILE_SIZE,
-    exitWx: 13.5 * TILE_SIZE, exitWy: 12 * TILE_SIZE,
+    exitWx: 30 * TILE_SIZE, exitWy: 23 * TILE_SIZE,
   },
   {
     id: 'inn',
     label: '🏨 여관 입장',
-    wx: 23.5 * TILE_SIZE, wy: 10 * TILE_SIZE,
+    wx: 41 * TILE_SIZE, wy: 21 * TILE_SIZE,
     range: 1.8 * TILE_SIZE,
-    exitWx: 23.5 * TILE_SIZE, exitWy: 12 * TILE_SIZE,
+    exitWx: 41 * TILE_SIZE, exitWy: 23 * TILE_SIZE,
   },
   {
     id: 'mine',
     label: '⛏ 광산 입장',
-    wx: 47.5 * TILE_SIZE, wy: 8.5 * TILE_SIZE,
-    range: 2.2 * TILE_SIZE,
-    exitWx: 47.5 * TILE_SIZE, exitWy: 11 * TILE_SIZE,
+    wx: 57 * TILE_SIZE, wy: 21 * TILE_SIZE,
+    range: 2.5 * TILE_SIZE,
+    exitWx: 53 * TILE_SIZE, exitWy: 22 * TILE_SIZE,
   },
   {
     id: 'bank',
     label: '🏦 은행 입장',
-    wx: 4.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
+    wx: 51 * TILE_SIZE, wy: 21 * TILE_SIZE,
     range: 1.8 * TILE_SIZE,
-    exitWx: 4.5 * TILE_SIZE, exitWy: 20 * TILE_SIZE,
+    exitWx: 51 * TILE_SIZE, exitWy: 23 * TILE_SIZE,
   },
   {
     id: 'guild',
     label: '🏰 길드 회관 입장',
-    wx: 14.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
+    wx: 20 * TILE_SIZE, wy: 24 * TILE_SIZE,
     range: 1.8 * TILE_SIZE,
-    exitWx: 14.5 * TILE_SIZE, exitWy: 20 * TILE_SIZE,
+    exitWx: 20 * TILE_SIZE, exitWy: 22 * TILE_SIZE,
   },
   {
     id: 'cottage',
     label: '🏠 내 오두막 입장',
-    wx: 23.5 * TILE_SIZE, wy: 18 * TILE_SIZE,
-    range: 1.8 * TILE_SIZE,
-    exitWx: 23.5 * TILE_SIZE, exitWy: 20 * TILE_SIZE,
+    wx: 36 * TILE_SIZE, wy: 10 * TILE_SIZE,
+    range: 2 * TILE_SIZE,
+    exitWx: 36 * TILE_SIZE, exitWy: 12 * TILE_SIZE,
   },
 ];
 
@@ -868,11 +838,13 @@ export const ZONE_UNLOCK_REQ = {
 export function getFishingZone(px, py, marineGear, fishAbil) {
   const tx = Math.floor(px / TILE_SIZE);
   const ty = Math.floor(py / TILE_SIZE);
-  // Freshwater pond area (cols 16-22, rows 14-17)
-  if (tx >= 15 && tx <= 23 && ty >= 14 && ty <= 18) return '민물';
+  // Hidden golden pond (cols 4-8, rows 7-12)
+  if (tx >= 3 && tx <= 9 && ty >= 6 && ty <= 12) return '황금연못';
+  // Freshwater pond (cols 27-33, rows 24-30)
+  if (tx >= 25 && tx <= 35 && ty >= 22 && ty <= 31) return '민물';
   // Deep sea (on water with scuba + high ability)
   if (marineGear === '스쿠버다이빙세트' && fishAbil >= 50) return '심해';
-  // Sea fishing area (deep pier)
-  if (ty >= 23 && ty <= 26) return '바다';
+  // Sea fishing area (deep pier rows 35-39)
+  if (ty >= 35 && ty <= 39) return '바다';
   return '강'; // default river/dock
 }
