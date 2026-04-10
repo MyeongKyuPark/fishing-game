@@ -395,23 +395,54 @@ export default function GameCanvas({
         }
       }
 
-      // ── Door proximity ──
+      // ── Zone mini-game entry detection (runs BEFORE door proximity) ──
+      // mine: tx>=54 fires before mine DOOR_TRIGGER range (~tx=54.5), blocking auto-enter
       {
-        let closestDoor = null;
-        for (const dt of getActiveDoors()) {
-          if (Math.hypot(player.x - dt.wx, player.y - dt.wy) <= dt.range) {
-            closestDoor = dt;
-            break;
+        const currentZone = gameRef.current?.worldZone ?? '마을';
+        if (currentZone === '마을' && !gameRef.current?.zoneMiniGameActive) {
+          const ptx = Math.floor(player.x / TILE_SIZE);
+          const pty = Math.floor(player.y / TILE_SIZE);
+          let mgZone = null;
+          if (ptx >= 54 && pty >= 18 && pty <= 28) mgZone = 'mine';
+          else if (pty >= 33) mgZone = 'fishing';
+          else if (ptx <= 11 && pty <= 30) mgZone = 'farm';
+
+          if (mgZone && mgZone !== prevMgZoneRef.current) {
+            prevMgZoneRef.current = mgZone;
+            gameRef.current.zoneMiniGameActive = true;
+            onZoneMiniGameEnterRef.current?.(mgZone);
+          } else if (!mgZone) {
+            prevMgZoneRef.current = null;
           }
         }
-        if (closestDoor?.id !== nearDoorRef.current?.id) {
-          nearDoorRef.current = closestDoor;
-          onNearDoorChangeRef.current?.(closestDoor ? closestDoor.id : null);
-          if (closestDoor && player.state === 'idle') {
-            onEnterRoomRef.current?.(closestDoor.id);
+      }
+
+      // ── Door proximity (skipped while zone mini-game is active) ──
+      {
+        if (!gameRef.current?.zoneMiniGameActive) {
+          let closestDoor = null;
+          for (const dt of getActiveDoors()) {
+            if (Math.hypot(player.x - dt.wx, player.y - dt.wy) <= dt.range) {
+              closestDoor = dt;
+              break;
+            }
           }
+          if (closestDoor?.id !== nearDoorRef.current?.id) {
+            nearDoorRef.current = closestDoor;
+            onNearDoorChangeRef.current?.(closestDoor ? closestDoor.id : null);
+            if (closestDoor && player.state === 'idle') {
+              onEnterRoomRef.current?.(closestDoor.id);
+            }
+          }
+          g.nearDoor = closestDoor?.id ?? null;
+        } else {
+          // clear any stale door state so prompt disappears during mini-game
+          if (nearDoorRef.current !== null) {
+            nearDoorRef.current = null;
+            onNearDoorChangeRef.current?.(null);
+          }
+          g.nearDoor = null;
         }
-        g.nearDoor = closestDoor?.id ?? null;
         g.enterRoom = () => {
           if (nearDoorRef.current) onEnterRoomRef.current?.(nearDoorRef.current.id);
         };
@@ -460,27 +491,6 @@ export default function GameCanvas({
         }
         nearZoneNpcRef.current = nearNpc;
         g.nearZoneNpc = nearNpc;
-      }
-
-      // ── Zone mini-game entry detection ──
-      {
-        const currentZone = gameRef.current?.worldZone ?? '마을';
-        if (currentZone === '마을' && !gameRef.current?.zoneMiniGameActive) {
-          const ptx = Math.floor(player.x / TILE_SIZE);
-          const pty = Math.floor(player.y / TILE_SIZE);
-          let mgZone = null;
-          if (ptx >= 56 && pty <= 30) mgZone = 'mine';
-          else if (pty >= 33) mgZone = 'fishing';
-          else if (ptx <= 11 && pty <= 30) mgZone = 'farm';
-
-          if (mgZone && mgZone !== prevMgZoneRef.current) {
-            prevMgZoneRef.current = mgZone;
-            gameRef.current.zoneMiniGameActive = true;
-            onZoneMiniGameEnterRef.current?.(mgZone);
-          } else if (!mgZone) {
-            prevMgZoneRef.current = null;
-          }
-        }
       }
 
       // ── Camera ──

@@ -139,6 +139,11 @@ export default function ZoneMiniGame({ zone, level, tutorialSeen, onTutorialSeen
                     {result.oreName} × {result.count} 채굴
                   </div>
                 )}
+                {zone === 'fishing' && (
+                  <div style={{ color: '#e8d888', marginBottom: 8 }}>
+                    +{50 + (level + 1) * 20}G 획득
+                  </div>
+                )}
                 <div style={{ fontSize: 14, color: '#ffdd88', marginBottom: 24 }}>
                   Lv.{level} → Lv.{level + 1} 달성!
                 </div>
@@ -154,7 +159,7 @@ export default function ZoneMiniGame({ zone, level, tutorialSeen, onTutorialSeen
                 </div>
               </>
             )}
-            <button className="btn" style={{ width: '100%', fontSize: 15 }} onClick={() => onClose(result?.won ?? false)}>
+            <button className="btn" style={{ width: '100%', fontSize: 15 }} onClick={() => onClose(result?.won ?? false, result ?? {})}>
               확인
             </button>
           </div>
