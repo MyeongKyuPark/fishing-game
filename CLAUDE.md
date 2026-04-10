@@ -158,6 +158,76 @@ src/
 
 ---
 
+## 미니게임 시스템
+
+### 종류 및 파일
+
+| 미니게임 | 파일 | 진입 조건 |
+|---------|------|---------|
+| 릴 낚시 (ResistanceMinigame) | `src/ResistanceMinigame.jsx` | 전설/신화 물고기 낚시 시 자동 (확률적) |
+| 정밀 채굴 (MiningMinigame) | `src/MiningMinigame.jsx` | 수정/금광석 채굴 시 20% 확률 |
+| 조류 낚시 (TidalMinigame) | `src/components/TidalMinigame.jsx` | 항구마을 낚시 |
+| 얼음 구멍 낚시 (IceHoleMinigame) | `src/components/IceHoleMinigame.jsx` | 설산 낚시 |
+| 방향별 존 미니게임 (ZoneMiniGame) | `src/components/ZoneMiniGame.jsx` | 마을 방향 존 진입 시 자동 |
+
+### 방향별 존 미니게임 (ZoneMiniGame)
+
+마을(`'마을'` worldZone)에서 플레이어가 방향별 구역에 진입하면 자동 실행됨.
+
+| 방향 | 타일 조건 | 연결 미니게임 |
+|------|----------|------------|
+| 동쪽 (광산) | tx ≥ 56, ty ≤ 30 | MiningMinigame 래핑 |
+| 남쪽 (낚시터) | ty ≥ 33 | ResistanceMinigame 래핑 |
+| 서쪽 (농장) | tx ≤ 11, ty ≤ 30 | 준비 중 placeholder |
+
+**감지 위치**: `GameCanvas.jsx` 게임 루프 내 "Zone mini-game entry detection" 블록.  
+`gameRef.current.zoneMiniGameActive = true` 플래그로 미니게임 진행 중 재진입 차단.
+
+**저장 상태** (`useGameState.js` DEFAULT_STATE + loadSave):
+```js
+zoneMiniGameLevels: { mine: 0, fishing: 0, farm: 0 }  // 존별 레벨 (완료 시 +1)
+zoneTutorialSeen:   { mine: false, fishing: false, farm: false }  // 튜토리얼 첫 표시 여부
+```
+
+**ZoneMiniGame 흐름**: 튜토리얼(첫 방문) → 미니게임 → 결과 화면 → `onClose(completed)`.  
+완료 시 `zoneMiniGameLevels[zone] += 1`, 종료 시 플레이어를 허브 중심(`PLAYER_START_X/Y`)으로 텔레포트.
+
+**레벨별 난이도 스케일**:
+- 광산: Lv.0-4 철광석 → Lv.5-9 구리광석 → Lv.10-14 수정 → Lv.15+ 금광석
+- 낚시: Lv.0-4 피라미 → Lv.5-9 붕어 → Lv.10-14 연어 → Lv.15+ 황금잉어
+
+### MiningMinigame 인터페이스
+
+```jsx
+<MiningMinigame oreName={string} miningBonus={object} onFinish={(yieldCount) => void} />
+```
+
+`miningBonus` 프로퍼티: `mineRange`, `mineSpeedMult`, `mineTimerBonus`, `mineYieldBonus`,
+`mineDoubleChance`, `mineExtraOres`, `mineChainBonus` — 모두 생략 시 기본값 적용.
+
+### ResistanceMinigame 인터페이스
+
+```jsx
+<ResistanceMinigame
+  fishName={string} rarity={'전설'|'신화'} size={number}
+  fishGrade={number} resistMastery={object}
+  onSuccess={() => void} onFail={() => void}
+/>
+```
+
+`fishGrade`가 높을수록 릴 속도 향상 + 스트레스 감소 (플레이어에게 유리).  
+`resistMastery` 프로퍼티: `resistDecayBonus`, `resistStressReduce`, `resistMaxStress`, `resistDistReduce`.
+
+### 새 존 미니게임 추가 패턴
+
+```
+1. src/components/ZoneMiniGame.jsx — ZONE_INFO에 항목 추가, playing 분기 추가
+2. GameCanvas.jsx — "Zone mini-game entry detection" 블록에 타일 조건 추가
+3. useGameState.js — zoneMiniGameLevels / zoneTutorialSeen 기본값에 키 추가
+```
+
+---
+
 ## Design System
 
 DESIGN.md가 존재합니다. 모든 시각적/UI 결정 전 반드시 읽으세요.
