@@ -11,13 +11,13 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 
 const GRID       = 5;
 const CENTER     = 2;
-const TILE_W     = 56;   // 타일 다이아몬드 가로
-const TILE_H     = 28;   // 타일 다이아몬드 세로
-const SVG_W      = 310;
-const SVG_H      = 215;
-const ORIGIN_X   = 155;
-const ORIGIN_Y   = 50;
-const CLICK_R    = 40;   // 클릭 채굴 원 반지름 (SVG px)
+const TILE_W     = 72;   // 타일 다이아몬드 가로
+const TILE_H     = 36;   // 타일 다이아몬드 세로
+const SVG_W      = 420;
+const SVG_H      = 290;
+const ORIGIN_X   = 210;
+const ORIGIN_Y   = 60;
+const CLICK_R    = 62;   // 클릭 채굴 원 반지름 (SVG px)
 const BASE_DURATION  = 20;    // 초
 const BASE_ORE_COUNT = 8;     // 초기 광석 수
 
@@ -179,7 +179,7 @@ export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) 
         borderRadius: 18, padding: '16px 18px',
         textAlign: 'center', userSelect: 'none',
         boxShadow: `0 0 36px ${oreColor}44`,
-        maxWidth: 360,
+        maxWidth: 480,
       }}>
         {/* 헤더 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
