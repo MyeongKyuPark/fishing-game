@@ -296,7 +296,7 @@ export default function ResistanceMinigame({ fishName, rarity, size, fishGrade =
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 11, marginBottom: 6 }}>
             <span style={{ color: '#aaa' }}>릴 스트레스</span>
             <span style={{ color: stressColor, fontWeight: 800, fontSize: stressPct > 80 ? 13 : 11 }}>
-              {Math.round(stressPct)}%{MAX_STRESS > 100 ? ` / ${MAX_STRESS}` : ''}
+              {MAX_STRESS > 100 ? `${Math.round(stress)} / ${MAX_STRESS}` : `${Math.round(stressPct)}%`}
             </span>
           </div>
           <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end' }}>
