@@ -239,125 +239,137 @@ export default function ResistanceMinigame({ fishName, rarity, size, fishGrade =
           </div>
         )}
 
-        {/* 거리 바 */}
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#aaa', marginBottom: 5 }}>
-            <span>🎣</span>
-            <span style={{
-              color: isFighting ? '#ff6644' : '#cccccc',
-              fontWeight: isFighting ? 800 : 400,
-              fontSize: isFighting ? 13 : 11,
-            }}>
-              {isFighting ? '⚡ 저항 중!' : `${distance}m`}
-            </span>
-            <span style={{ color: rColor }}>{rIcon}</span>
-          </div>
+        {/* 거리 바 + 릴 버튼 | 수직 스트레스 바 */}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'stretch' }}>
 
-          {/* 줄 + 물고기 */}
-          <div style={{ position: 'relative', height: 28, background: '#111e2e', borderRadius: 8, overflow: 'hidden' }}>
-            {/* 감긴 줄 표시 */}
-            <div style={{
-              position: 'absolute', left: 0, top: 0, bottom: 0,
-              width: `${(1 - distPct) * 100}%`,
-              background: isReeling
-                ? `linear-gradient(90deg, ${rColor}55, ${rColor}22)`
-                : 'rgba(255,255,255,0.05)',
-              transition: 'background 0.2s',
-            }} />
-            {/* 낚싯줄 */}
-            <div style={{
-              position: 'absolute', top: '50%', left: 0,
-              width: `${(1 - distPct) * 100}%`,
-              height: 2,
-              background: isReeling ? rColor : '#445566',
-              transform: 'translateY(-50%)',
-              transition: 'background 0.15s',
-            }} />
-            {/* 물고기 아이콘 */}
-            <div style={{
-              position: 'absolute', top: '50%',
-              left: `${(1 - distPct) * 100}%`,
-              transform: 'translateY(-50%) translateX(-2px)',
-              fontSize: 18,
-              filter: isFighting ? 'hue-rotate(30deg) brightness(1.3)' : 'none',
-              transition: 'left 0.08s linear, filter 0.15s',
-            }}>
-              🐟
-            </div>
-          </div>
+          {/* 왼쪽: 거리 바 + 릴 버튼 + 결과 */}
+          <div style={{ flex: 1, minWidth: 0 }}>
 
-          <div style={{ fontSize: 10, color: '#445566', marginTop: 3, textAlign: 'right' }}>
-            {distance}m / {INIT_DIST}m
-          </div>
-        </div>
+            {/* 거리 바 */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#aaa', marginBottom: 5 }}>
+                <span>🎣</span>
+                <span style={{
+                  color: isFighting ? '#ff6644' : '#cccccc',
+                  fontWeight: isFighting ? 800 : 400,
+                  fontSize: isFighting ? 13 : 11,
+                }}>
+                  {isFighting ? '⚡ 저항 중!' : `${distance}m`}
+                </span>
+                <span style={{ color: rColor }}>{rIcon}</span>
+              </div>
 
-        {/* 스트레스 세그먼트 바 */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 11, marginBottom: 6 }}>
-            <span style={{ color: '#aaa' }}>릴 스트레스</span>
-            <span style={{ color: stressColor, fontWeight: 800, fontSize: stressPct > 80 ? 13 : 11 }}>
-              {MAX_STRESS > 100 ? `${Math.round(stress)} / ${MAX_STRESS}` : `${Math.round(stressPct)}%`}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end' }}>
-            {Array.from({ length: 10 }, (_, i) => {
-              const filled   = stressPct > i * 10;
-              const segColor = i >= 8 ? '#ff2020'
-                             : i >= 6 ? '#ff7700'
-                             : i >= 4 ? '#ffcc00'
-                             : '#44cc88';
-              const isHot    = filled && stressPct > 80;
-              const pulse    = isHot
-                ? 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / (105 - i * 4) + i * 1.2))
-                : 1;
-              const segH     = 12 + i * 1.5; // 높이를 오른쪽으로 갈수록 높게
-              return (
-                <div key={i} style={{
-                  flex: 1, height: segH, borderRadius: 3,
-                  background: filled ? segColor : '#0d1a28',
-                  border: `1px solid ${filled ? segColor + '99' : '#182434'}`,
-                  opacity: filled ? pulse : 0.35,
-                  boxShadow: isHot ? `0 0 ${4 + i}px ${segColor}bb` : 'none',
-                  alignSelf: 'flex-end',
+              {/* 줄 + 물고기 */}
+              <div style={{ position: 'relative', height: 28, background: '#111e2e', borderRadius: 8, overflow: 'hidden' }}>
+                <div style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0,
+                  width: `${(1 - distPct) * 100}%`,
+                  background: isReeling
+                    ? `linear-gradient(90deg, ${rColor}55, ${rColor}22)`
+                    : 'rgba(255,255,255,0.05)',
+                  transition: 'background 0.2s',
                 }} />
-              );
-            })}
-          </div>
-          {perkMaxStress > 0 && (
-            <div style={{ fontSize: 9, color: '#ff9977', marginTop: 3, textAlign: 'right' }}>
-              강인한 줄 — 내구도 +{perkMaxStress}
+                <div style={{
+                  position: 'absolute', top: '50%', left: 0,
+                  width: `${(1 - distPct) * 100}%`,
+                  height: 2,
+                  background: isReeling ? rColor : '#445566',
+                  transform: 'translateY(-50%)',
+                  transition: 'background 0.15s',
+                }} />
+                <div style={{
+                  position: 'absolute', top: '50%',
+                  left: `${(1 - distPct) * 100}%`,
+                  transform: 'translateY(-50%) translateX(-2px)',
+                  fontSize: 18,
+                  filter: isFighting ? 'hue-rotate(30deg) brightness(1.3)' : 'none',
+                  transition: 'left 0.08s linear, filter 0.15s',
+                }}>
+                  🐟
+                </div>
+              </div>
+
+              <div style={{ fontSize: 10, color: '#445566', marginTop: 3, textAlign: 'right' }}>
+                {distance}m / {INIT_DIST}m
+              </div>
             </div>
-          )}
-        </div>
 
-        {/* 릴 버튼 */}
-        {phase === 'playing' && (
-          <div
-            style={{
-              padding: '13px 0', borderRadius: 10,
-              background: isReeling ? rColor : 'rgba(255,255,255,0.07)',
-              color: isReeling ? '#000' : '#777',
-              fontWeight: 800, fontSize: 15,
-              border: `2px solid ${isReeling ? rColor : 'rgba(255,255,255,0.12)'}`,
-              cursor: 'pointer',
-              transition: 'all 0.1s',
-              boxShadow: isReeling ? `0 0 16px ${rColor}88` : 'none',
-            }}
-            onMouseDown={(e) => { e.stopPropagation(); startReel(); }}
-            onMouseUp={(e)   => { e.stopPropagation(); stopReel();  }}
-            onTouchStart={(e)=> { e.stopPropagation(); e.preventDefault(); startReel(); }}
-            onTouchEnd={(e)  => { e.stopPropagation(); e.preventDefault(); stopReel();  }}
-          >
-            {isReeling ? '🎣 릴 감는 중...' : '꾹 눌러서 릴 감기'}
-          </div>
-        )}
+            {/* 릴 버튼 */}
+            {phase === 'playing' && (
+              <div
+                style={{
+                  padding: '13px 0', borderRadius: 10,
+                  background: isReeling ? rColor : 'rgba(255,255,255,0.07)',
+                  color: isReeling ? '#000' : '#777',
+                  fontWeight: 800, fontSize: 15,
+                  border: `2px solid ${isReeling ? rColor : 'rgba(255,255,255,0.12)'}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.1s',
+                  boxShadow: isReeling ? `0 0 16px ${rColor}88` : 'none',
+                }}
+                onMouseDown={(e) => { e.stopPropagation(); startReel(); }}
+                onMouseUp={(e)   => { e.stopPropagation(); stopReel();  }}
+                onTouchStart={(e)=> { e.stopPropagation(); e.preventDefault(); startReel(); }}
+                onTouchEnd={(e)  => { e.stopPropagation(); e.preventDefault(); stopReel();  }}
+              >
+                {isReeling ? '🎣 릴 감는 중...' : '꾹 눌러서 릴 감기'}
+              </div>
+            )}
 
-        {/* 결과 */}
-        {phase !== 'playing' && (
-          <div style={{ padding: '13px 0', fontSize: 16, fontWeight: 800, color: phase === 'success' ? '#44ff88' : '#ff4444' }}>
-            {phase === 'success' ? '🎉 포획 성공!' : '💔 줄이 끊어졌습니다!'}
-          </div>
-        )}
+            {/* 결과 */}
+            {phase !== 'playing' && (
+              <div style={{ padding: '13px 0', fontSize: 16, fontWeight: 800, color: phase === 'success' ? '#44ff88' : '#ff4444' }}>
+                {phase === 'success' ? '🎉 포획 성공!' : '💔 줄이 끊어졌습니다!'}
+              </div>
+            )}
+
+          </div>{/* /왼쪽 */}
+
+          {/* 오른쪽: 수직 스트레스 바 */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 28 }}>
+            {/* 수치 */}
+            <div style={{ fontSize: 9, color: stressColor, fontWeight: 800, lineHeight: 1.2, textAlign: 'center' }}>
+              {MAX_STRESS > 100
+                ? <>{Math.round(stress)}<br/><span style={{ color: '#445', fontWeight: 400 }}>{MAX_STRESS}</span></>
+                : `${Math.round(stressPct)}%`
+              }
+            </div>
+            {/* 세그먼트 (위 = 위험, 아래 = 안전) */}
+            <div style={{ display: 'flex', flexDirection: 'column-reverse', gap: 2, flex: 1 }}>
+              {Array.from({ length: 10 }, (_, i) => {
+                const filled   = stressPct > i * 10;
+                const segColor = i >= 8 ? '#ff2020'
+                               : i >= 6 ? '#ff7700'
+                               : i >= 4 ? '#ffcc00'
+                               : '#44cc88';
+                const isHot    = filled && stressPct > 80;
+                const pulse    = isHot
+                  ? 0.55 + 0.45 * Math.abs(Math.sin(performance.now() / (105 - i * 4) + i * 1.2))
+                  : 1;
+                const segW     = 14 + i * 1.2; // 위로 갈수록 넓게
+                return (
+                  <div key={i} style={{
+                    width: segW, height: 11, borderRadius: 3, alignSelf: 'center',
+                    background: filled ? segColor : '#0d1a28',
+                    border: `1px solid ${filled ? segColor + '99' : '#182434'}`,
+                    opacity: filled ? pulse : 0.35,
+                    boxShadow: isHot ? `0 0 ${4 + i}px ${segColor}bb` : 'none',
+                  }} />
+                );
+              })}
+            </div>
+            {/* 레이블 */}
+            <div style={{ fontSize: 8, color: '#445', writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: 1, marginTop: 2 }}>
+              스트레스
+            </div>
+            {perkMaxStress > 0 && (
+              <div style={{ fontSize: 7, color: '#ff9977', textAlign: 'center', lineHeight: 1.3 }}>
+                +{perkMaxStress}
+              </div>
+            )}
+          </div>{/* /오른쪽 */}
+
+        </div>{/* /2-col */}
 
         <div style={{ marginTop: 10, fontSize: 10, color: '#444' }}>
           스페이스/엔터 또는 화면을 꾹 누르세요
