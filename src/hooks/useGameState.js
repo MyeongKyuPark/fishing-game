@@ -271,6 +271,9 @@ export const DEFAULT_STATE = {
   weeklyGoalDate: '',
   // Phase 16-5: 외곽 NPC S2 퀘스트
   npcQuestS2Done: [],
+  // Zone mini-game progression
+  zoneMiniGameLevels: { mine: 0, fishing: 0, farm: 0 },
+  zoneTutorialSeen: { mine: false, fishing: false, farm: false },
 };
 
 export const SAVE_VERSION = 2;
@@ -467,6 +470,8 @@ export function loadSave(nickname) {
       weeklyGoals: s.weeklyGoals ?? {},
       weeklyGoalDate: s.weeklyGoalDate ?? '',
       npcQuestS2Done: s.npcQuestS2Done ?? [],
+      zoneMiniGameLevels: { mine: 0, fishing: 0, farm: 0, ...(s.zoneMiniGameLevels ?? {}) },
+      zoneTutorialSeen: { mine: false, fishing: false, farm: false, ...(s.zoneTutorialSeen ?? {}) },
     };
   } catch { return DEFAULT_STATE; }
 }

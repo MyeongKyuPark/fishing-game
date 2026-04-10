@@ -68,6 +68,7 @@ import TownHall from './components/TownHall';
 import PointShop from './components/PointShop';
 import TidalMinigame from './components/TidalMinigame';
 import IceHoleMinigame from './components/IceHoleMinigame';
+import ZoneMiniGame from './components/ZoneMiniGame';
 import ProfileCard from './components/ProfileCard';
 import { TOWN_BUILDINGS, getTownBonuses, subscribeTownProgress, contributeTown } from './townData';
 
@@ -552,6 +553,7 @@ export default function App() {
   // Phase 15 state
   const [tidalGame, setTidalGame] = useState(null); // { name, fd, size, finalPrice, rodKey, seaMsg, id }
   const [iceHoleGame, setIceHoleGame] = useState(null); // { name, fd, size, finalPrice, rodKey, seaMsg, id }
+  const [zoneMiniGame, setZoneMiniGame] = useState(null); // { zone: 'mine'|'fishing'|'farm' }
   const [showProfileCard, setShowProfileCard] = useState(false);
   const [mapTransitioning, setMapTransitioning] = useState(false);
   const [townLevels, setTownLevels] = useState({});
@@ -1766,6 +1768,38 @@ export default function App() {
     incrementServerQuestProgress('fishCaught');
     damageServerBoss(1, nicknameRef.current);
   }, [iceHoleGame, addMsg, grantAbility, advanceQuest, advanceZoneChallenge, checkAndGrantAchievements]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Zone mini-game: triggered when player enters directional zone
+  const handleZoneMiniGameEnter = useCallback((zone) => {
+    setZoneMiniGame({ zone });
+    // Freeze player movement while mini-game is active
+    if (gameRef.current?.player) {
+      gameRef.current.player.vx = 0;
+      gameRef.current.player.vy = 0;
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleZoneMiniGameClose = useCallback((completed) => {
+    const zone = zoneMiniGame?.zone;
+    setZoneMiniGame(null);
+    if (gameRef.current) gameRef.current.zoneMiniGameActive = false;
+    // Teleport player back to hub center
+    if (gameRef.current?.player) {
+      gameRef.current.player.x = PLAYER_START_X;
+      gameRef.current.player.y = PLAYER_START_Y;
+      gameRef.current.player.vx = 0;
+      gameRef.current.player.vy = 0;
+    }
+    if (completed && zone) {
+      setGs(prev => ({
+        ...prev,
+        zoneMiniGameLevels: {
+          ...prev.zoneMiniGameLevels,
+          [zone]: (prev.zoneMiniGameLevels?.[zone] ?? 0) + 1,
+        },
+      }));
+    }
+  }, [zoneMiniGame]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onOreMined = useCallback((oreName) => {
     // World-zone ore yield bonus (동쪽절벽 ×1.3, 북쪽고원 ×1.15)
@@ -4030,6 +4064,7 @@ nickname={nickname}
           onNearZoneNpcChange={setNearZoneNpc}
           onNpcQuickMenu={(npcId, x, y) => setNpcQuickMenu({ npcId, x, y, tab: '퀘스트' })}
           marineGear={gs.marineGear}
+          onZoneMiniGameEnter={handleZoneMiniGameEnter}
         />
         {/* Phase 13: Map transition wipe overlay */}
         {mapTransitioning && (
@@ -4556,6 +4591,20 @@ nickname={nickname}
       {iceHoleGame && (
         <IceHoleMinigame
           onResult={onIceHoleResult}
+        />
+      )}
+
+      {/* Directional zone mini-games */}
+      {zoneMiniGame && (
+        <ZoneMiniGame
+          zone={zoneMiniGame.zone}
+          level={gs.zoneMiniGameLevels?.[zoneMiniGame.zone] ?? 0}
+          tutorialSeen={gs.zoneTutorialSeen?.[zoneMiniGame.zone] ?? false}
+          onTutorialSeen={(zone) => setGs(prev => ({
+            ...prev,
+            zoneTutorialSeen: { ...prev.zoneTutorialSeen, [zone]: true },
+          }))}
+          onClose={handleZoneMiniGameClose}
         />
       )}
 
