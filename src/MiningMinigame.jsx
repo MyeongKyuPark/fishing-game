@@ -70,9 +70,12 @@ export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) 
   const [totalYield, setTotalYield]   = useState(0);
   const [waveCount, setWaveCount]     = useState(1);
   const [flashIds, setFlashIds]       = useState([]);
-  const [clickCircle, setClickCircle] = useState(null); // { x, y }
-  const [waveFlash, setWaveFlash]     = useState(false); // 파도 클리어 연출
-  const [comboText, setComboText]     = useState(null);  // { n, x, y }
+  const [clickCircle, setClickCircle] = useState(null);  // { x, y }
+  const [waveFlash, setWaveFlash]     = useState(false);  // 파도 클리어 연출
+  const [comboText, setComboText]     = useState(null);   // { n, x, y }
+  const [timeBonusText, setTimeBonusText] = useState(null); // '+2s!'
+  const [spawnPulse, setSpawnPulse]   = useState(false);  // 새 파도 스폰 펄스
+  const [bestCombo, setBestCombo]     = useState(0);
   const [phase, setPhase]             = useState('playing');
 
   // ── 내부 ref ─────────────────────────────────────────────────
@@ -80,28 +83,37 @@ export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) 
   const timeRef       = useRef(DURATION);
   const yieldRef      = useRef(0);
   const waveRef       = useRef(1);
+  const bestComboRef  = useRef(0);
   const rafRef        = useRef(null);
   const lastRef       = useRef(null);
   const respawningRef = useRef(false);
 
   useEffect(() => { oresRef.current = ores; }, [ores]);
 
-  // 광석 소진 → 파도 클리어 연출 → 새 파도
+  // 광석 소진 → 파도 클리어 연출 → 시간 보너스 → 새 파도
   useEffect(() => {
     if (phase !== 'playing' || ores.length > 0 || respawningRef.current) return;
     respawningRef.current = true;
     setWaveFlash(true);
+
+    // 파도 클리어 시 +2s 보너스
+    timeRef.current = Math.min(timeRef.current + 2, DURATION);
+    setTimeBonusText('+2s!');
+    setTimeout(() => setTimeBonusText(null), 900);
+
     setTimeout(() => {
       const nextWave = waveRef.current + 1;
       waveRef.current = nextWave;
       setWaveCount(nextWave);
-      // 파도마다 광석 +1 (2파도마다), 상한 MAX_ORE_COUNT
       const nextCount = Math.min(baseCount + Math.floor((nextWave - 1) / 2), MAX_ORE_COUNT);
       setOres(genOres(nextCount, mineRange));
       setWaveFlash(false);
+      // 스폰 펄스 (300ms)
+      setSpawnPulse(true);
+      setTimeout(() => setSpawnPulse(false), 350);
       respawningRef.current = false;
     }, 650);
-  }, [ores, phase, baseCount, mineRange]);
+  }, [ores, phase, baseCount, mineRange, DURATION]);
 
   // ── 게임 루프 (타이머) ──────────────────────────────────────
   useEffect(() => {
@@ -114,7 +126,7 @@ export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) 
       setTimeLeft(timeRef.current);
       if (timeRef.current <= 0) {
         setPhase('done');
-        setTimeout(() => onFinish(yieldRef.current), 800);
+        setTimeout(() => onFinish(yieldRef.current, waveRef.current), 800);
         return;
       }
       rafRef.current = requestAnimationFrame(tick);
@@ -142,10 +154,14 @@ export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) 
     }
     if (toMine.length === 0) return;
 
-    // 콤보 표시 (3개 이상)
+    // 콤보 표시 (3개 이상) + 베스트 콤보 갱신
     if (toMine.length >= 3) {
       setComboText({ n: toMine.length, x: svgX, y: svgY - 20 });
       setTimeout(() => setComboText(null), 750);
+    }
+    if (toMine.length > bestComboRef.current) {
+      bestComboRef.current = toMine.length;
+      setBestCombo(toMine.length);
     }
 
     // 수확 계산 (체인 크레딧은 수확량 보너스로 적용)
@@ -250,14 +266,18 @@ export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) 
                   {/* 광석 노드 */}
                   {ore && !isFlash && (
                     <g style={{ pointerEvents: 'none' }}>
+                      {/* 스폰 펄스 링 */}
+                      {spawnPulse && (
+                        <circle cx={ox} cy={oy} r={17} fill="none" stroke={`${oreColor}99`} strokeWidth={1.5} />
+                      )}
                       {/* 체인 글로우 */}
                       {hasChain && (
                         <circle cx={ox} cy={oy} r={16} fill="none" stroke="#dd88ff88" strokeWidth={2} />
                       )}
                       <circle cx={ox} cy={oy} r={11}
-                        fill={hasChain ? `${oreColor}50` : `${oreColor}30`}
-                        stroke={hasChain ? '#dd88ff' : oreColor}
-                        strokeWidth={hasChain ? 2 : 1.5}
+                        fill={spawnPulse ? `${oreColor}55` : hasChain ? `${oreColor}50` : `${oreColor}30`}
+                        stroke={spawnPulse ? oreColor : hasChain ? '#dd88ff' : oreColor}
+                        strokeWidth={spawnPulse ? 2.5 : hasChain ? 2 : 1.5}
                       />
                       <text x={ox} y={oy + 4} textAnchor="middle" fontSize={10} fill={oreColor} style={{ fontWeight: 'bold' }}>
                         {ORE_GLYPH[oreName] ?? '●'}
@@ -309,13 +329,26 @@ export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) 
           {waveFlash && (
             <div style={{
               position: 'absolute', inset: 0,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6,
               background: `${oreColor}18`, borderRadius: 8,
               pointerEvents: 'none',
             }}>
               <div style={{ fontSize: 22, fontWeight: 800, color: oreColor, filter: `drop-shadow(0 0 8px ${oreColor})` }}>
-                WAVE {waveCount} CLEAR! →
+                WAVE {waveCount} CLEAR!
               </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#88ffaa' }}>+2s ⏱</div>
+            </div>
+          )}
+
+          {/* 시간 보너스 플로팅 텍스트 */}
+          {timeBonusText && !waveFlash && (
+            <div style={{
+              position: 'absolute', top: 8, right: 12,
+              fontSize: 15, fontWeight: 800, color: '#88ffaa',
+              pointerEvents: 'none',
+              filter: 'drop-shadow(0 0 4px #44ff88)',
+            }}>
+              {timeBonusText}
             </div>
           )}
         </div>
@@ -333,8 +366,16 @@ export default function MiningMinigame({ oreName, miningBonus = {}, onFinish }) 
 
         {/* 결과 */}
         {phase === 'done' && (
-          <div style={{ marginTop: 10, fontSize: 15, fontWeight: 800, color: totalYield > 0 ? oreColor : '#aaa' }}>
-            {totalYield > 0 ? `💎 ${oreName} ×${totalYield} 획득!` : '이번엔 채굴 못했어요'}
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: totalYield > 0 ? oreColor : '#aaa', marginBottom: 5 }}>
+              {totalYield > 0 ? `💎 ${oreName} ×${totalYield} 획득!` : '이번엔 채굴 못했어요'}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: 16, fontSize: 11, color: '#667' }}>
+              <span>파도 <span style={{ color: oreColor, fontWeight: 700 }}>{waveCount}</span>개 클리어</span>
+              {bestCombo >= 3 && (
+                <span>베스트 콤보 <span style={{ color: '#ffdd44', fontWeight: 700 }}>×{bestCombo}</span></span>
+              )}
+            </div>
           </div>
         )}
 

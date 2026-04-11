@@ -12,6 +12,7 @@ export const PERK_DEFS = {
   mine: [
     { id: 'big_circle',   icon: '🔵', name: '광역 채굴',    desc: '클릭 원 범위 35% 확대',     cost: 1 },
     { id: 'extra_nodes',  icon: '💎', name: '추가 노드',    desc: '광석 노드 +3개',            cost: 1 },
+    { id: 'more_time',    icon: '⏱', name: '연장전',       desc: '채굴 시간 +8초',            cost: 1 },
     { id: 'chain_mine',   icon: '🔗', name: '연쇄 채굴',    desc: '인접 광석에 수확량 보너스', cost: 2 },
     { id: 'wide_range',   icon: '📡', name: '넓은 범위',    desc: '채굴 범위 +1칸 (→ 3칸)',   cost: 2 },
     { id: 'double_yield', icon: '✨', name: '이중 획득',    desc: '25% 확률로 광석 2배',       cost: 3 },
@@ -42,10 +43,11 @@ function getFishForLevel(level) {
 function getMiningBonus(perks) {
   const has = id => perks.includes(id);
   return {
-    mineClickBonus:   has('big_circle')   ? 0.35 : 0,    // 클릭 원 35% 확대
+    mineClickBonus:   has('big_circle')   ? 0.35 : 0,
     mineExtraOres:    has('extra_nodes')  ? 3    : 0,
+    mineTimerBonus:   has('more_time')    ? 8    : 0,
     mineChainBonus:   has('chain_mine')   ? 0.25 : 0,
-    mineRange:        has('wide_range')   ? 3    : 2,    // 기본 2칸, 퍽 시 3칸
+    mineRange:        has('wide_range')   ? 3    : 2,
     mineDoubleChance: has('double_yield') ? 0.25 : 0,
   };
 }
@@ -159,8 +161,8 @@ export default function ZoneMiniGame({
         <MiningMinigame
           oreName={oreName}
           miningBonus={getMiningBonus(perks)}
-          onFinish={(count) => {
-            const result = { won: count > 0, count, oreName, prevLevel: level };
+          onFinish={(count, waves) => {
+            const result = { won: count > 0, count, waves, oreName, prevLevel: level };
             onComplete(result);
             setLastResult(result);
             setPhase('result');
@@ -208,6 +210,11 @@ export default function ZoneMiniGame({
                 {lastResult.count != null && (
                   <div style={{ color: 'rgba(255,255,255,0.82)', marginBottom: 5, fontSize: 14 }}>
                     {lastResult.oreName} × {lastResult.count} 채굴
+                  </div>
+                )}
+                {lastResult.waves != null && lastResult.waves > 1 && (
+                  <div style={{ color: accent, marginBottom: 5, fontSize: 13 }}>
+                    파도 {lastResult.waves}개 클리어
                   </div>
                 )}
                 {zone === 'fishing' && (
