@@ -10,10 +10,10 @@ const ZONE_INFO = {
 
 export const PERK_DEFS = {
   mine: [
-    { id: 'fast_mine',    icon: '⚡', name: '빠른 채굴',    desc: '채굴 속도 30% 증가',      cost: 1 },
+    { id: 'big_circle',   icon: '🔵', name: '광역 채굴',    desc: '클릭 원 범위 35% 확대',     cost: 1 },
     { id: 'extra_nodes',  icon: '💎', name: '추가 노드',    desc: '광석 노드 +3개',            cost: 1 },
-    { id: 'chain_mine',   icon: '🔗', name: '연쇄 채굴',    desc: '인접 광석 25% 크레딧',     cost: 2 },
-    { id: 'wide_range',   icon: '📡', name: '넓은 범위',    desc: '채굴 범위 +1칸',            cost: 2 },
+    { id: 'chain_mine',   icon: '🔗', name: '연쇄 채굴',    desc: '인접 광석에 수확량 보너스', cost: 2 },
+    { id: 'wide_range',   icon: '📡', name: '넓은 범위',    desc: '채굴 범위 +1칸 (→ 3칸)',   cost: 2 },
     { id: 'double_yield', icon: '✨', name: '이중 획득',    desc: '25% 확률로 광석 2배',       cost: 3 },
   ],
   fishing: [
@@ -42,10 +42,10 @@ function getFishForLevel(level) {
 function getMiningBonus(perks) {
   const has = id => perks.includes(id);
   return {
-    mineSpeedMult:    has('fast_mine')    ? 0.7  : 1,
+    mineClickBonus:   has('big_circle')   ? 0.35 : 0,    // 클릭 원 35% 확대
     mineExtraOres:    has('extra_nodes')  ? 3    : 0,
     mineChainBonus:   has('chain_mine')   ? 0.25 : 0,
-    mineRange:        has('wide_range')   ? 2    : 1,
+    mineRange:        has('wide_range')   ? 3    : 2,    // 기본 2칸, 퍽 시 3칸
     mineDoubleChance: has('double_yield') ? 0.25 : 0,
   };
 }
@@ -125,7 +125,7 @@ export default function ZoneMiniGame({
   // ── 튜토리얼 (첫 방문) ─────────────────────────────────────────────
   if (phase === 'tutorial') {
     const lines = zone === 'mine'
-      ? ['5×5 아이소메트릭 그리드에 광석이 배치됩니다.', '광석을 꾹 눌러 홀드하면 채굴이 진행됩니다.', '모든 광석을 채굴하면 즉시 완료됩니다.', '레벨이 올라갈수록 더 귀한 광석이 등장합니다.']
+      ? ['아이소메트릭 그리드에 광석이 배치됩니다.', '클릭하면 원형 범위가 활성화되어 원 안의 광석이 모두 채굴됩니다.', '광석을 모두 캐면 새 파도가 등장합니다. 파도마다 광석이 늘어납니다!', '3개 이상 동시 채굴 시 COMBO 보너스! 레벨이 오를수록 귀한 광석이 등장합니다.']
       : ['물고기의 저항을 이겨내는 릴 미니게임입니다.', '화면을 꾹 눌러 릴을 감아 물고기를 끌어당기세요.', '스트레스가 100%가 되면 낚싯줄이 끊어집니다!', '레벨이 올라갈수록 더 강한 물고기가 나타납니다.'];
     return (
       <div className="overlay" style={{ zIndex: 900 }}>
